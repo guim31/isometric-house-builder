@@ -19,6 +19,7 @@
     <button id="btn-undo" title="Annuler (Ctrl+Z)">Annuler</button>
     <button id="btn-redo" title="Rétablir (Ctrl+Maj+Z)">Rétablir</button>
     <span class="sep"></span>
+    <button id="btn-gallery">Modèles</button>
     <button id="btn-new">Nouveau</button>
     <button id="btn-open">Ouvrir…</button>
     <button id="btn-save">Enregistrer</button>
@@ -70,6 +71,15 @@
       <button type="button" id="btn-copy">Copier</button>
     </div>
     <p class="dialog-status" id="export-status" role="status"></p>
+    <menu class="dialog-close"><button value="close">Fermer</button></menu>
+  </form>
+</dialog>
+
+<dialog id="gallery-dialog" class="dialog dialog-wide">
+  <form method="dialog">
+    <h2>Par où commencer&nbsp;?</h2>
+    <p class="dialog-lead">Choisissez le modèle le plus proche de votre maison, puis ajustez-le. Rien n’est définitif&nbsp;: tout se remodèle ensuite.</p>
+    <div class="gallery-grid"></div>
     <menu class="dialog-close"><button value="close">Fermer</button></menu>
   </form>
 </dialog>

@@ -16,15 +16,16 @@ li{list-style:none;padding:3px 0;font-family:ui-monospace,monospace;font-size:12
 /* The iframe tests need a genuinely visible frame: Chrome suspends
    requestAnimationFrame in an off-screen iframe, so the app never draws and
    the failure says nothing about the code. */
-#appframe iframe{border:1px solid #d8e0e8;border-radius:8px;background:#fff}
+#appframe{margin-bottom:14px}
+#appframe iframe{border:1px solid #d8e0e8;border-radius:8px;background:#fff;transform:scale(.55);transform-origin:top left;height:800px;margin-bottom:-360px}
 </style></head>
 <body>
 <h1>Tests — Isometric House Builder</h1>
 <p class="lead">Aucune dépendance, aucun build : ouvrez ce fichier depuis un serveur local.</p>
+<h2 style="font-size:13px;margin:0 0 6px">Banc d'essai — l'application, chargée telle quelle</h2>
+<div id="appframe"></div>
 <ul id="results"></ul>
 <div id="summary">…</div>
-<h2 style="font-size:13px;margin:18px 0 6px">Banc d'essai — l'application, chargée telle quelle</h2>
-<div id="appframe"></div>
 <div id="stage"><div id="plan" style="width:440px;height:600px"></div><div id="iso" style="width:440px;height:600px"></div><div id="inspector"></div></div>
 <script type="module" src="run.js"></script>
 </body></html>

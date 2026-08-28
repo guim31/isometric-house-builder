@@ -29,6 +29,19 @@ Conçu au départ pour illustrer une maison dans
 SVG ordinaires : Home Assistant, Jeedom, un wiki ou une présentation feront tout
 aussi bien l'affaire.
 
+## Dix modèles pour démarrer
+
+![Les dix modèles de départ](assets/presets.png)
+
+L'outil s'ouvre sur une galerie plutôt que sur une grille vide. Les dix modèles
+couvrent des architectures volontairement contrastées — pavillon, brique du
+Nord, mas provençal, chalet, maison passive, longère, colombages, etxe basque,
+contemporaine, maison de ville — parce que ce qui distingue une région tient
+davantage à la pente du toit, à la profondeur du débord et au nombre de niveaux
+qu'à la couleur des murs. Prenez le plus proche du vôtre et remodelez-le : c'est
+plus rapide que de partir de rien. Le bouton **Modèles** rouvre la galerie à
+tout moment, et *Page blanche* reste disponible.
+
 ## Ce que l'outil sait faire
 
 ![Les quatre types de toiture et les quatre orientations](assets/gallery.png)
@@ -39,16 +52,17 @@ aussi bien l'affaire.
 | **Toiture** | Croupe, deux pans, appentis, toit plat — inclinaison, débord et épaisseur de rive ; les noues entre ailes sont calculées |
 | **Ouvertures** | Fenêtres, fenêtres à volets, portes, portes de garage, posées sur n'importe quel mur et à n'importe quel niveau |
 | **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente |
-| **Extérieurs** | Piscine, terrasse, allée, pelouse, haies, clôtures, arbres, voiture |
-| **Matières** | Tuiles, ardoises, bac acier sur le toit ; briques, bardage, pierre sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
+| **Extérieurs** | Piscine, terrasse, allée, pelouse, haies, clôtures, arbres, buissons, voiture |
+| **Matières** | Tuiles, ardoises, bac acier sur le toit ; briques, bardage, pierre, colombages sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
 | **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, copie directe dans le presse-papier |
 
 ## Prise en main
 
-1. **Dessinez l'emprise.** Outil *Rectangle* pour poser un volume, *Pinceau* pour
-   affiner, *Gomme* pour retirer. Une case vaut un mètre.
+1. **Partez d'un modèle** proche du vôtre, puis **corrigez l'emprise** : outil
+   *Rectangle* pour poser un volume, *Pinceau* pour affiner, *Gomme* pour
+   retirer. Une case vaut un mètre.
 2. **Réglez la toiture** dans le panneau de droite. Le débord se cale par pas de
    25 cm, pour que la rive tombe sur la trame.
 3. **Choisissez matières et couleurs** dans *Couleurs et matières* : une palette
@@ -71,8 +85,9 @@ Raccourcis : `Ctrl+Z` / `Ctrl+Maj+Z` annuler et rétablir, `[` et `]` tourner,
 `Maj` + glisser pour déplacer la vue.
 
 Le projet en cours est conservé dans le navigateur. *Enregistrer* produit un
-fichier `.house.json` lisible et versionnable ; deux exemples sont fournis dans
-[`examples/`](examples/).
+fichier `.house.json` lisible et versionnable, qu'*Ouvrir* relit ; c'est aussi
+le format des dix modèles de départ, décrits dans
+[`src/data/presets.js`](src/data/presets.js).
 
 ## Intégrer l'image à Gladys Assistant
 
@@ -157,6 +172,7 @@ modifier le moteur :
 | `src/core/scene.js` | Assemblage : sol, murs, ouvertures, toit, objets |
 | `src/render/svg.js` | Tri, éclairage, émission SVG |
 | `src/core/palette.js` | Palettes, ancrages par orientation, éclairage |
+| `src/data/presets.js` | Les dix modèles de départ |
 | `src/render/texture.js` | Rangs de tuiles, appareillages, bardages |
 | `src/render/hit.js` | Couche de sélection invisible |
 | `src/ui/` | Plan, rendu, inspecteur, historique |
@@ -179,6 +195,11 @@ commercialement.
 modelling the exterior of a house in isometric view and exporting it as a
 transparent PNG or a flat SVG — meant for home-automation dashboards such as
 Gladys Assistant, but the output is plain image files usable anywhere.
+
+It opens on a gallery of ten starter houses — French regional archetypes from a
+Flemish brick townhouse to a Provençal mas, a mountain chalet and a passive
+solar home — so you begin by adjusting something close to your own rather than
+from an empty grid.
 
 Draw the footprint on a one-metre grid, pick a roof (hip, gable, shed, flat),
 place windows, doors, garage doors, solar panels, chimneys, a pool, trees, then

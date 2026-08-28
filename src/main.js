@@ -6,7 +6,8 @@ import { Store } from './ui/store.js';
 import { PlanView } from './ui/plan.js';
 import { Viewport } from './ui/viewport.js';
 import { Inspector } from './ui/panels.js';
-import { initialModel, exportProject, importProject, clearLocal } from './io/project.js';
+import { initialModel, exportProject, importProject, clearLocal, loadLocal, fromShareUrl } from './io/project.js';
+import { Gallery } from './ui/gallery.js';
 import { defaultModel, emptyModel } from './core/model.js';
 import { SIZES, exportPng, exportSvg, exportFourViews, copyPngToClipboard } from './io/export.js';
 
@@ -129,6 +130,13 @@ $('btn-redo').addEventListener('click', () => store.redo());
 $('btn-rot-left').addEventListener('click', () => rotate(-1));
 $('btn-rot-right').addEventListener('click', () => rotate(1));
 $('btn-fit').addEventListener('click', () => viewport.resetView());
+
+const gallery = new Gallery($('gallery-dialog'), (model) => {
+  store.update(model);
+  store.select(null);
+  viewport.resetView();
+});
+$('btn-gallery').addEventListener('click', () => gallery.open());
 
 $('btn-new').addEventListener('click', () => {
   const blank = confirm(
@@ -271,4 +279,11 @@ scheduleRender();
 // A first-run project that shows what the tool can do beats an empty grid.
 if (!store.model.cells.length) {
   store.update(defaultModel(), { silent: true });
+}
+
+// On a genuinely first visit, offer the gallery rather than leaving someone to
+// guess what the tool is for. Returning visitors get their project straight
+// back, with the gallery a click away.
+if (!fromShareUrl() && !loadLocal()) {
+  requestAnimationFrame(() => gallery.open());
 }

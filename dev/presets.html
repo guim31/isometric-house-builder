@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Modèles de départ</title><style>
+body{margin:0;background:#f6f8fa;font:12px system-ui;color:#1c2334}
+.r{display:flex;flex-wrap:wrap;gap:10px;padding:10px}
+figure{margin:0;background:#fff;border-radius:14px;overflow:hidden;width:340px}
+figcaption{padding:8px 10px;color:#5a6b7d}
+b{display:block;color:#1c2334;font-size:13px}
+pre{padding:10px;color:#b3392b;white-space:pre-wrap}
+</style></head><body><pre id="warn"></pre><div class="r" id="o"></div>
+<script type="module">
+import { PRESETS } from '../src/data/presets.js';
+import { normalise, cellSet } from '../src/core/model.js';
+import { boundaryEdges } from '../src/core/grid.js';
+import { renderScene } from '../src/render/svg.js';
+const o = document.getElementById('o'); const warn = [];
+for (const p of PRESETS) {
+  const m = normalise({ ...p.model, name: p.name });
+  const valid = new Set(boundaryEdges(cellSet(m)).map((e) => e.id));
+  for (const op of m.openings) if (!valid.has(op.edge)) warn.push(`${p.id}: mur inexistant ${op.edge} (${op.kind})`);
+  const t0 = performance.now();
+  const { svg, faces } = renderScene(m, { width: 340, height: 250 });
+  const ms = (performance.now() - t0).toFixed(0);
+  o.insertAdjacentHTML('beforeend',
+    `<figure>${svg}<figcaption><b>${p.name}</b>${p.note}<br><small>${faces.length} faces — ${ms} ms</small></figcaption></figure>`);
+}
+document.getElementById('warn').textContent = warn.join('\n');
+</script></body></html>

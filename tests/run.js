@@ -13,6 +13,8 @@ import { renderScene } from '../src/render/svg.js';
 import { hitLayer, screenToGround } from '../src/render/hit.js';
 import { textureSegments, specFor, ROOF_TEXTURES, WALL_TEXTURES } from '../src/render/texture.js';
 import { THEMES, faceColour, materialColour } from '../src/core/palette.js';
+import { PRESETS, getPreset } from '../src/data/presets.js';
+import { Gallery } from '../src/ui/gallery.js';
 import { Store } from '../src/ui/store.js';
 import { PlanView } from '../src/ui/plan.js';
 import { Viewport } from '../src/ui/viewport.js';
@@ -302,6 +304,77 @@ check('le rendu texturé produit des chemins de découpe uniques', () => {
   return ia.every((id) => !ib.includes(id)) || 'identifiants partagés entre deux rendus';
 });
 
+/* ---------------- starter models ---------------- */
+
+check('la galerie propose dix modèles, tous identifiés', () => {
+  if (PRESETS.length !== 10) return `${PRESETS.length} modèles`;
+  const ids = PRESETS.map((p) => p.id);
+  if (new Set(ids).size !== ids.length) return 'identifiants en double';
+  for (const p of PRESETS) {
+    if (!p.name || !p.note) return `${p.id} : nom ou description manquant`;
+    if (!p.model.cells.length) return `${p.id} : emprise vide`;
+  }
+  return getPreset('chalet') !== null && getPreset('inconnu') === null;
+});
+
+check('chaque ouverture d’un modèle est posée sur un mur qui existe', () => {
+  // A dangling wall reference fails silently: the opening is simply never
+  // drawn, which is easy to miss when eyeballing a thumbnail.
+  for (const p of PRESETS) {
+    const m = normalise(p.model);
+    const walls = new Set(boundaryEdges(cellSet(m)).map((e) => e.id));
+    for (const op of m.openings) {
+      if (!walls.has(op.edge)) return `${p.id} : ${op.kind} sur le mur inexistant ${op.edge}`;
+      if ((op.storey || 0) >= m.storeys) return `${p.id} : ${op.kind} à l’étage ${op.storey} sur ${m.storeys}`;
+    }
+  }
+  return true;
+});
+
+check('chaque objet de toiture d’un modèle repose bien sur le toit', () => {
+  for (const p of PRESETS) {
+    const m = normalise(p.model);
+    const field = heightField(decomposeRects(cellSet(m)), m.roof);
+    for (const it of m.roofItems) {
+      if (!field.inside(it.x, it.y)) return `${p.id} : ${it.kind} hors toiture en (${it.x}, ${it.y})`;
+    }
+  }
+  return true;
+});
+
+check('les dix modèles se rendent sans coordonnée invalide', () => {
+  for (const p of PRESETS) {
+    const out = renderScene(normalise(p.model), { width: 320, height: 220 });
+    if (out.svg.includes('NaN')) return `${p.id} : coordonnée NaN`;
+    if (out.faces.length < 12) return `${p.id} : ${out.faces.length} faces seulement`;
+  }
+  return true;
+});
+
+check('les modèles couvrent des formes réellement différentes', () => {
+  // Ten variations on one shape would defeat the point of the gallery.
+  const seen = new Set();
+  for (const p of PRESETS) {
+    const m = normalise(p.model);
+    seen.add(`${m.roof.type}|${m.storeys}`);
+  }
+  return seen.size >= 6 || `seulement ${seen.size} combinaisons toit/étages`;
+});
+
+check('la galerie construit une vignette par modèle, plus la page blanche', () => {
+  const dialog = document.createElement('dialog');
+  dialog.innerHTML = '<div class="gallery-grid"></div>';
+  document.getElementById('stage').appendChild(dialog);
+  let picked = null;
+  const gallery = new Gallery(dialog, (m) => { picked = m; });
+  gallery.build();
+  const cards = dialog.querySelectorAll('.gallery-card');
+  if (cards.length !== PRESETS.length + 1) return `${cards.length} cartes`;
+  if (!dialog.querySelector('.gallery-thumb svg')) return 'vignette sans rendu';
+  cards[0].click();
+  return (picked && picked.cells.length > 0) || 'le choix ne renvoie aucun modèle';
+});
+
 /* ---------------- palettes ---------------- */
 
 check('la palette Horizons rend ses teintes exactes sur les faces d’axe', () => {
@@ -548,14 +621,37 @@ function loadApp(width, height) {
     const frame = document.createElement('iframe');
     frame.style.cssText = `width:${width}px;height:${height}px`;
     frame.src = '../index.html';
-    frame.onload = () => setTimeout(() => resolve(frame), 700);
     frame.onerror = () => reject(new Error('page non chargée'));
-    document.getElementById('appframe').appendChild(frame);
+    frame.onload = () => {
+      // Poll for readiness rather than guessing a delay: the app draws on an
+      // animation frame, and the gallery renders ten thumbnails on first run,
+      // so a fixed timeout is a race that fails on a slow machine only.
+      const started = Date.now();
+      const ready = () => {
+        const doc = frame.contentDocument;
+        const done = doc.querySelector('#inspector .panel') && doc.querySelector('#iso svg');
+        if (done) resolve(frame);
+        else if (Date.now() - started > 6000) reject(new Error('interface non prête après 6 s'));
+        else setTimeout(ready, 60);
+      };
+      ready();
+    };
+    // The frame lives at the top of the page and there is only ever one:
+    // anywhere below the fold, Chrome throttles its animation frames to
+    // nothing and the app inside never draws.
+    const host = document.getElementById('appframe');
+    host.replaceChildren(frame);
+
   });
 }
 
+// Loaded once and shared: a second frame lands lower down the page, where
+// Chrome throttles animation frames and the app never draws.
+let appFramePromise = null;
+const app = () => (appFramePromise ||= loadApp(1280, 800));
+
 await checkAsync('la page tient dans la fenêtre, sans déborder', async () => {
-  const frame = await loadApp(1280, 800);
+  const frame = await app();
   const doc = frame.contentDocument;
   const view = doc.documentElement.clientHeight;
   const scroll = doc.body.scrollHeight;
@@ -570,12 +666,11 @@ await checkAsync('la page tient dans la fenêtre, sans déborder', async () => {
 });
 
 await checkAsync('la page s’amorce avec ses outils et un rendu visible', async () => {
-  const frame = await loadApp(1280, 800);
+  const frame = await app();
   const doc = frame.contentDocument;
   if (doc.querySelectorAll('.tool').length < 10) return 'palette d’outils incomplète';
-  if (!doc.querySelector('#inspector .panel')) return 'inspecteur vide';
   const svg = doc.querySelector('#iso svg');
-  if (!svg || svg.querySelectorAll('path').length < 20) return 'rendu isométrique vide';
+  if (svg.querySelectorAll('path').length < 20) return 'rendu isométrique vide';
   // The drawing must land inside the panel, not somewhere off-screen below it.
   const panel = doc.getElementById('iso').getBoundingClientRect();
   const box = svg.getBBox();

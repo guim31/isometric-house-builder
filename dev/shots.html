@@ -1,32 +1,29 @@
-<!doctype html><html><head><meta charset="utf-8"><style>
+<!doctype html><html><head><meta charset="utf-8"><title>Visuels du dépôt</title><style>
 body{margin:0;background:#fff;font:13px system-ui}
-#hero{width:1280px;height:520px;display:flex;align-items:center;justify-content:center;gap:0}
+#hero{width:1280px;height:520px;display:flex;align-items:center;justify-content:center}
 #grid{width:1280px;display:flex;flex-wrap:wrap}
 figure{margin:0}figcaption{text-align:center;color:#5a6b7d;padding-bottom:8px}
-</style></head><body>
-<div id="hero"></div><div id="grid"></div>
+</style></head><body><div id="hero"></div><div id="grid"></div>
 <script type="module">
+import { PRESETS } from '../src/data/presets.js';
 import { normalise } from '../src/core/model.js';
 import { renderScene } from '../src/render/svg.js';
-const load = async (n) => normalise(await (await fetch(`../examples/${n}.house.json`)).json());
-const a = await load('maison-en-l-avec-piscine');
-const b = await load('pavillon-solaire-gladys');
-document.getElementById('hero').innerHTML =
-  renderScene({...a, style:{...a.style, background:'transparent'}}, { width: 700, height: 500 }).svg +
-  renderScene({...b, style:{...b.style, background:'transparent'}}, { width: 560, height: 500 }).svg;
-const cases = [
-  ['Croupe', { ...a.roof, type:'hip' }], ['Deux pans', { ...a.roof, type:'gable' }],
-  ['Toit plat', { ...a.roof, type:'flat' }], ['Appentis', { ...a.roof, type:'shed' }],
-];
+const of = (id) => normalise({ ...PRESETS.find((p) => p.id === id).model });
+const hero = ['provence', 'chalet', 'passive'];
+document.getElementById('hero').innerHTML = hero
+  .map((id, i) => renderScene(of(id), { width: i === 0 ? 480 : 400, height: 500 }).svg).join('');
 const g = document.getElementById('grid');
-for (const [label, roof] of cases) {
-  const { svg } = renderScene({ ...a, roof }, { width: 320, height: 240 });
-  g.insertAdjacentHTML('beforeend', `<figure>${svg}<figcaption>${label}</figcaption></figure>`);
+const a = of('pavillon');
+for (const [label, roof] of [
+  ['Croupe', { ...a.roof, type: 'hip' }], ['Deux pans', { ...a.roof, type: 'gable' }],
+  ['Toit plat', { ...a.roof, type: 'flat' }], ['Appentis', { ...a.roof, type: 'shed' }],
+]) {
+  g.insertAdjacentHTML('beforeend',
+    `<figure>${renderScene({ ...a, roof }, { width: 320, height: 240 }).svg}<figcaption>${label}</figcaption></figure>`);
 }
 for (let r = 0; r < 4; r++) {
-  const { svg } = renderScene({ ...a, camera: { ...a.camera, rotation: r } }, { width: 320, height: 240 });
   g.insertAdjacentHTML('beforeend',
-    `<figure>${svg}<figcaption>${['Sud-Est','Sud-Ouest','Nord-Ouest','Nord-Est'][r]}</figcaption></figure>`);
+    `<figure>${renderScene({ ...a, camera: { ...a.camera, rotation: r } }, { width: 320, height: 240 }).svg}` +
+    `<figcaption>${['Sud-Est', 'Sud-Ouest', 'Nord-Ouest', 'Nord-Est'][r]}</figcaption></figure>`);
 }
-document.body.dataset.ready = '1';
 </script></body></html>

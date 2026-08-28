@@ -6,6 +6,7 @@
 import { key, rectCells } from './grid.js';
 import { DEFAULT_PROJECTION } from './iso.js';
 import { THEMES } from './palette.js';
+import { PRESETS } from '../data/presets.js';
 
 export const MODEL_VERSION = 1;
 export const GRID = 40; // cells per side; 1 cell = 1 metre
@@ -37,35 +38,13 @@ export function emptyModel() {
   };
 }
 
-/** An L-shaped starter house, in the spirit of the reference illustration. */
+/**
+ * The project a first-time visitor lands on: the first entry of the starter
+ * gallery, so there is one description of it rather than two that can drift.
+ */
 export function defaultModel() {
-  const m = emptyModel();
-  const wing = rectCells(11, 12, 27, 18); // long bar
-  const arm = rectCells(21, 19, 27, 24); // short arm, forming the L
-  m.cells = [...new Set([...wing, ...arm])];
-  // Placed on the north and east walls: those are the two facades the default
-  // camera looks at, so a new project shows its openings straight away.
-  m.openings = [
-    { id: newId('o'), edge: '12,18,N', storey: 0, kind: 'shutter', offset: 0.5, width: 1.3, height: 1.3, sill: 0.95 },
-    { id: newId('o'), edge: '15,18,N', storey: 0, kind: 'window', offset: 0.5, width: 1.8, height: 1.4, sill: 0.9 },
-    { id: newId('o'), edge: '18,18,N', storey: 0, kind: 'door', offset: 0.5, width: 1.0, height: 2.1, sill: 0 },
-    { id: newId('o'), edge: '22,24,N', storey: 0, kind: 'window', offset: 0.5, width: 1.3, height: 1.3, sill: 0.95 },
-    { id: newId('o'), edge: '25,24,N', storey: 0, kind: 'garage', offset: 0.5, width: 2.6, height: 2.1, sill: 0 },
-    { id: newId('o'), edge: '27,15,E', storey: 0, kind: 'shutter', offset: 0.5, width: 1.3, height: 1.3, sill: 0.95 },
-    { id: newId('o'), edge: '27,21,E', storey: 0, kind: 'window', offset: 0.5, width: 1.5, height: 1.3, sill: 0.95 },
-  ];
-  m.props = [
-    { id: newId('p'), kind: 'pool', x: 12.5, y: 20, w: 7, d: 4.5, shape: 'rounded' },
-    { id: newId('p'), kind: 'terrace', x: 11, y: 19, w: 10, d: 6.5, material: 'paving' },
-    { id: newId('p'), kind: 'path', x: 17.5, y: 19.2, w: 2.5, d: 2, material: 'paving' },
-    { id: newId('p'), kind: 'tree', x: 8.5, y: 22, r: 1.4 },
-    { id: newId('p'), kind: 'tree', x: 30, y: 15, r: 1.7 },
-  ];
-  m.roofItems = [
-    { id: newId('r'), kind: 'solar', x: 15, y: 13.2, w: 4.4, d: 2.4 },
-    { id: newId('r'), kind: 'chimney', x: 24.5, y: 14.5, w: 0.8, d: 0.8, h: 1.1 },
-  ];
-  return m;
+  const preset = PRESETS[0];
+  return normalise({ ...preset.model, name: preset.name });
 }
 
 /** Fill in anything a hand-edited or older file may be missing. */

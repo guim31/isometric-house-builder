@@ -147,7 +147,7 @@ export const FIXED = {
  * and interpolating between them reproduces those palettes exactly on the
  * axis-aligned faces, and stays inside the same family on the sloped ones.
  */
-function blendOriented(spec, n, tint) {
+function blendOriented(spec, n) {
   const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
   const w = ax + ay + az || 1;
   const pick = (key, fallback) => hexToRgb(spec[key] || spec[fallback] || spec.base);
@@ -155,16 +155,23 @@ function blendOriented(spec, n, tint) {
   const sx = pick(n[0] > 0 ? 'xPos' : 'xNeg', 'xPos');
   const sy = pick(n[1] > 0 ? 'yPos' : 'yNeg', 'yPos');
   const out = [0, 1, 2].map((i) => (up[i] * az + sx[i] * ax + sy[i] * ay) / w);
-  return rgbToHex(out[0] * tint[0], out[1] * tint[1], out[2] * tint[2]);
+  return rgbToHex(out[0], out[1], out[2]);
 }
+
+const luminance = (hex) => {
+  const [r, g, b] = hexToRgb(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
 
 /**
  * Final colour of a face.
  *
- * A recoloured material keeps its palette's shading structure: the override is
- * applied as a per-channel ratio against the base, so picking a blue wall in a
- * palette whose shadows shift warm still yields warm-shifted blue shadows,
- * instead of collapsing back to a flat multiply.
+ * A recoloured material keeps how *light* its palette makes each orientation,
+ * not the palette's own hues. Carrying the anchors over as per-channel ratios
+ * was the obvious approach and is wrong: going from a warm base to a neutral
+ * target multiplies the blue channel by well over one, and the lighter anchors
+ * blow out — a grey roof comes back pale cyan. Transposing the luminance ratio
+ * instead keeps the shading structure and honours the chosen hue exactly.
  */
 export function faceColour(mat, theme, overrides, n) {
   const t = THEMES[theme] || THEMES.terracotta;
@@ -172,12 +179,10 @@ export function faceColour(mat, theme, overrides, n) {
   const override = overrides[mat];
 
   if (spec && typeof spec === 'object') {
-    let tint = [1, 1, 1];
-    if (override) {
-      const a = hexToRgb(override), b = hexToRgb(spec.base);
-      tint = [0, 1, 2].map((i) => (b[i] < 4 ? 1 : a[i] / b[i]));
-    }
-    return blendOriented(spec, n, tint);
+    const blended = blendOriented(spec, n);
+    if (!override) return blended;
+    const baseL = luminance(spec.base);
+    return shade(override, baseL < 1 ? 1 : luminance(blended) / baseL);
   }
   const base = override || spec || '#cccccc';
   return shade(base, shadeFactor(n));

@@ -22,6 +22,9 @@ export const WALL_TEXTURES = {
   brick: { label: 'Briques', course: 0.24, joint: 0.52, stagger: true },
   siding: { label: 'Bardage', course: 0.26 },
   stone: { label: 'Pierre', course: 0.44, joint: 0.86, stagger: true },
+  // Half-timbering is beams, not joints: a coarse grid drawn dark and thick,
+  // where the other materials want fine lines barely off the wall colour.
+  timber: { label: 'Colombages', course: 0.95, joint: 1.15, contrast: 0.45, weight: 2.2 },
 };
 
 /** In-plane frame: `u` runs horizontally across the face, `v` up its slope. */

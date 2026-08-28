@@ -162,7 +162,8 @@ export function renderScene(model, opts = {}) {
     }).join('');
     out.push(
       `<path d="${lines}" clip-path="url(#${id})" fill="none" ` +
-      `stroke="${darken(fill, 0.2)}" stroke-width="${hair.toFixed(2)}"/>`,
+      `stroke="${darken(fill, spec.contrast ?? 0.2)}" ` +
+      `stroke-width="${(hair * (spec.weight ?? 1)).toFixed(2)}"/>`,
     );
   });
 
