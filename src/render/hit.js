@@ -114,9 +114,9 @@ export function screenToGround(camera, sx, sy) {
   const x = (sx - camera.offset[0]) / camera.scale;
   const y = (sy - camera.offset[1]) / camera.scale;
   // Invert the projection at z = 0.
-  const a = x / proj.kx;      // = vx - vy
+  const a = x / proj.kx;      // = vy - vx
   const b = y / proj.ky;      // = vx + vy
-  const vx = (a + b) / 2, vy = (b - a) / 2;
+  const vx = (b - a) / 2, vy = (a + b) / 2;
   // Undo the camera rotation.
   const [cx, cy] = camera.centre;
   const dx = vx - cx, dy = vy - cy;

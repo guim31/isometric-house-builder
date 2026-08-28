@@ -257,6 +257,24 @@ check('fmtMetres écrit les dimensions à la française', () => {
 
 /* ---------------- viewpoints ---------------- */
 
+check('le rendu n’est pas l’image miroir du plan', () => {
+  // The regression this pins: the video-game iso formula (x - y) forms a
+  // left-handed basis once the near side is +x+y, and every render came out
+  // mirrored — a pool west of the house on the plan appeared on the wrong
+  // side. From the north-east camera of rotation 0, east must extend to the
+  // screen LEFT and north to the RIGHT.
+  const cam = new Camera({ rotation: 0, centre: [0, 0] });
+  cam.scale = 10;
+  cam.offset = [0, 0];
+  const o = cam.toScreen([0, 0, 0]);
+  const e = cam.toScreen([1, 0, 0]);
+  const n = cam.toScreen([0, 1, 0]);
+  if (e[0] >= o[0]) return 'l’est part vers la droite : vue en miroir';
+  if (n[0] <= o[0]) return 'le nord part vers la gauche : vue en miroir';
+  return true;
+});
+
+
 check('les libellés de point de vue désignent bien les façades visibles', () => {
   // The regression this guards: rotation 0 shows the north and east facades,
   // so the camera stands to the north-east — yet the labels once started at
@@ -497,9 +515,11 @@ check('la galerie construit une vignette par modèle, plus la page blanche', () 
 check('la palette Horizons rend ses teintes exactes sur les faces d’axe', () => {
   // The values are those of the Gladys v5 house-view gallery; drifting from
   // them is exactly what this test is for.
+  // The lit tone sits on +x: at rotation 0 the east facade lands on the
+  // screen left, which is the side the reference drawing lights.
   const cases = [
-    ['wall', [0, 1, 0], '#efe8dc'], ['wall', [1, 0, 0], '#e0d6c6'], ['wall', [0, 0, 1], '#f8f4ed'],
-    ['roof', [0, 1, 0], '#e8a37c'], ['roof', [1, 0, 0], '#c97e56'],
+    ['wall', [1, 0, 0], '#efe8dc'], ['wall', [0, 1, 0], '#e0d6c6'], ['wall', [0, 0, 1], '#f8f4ed'],
+    ['roof', [1, 0, 0], '#e8a37c'], ['roof', [0, 1, 0], '#c97e56'],
     ['grass', [0, 0, 1], '#e3ecdf'],
   ];
   for (const [mat, n, expected] of cases) {
@@ -514,15 +534,15 @@ check('une face inclinée reste entre les teintes voisines', () => {
   const got = faceColour('roof', 'horizons', {}, n);
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(got.slice(i, i + 2), 16));
   const between = (v, lo, hi) => v >= Math.min(lo, hi) - 1 && v <= Math.max(lo, hi) + 1;
-  // Bounded by the two anchors it blends: yNeg #d98d64 and up #eeb08d.
-  return (between(r, 0xd9, 0xee) && between(g, 0x8d, 0xb0) && between(b, 0x64, 0x8d))
+  // Bounded by the two anchors it blends: yNeg #bf7550 and up #eeb08d.
+  return (between(r, 0xbf, 0xee) && between(g, 0x75, 0xb0) && between(b, 0x50, 0x8d))
     || `teinte hors bornes : ${got}`;
 });
 
 check('recolorer un matériau conserve la structure d’ombrage', () => {
   const ov = { wall: '#8fb3d9' };
-  const lit = faceColour('wall', 'horizons', ov, [0, 1, 0]);
-  const shaded = faceColour('wall', 'horizons', ov, [1, 0, 0]);
+  const lit = faceColour('wall', 'horizons', ov, [1, 0, 0]);
+  const shaded = faceColour('wall', 'horizons', ov, [0, 1, 0]);
   const top = faceColour('wall', 'horizons', ov, [0, 0, 1]);
   const lum = (h) => [1, 3, 5].reduce((a, i) => a + parseInt(h.slice(i, i + 2), 16), 0);
   // Still three distinct values, ordered as the palette orders them.

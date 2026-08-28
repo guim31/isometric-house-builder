@@ -50,10 +50,21 @@ export function rotateDir(n, r) {
   }
 }
 
-/** Project a world point to screen space (y grows downward, as in SVG). */
+/**
+ * Project a world point to screen space (y grows downward, as in SVG).
+ *
+ * The horizontal term is (y - x), not the video-game classic (x - y). With
+ * screen y pointing down and the near side at +x+y, the classic form is a
+ * LEFT-handed basis: the painter's order says the camera is to the north-east
+ * while the horizontal axis says south-west, and every view comes out as the
+ * mirror image of what a physical camera would see — a pool west of the house
+ * on the plan showed up on the wrong side of the render. From a real camera
+ * at the north-east, east extends to the screen left and north to the right,
+ * which is what (y - x) yields.
+ */
 export function project(p, proj) {
   return [
-    (p[0] - p[1]) * proj.kx,
+    (p[1] - p[0]) * proj.kx,
     (p[0] + p[1]) * proj.ky - p[2] * proj.kz,
   ];
 }

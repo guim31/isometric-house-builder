@@ -11,10 +11,10 @@
 const ORIENT = {
   up: 1.0,
   down: 0.42,
-  xPos: 0.74, // right-hand facade on screen
-  xNeg: 0.60,
-  yPos: 0.90, // left-hand facade on screen
-  yNeg: 0.66,
+  xPos: 0.90, // at rotation 0, the east facade lands on the screen LEFT — lit
+  xNeg: 0.66,
+  yPos: 0.74, // and the north facade on the screen right — shaded
+  yNeg: 0.60,
 };
 
 /** Shading factor for a normal already expressed in camera space. */
@@ -64,8 +64,8 @@ export const THEMES = {
     // own drawings light the far slope, which looks right from one angle only,
     // whereas this tool has to give four exportable views of equal quality.
     style: { outline: false, shadow: false, windowBars: false, plinth: 0, texture: { roof: 'none', wall: 'none' } },
-    wall: { base: '#efe8dc', up: '#f8f4ed', yPos: '#efe8dc', xPos: '#e0d6c6', yNeg: '#e7ded0', xNeg: '#d6cab4', down: '#cfc2ab' },
-    roof: { base: '#d98d64', up: '#eeb08d', yPos: '#e8a37c', xPos: '#c97e56', yNeg: '#d98d64', xNeg: '#bf7550', down: '#b06c48' },
+    wall: { base: '#efe8dc', up: '#f8f4ed', xPos: '#efe8dc', yPos: '#e0d6c6', xNeg: '#e7ded0', yNeg: '#d6cab4', down: '#cfc2ab' },
+    roof: { base: '#d98d64', up: '#eeb08d', xPos: '#e8a37c', yPos: '#c97e56', xNeg: '#d98d64', yNeg: '#bf7550', down: '#b06c48' },
     roofEdge: '#f8f4ed',
     plinth: '#e0d6c6',
     trim: '#ffffff', door: '#54749e', shutter: '#f2f2f0', garage: '#f2f2f0',
@@ -81,8 +81,8 @@ export const THEMES = {
   horizonsSlate: {
     label: 'Horizons — ardoise',
     style: { outline: false, shadow: false, windowBars: false, plinth: 0, texture: { roof: 'none', wall: 'none' } },
-    wall: { base: '#eef0f2', up: '#f7f8f9', yPos: '#eef0f2', xPos: '#e0d6c6', yNeg: '#e6e9ec', xNeg: '#d6cab4', down: '#cdd2d6' },
-    roof: { base: '#54636f', up: '#6b7d8b', yPos: '#5f7183', xPos: '#48555f', yNeg: '#54636f', xNeg: '#404b54', down: '#39434b' },
+    wall: { base: '#eef0f2', up: '#f7f8f9', xPos: '#eef0f2', yPos: '#e0d6c6', xNeg: '#e6e9ec', yNeg: '#d6cab4', down: '#cdd2d6' },
+    roof: { base: '#54636f', up: '#6b7d8b', xPos: '#5f7183', yPos: '#48555f', xNeg: '#54636f', yNeg: '#404b54', down: '#39434b' },
     roofEdge: '#f2f2f0',
     plinth: '#e0d6c6',
     trim: '#ffffff', door: '#54749e', shutter: '#eef0f2', garage: '#f2f2f0',

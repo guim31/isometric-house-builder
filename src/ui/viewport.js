@@ -8,7 +8,7 @@ import { boundaryEdges } from '../core/grid.js';
 import { cellSet, cellSizeOf } from '../core/model.js';
 import { buildMesh } from '../core/scene.js';
 import { mergeCoplanar } from '../core/mesh.js';
-import { rotateDir } from '../core/iso.js';
+import { rotateDir, project } from '../core/iso.js';
 import { OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, placeOpening, placeProp } from './actions.js';
 
 export class Viewport {
@@ -65,8 +65,7 @@ export class Viewport {
    */
   compass(camera, height) {
     const dir = rotateDir([0, 1, 0], this.store.model.camera.rotation);
-    const proj = camera.proj;
-    const v = [(dir[0] - dir[1]) * proj.kx, (dir[0] + dir[1]) * proj.ky];
+    const v = project(dir, camera.proj);
     const l = Math.hypot(v[0], v[1]) || 1;
     const ux = (v[0] / l) * 10, uy = (v[1] / l) * 10;
     const cx = 30, cy = height - 30;
