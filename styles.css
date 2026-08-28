@@ -195,6 +195,15 @@ button:disabled { opacity: .45; cursor: default; }
 .plan-svg { touch-action: none; cursor: crosshair; }
 .plan-grid line { stroke: var(--line); stroke-width: 1; }
 .plan-grid line.major { stroke-width: 1.6; }
+.plan-grid line.sub { opacity: .45; }
+.plan-dims text, .rect-size {
+  fill: var(--ink-soft);
+  font: 600 11px system-ui, sans-serif;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 3px;
+}
 .cell { fill: #e9c98d; fill-opacity: .55; stroke: none; }
 @media (prefers-color-scheme: dark) { .cell { fill: #b08f56; fill-opacity: .5; } }
 .edge { stroke: var(--accent); stroke-width: 3.5; stroke-linecap: round; }
@@ -296,6 +305,7 @@ button:disabled { opacity: .45; cursor: default; }
   flex: none;
 }
 button.subtle { width: 100%; margin-top: 10px; font-size: 12px; }
+.field-static { font-size: 13px; font-variant-numeric: tabular-nums; }
 
 /* ---------- dialog and toast ---------- */
 

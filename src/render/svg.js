@@ -104,10 +104,11 @@ export function renderScene(model, opts = {}) {
   const faces = opts.faces ?? mergeCoplanar(built.mesh.tris);
 
   const b = built.bounds.empty ? { i0: 0, j0: 0, i1: 1, j1: 1 } : built.bounds;
+  const cs = model.grid?.cellSize || 1;
   const camera = new Camera({
     rotation: model.camera.rotation,
     projection: model.camera.projection,
-    centre: [(b.i0 + b.i1 + 1) / 2, (b.j0 + b.j1 + 1) / 2],
+    centre: [((b.i0 + b.i1 + 1) / 2) * cs, ((b.j0 + b.j1 + 1) / 2) * cs],
   });
 
   const pts = [];

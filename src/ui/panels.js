@@ -5,6 +5,8 @@
 import { THEMES, materialColour } from '../core/palette.js';
 import { PROJECTIONS } from '../core/iso.js';
 import { ROOF_TYPES, STEP } from '../core/roof.js';
+import { withCellSize, cellSizeOf, fmtMetres, cellSet } from '../core/model.js';
+import { bounds } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
 
 const h = (tag, cls, text) => {
@@ -121,7 +123,15 @@ export class Inspector {
   buildingSection() {
     const m = this.store.model;
     const s = this.section('Bâtiment');
+    const cs = cellSizeOf(m);
+    const b = bounds(cellSet(m));
+    const dims = b.empty ? '—'
+      : `${fmtMetres(b.w * cs)} × ${fmtMetres(b.d * cs)} m — ${fmtMetres(m.cells.length * cs * cs)} m²`;
     s.append(
+      field('Emprise', h('span', 'field-static', dims), 'hors débord de toiture'),
+      field('Trame', select(String(cs), [['1', '1 m'], ['0.5', '0,50 m']],
+        (v) => this.store.update((mm) => withCellSize(mm, Number(v)))),
+        'le pas de dessin du plan — affiner ne change pas les dimensions de la maison'),
       field('Étages', slider(m.storeys, {
         min: 1, max: 4, step: 1,
         onInput: (v) => this.set({ storeys: v }, 'storeys'),

@@ -6,14 +6,21 @@
 import { Mesh } from './mesh.js';
 import { boundaryEdges, decomposeRects, bounds, parseKey, SIDES } from './grid.js';
 import { buildRoof, heightField, undersideAt, STEP } from './roof.js';
-import { cellSet, wallTop } from './model.js';
+import { cellSet, wallTop, cellSizeOf } from './model.js';
 import { buildProps } from './props.js';
 
 const LIFT = 0.015; // how far detail quads float off the surface they decorate
 
-/** Geometry of one exterior wall segment, in world space. */
-function edgeGeometry(e) {
-  const a = e.a, b = e.b;
+/**
+ * Geometry of one exterior wall segment, in metres.
+ *
+ * The grid speaks in cells; everything else — wall heights, opening sizes,
+ * roof pitch — speaks in metres. This is the single place where a wall edge
+ * crosses that boundary, scaled by the grid pitch `cs`.
+ */
+function edgeGeometry(e, cs) {
+  const a = [e.a[0] * cs, e.a[1] * cs];
+  const b = [e.b[0] * cs, e.b[1] * cs];
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
   const u = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
   return { a, u, len, n: e.n, side: e.side };
@@ -152,8 +159,12 @@ function buildRoofItems(mesh, m, roof) {
 /** Build the complete mesh for a model. */
 export function buildMesh(m) {
   const mesh = new Mesh();
+  const cs = cellSizeOf(m);
   const cells = cellSet(m);
-  const rects = decomposeRects(cells);
+  // Roof rectangles cross into metre space here, like the walls do.
+  const rects = decomposeRects(cells).map((r) => ({
+    x0: r.x0 * cs, y0: r.y0 * cs, x1: r.x1 * cs, y1: r.y1 * cs,
+  }));
   const top = wallTop(m);
   const b = bounds(cells);
 
@@ -163,7 +174,7 @@ export function buildMesh(m) {
   // than standing behind the house, because nothing anchors it to a surface.
   if (m.ground.enabled && !b.empty) {
     const g = m.ground.margin;
-    let x0 = b.i0, y0 = b.j0, x1 = b.i1 + 1, y1 = b.j1 + 1;
+    let x0 = b.i0 * cs, y0 = b.j0 * cs, x1 = (b.i1 + 1) * cs, y1 = (b.j1 + 1) * cs;
     for (const p of m.props) {
       const centred = p.kind === 'tree' || p.kind === 'bush' || p.kind === 'car';
       const pw = p.r ? p.r * 2 : p.w ?? 2;
@@ -187,8 +198,8 @@ export function buildMesh(m) {
     for (const k of cells) {
       const [i, j] = parseKey(k);
       mesh.quad(
-        [i + o, j + o, 0.004], [i + 1 + o, j + o, 0.004],
-        [i + 1 + o, j + 1 + o, 0.004], [i + o, j + 1 + o, 0.004],
+        [i * cs + o, j * cs + o, 0.004], [(i + 1) * cs + o, j * cs + o, 0.004],
+        [(i + 1) * cs + o, (j + 1) * cs + o, 0.004], [i * cs + o, (j + 1) * cs + o, 0.004],
         'shadow', 'shadow', after,
       );
     }
@@ -207,7 +218,7 @@ export function buildMesh(m) {
   const edges = boundaryEdges(cells);
   const geoms = new Map();
   for (const e of edges) {
-    const g = edgeGeometry(e);
+    const g = edgeGeometry(e, cs);
     geoms.set(e.id, g);
     const p = (s, z, out = 0) => [
       g.a[0] + g.u[0] * s + g.n[0] * out,

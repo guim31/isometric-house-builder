@@ -6,8 +6,8 @@
  * view owns inspection and export.
  */
 
-import { key, parseKey, boundaryEdges } from '../core/grid.js';
-import { cellSet } from '../core/model.js';
+import { key, parseKey, boundaryEdges, boundaryRuns } from '../core/grid.js';
+import { cellSet, cellSizeOf, fmtMetres } from '../core/model.js';
 import {
   OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS,
   placeOpening, placeRoofItem, placeProp,
@@ -39,14 +39,16 @@ export class PlanView {
     const w = Math.max(200, r.width);
     const h = Math.max(200, r.height);
     const m = this.store.model;
+    const cs = cellSizeOf(m);
     const cells = cellSet(m);
+    // The plan's canvas space is metres; only painting converts to cells.
     let i0 = 12, j0 = 12, i1 = 28, j1 = 28;
     if (cells.size) {
       i0 = Infinity; j0 = Infinity; i1 = -Infinity; j1 = -Infinity;
       for (const k of cells) {
         const [i, j] = parseKey(k);
-        i0 = Math.min(i0, i); j0 = Math.min(j0, j);
-        i1 = Math.max(i1, i + 1); j1 = Math.max(j1, j + 1);
+        i0 = Math.min(i0, i * cs); j0 = Math.min(j0, j * cs);
+        i1 = Math.max(i1, (i + 1) * cs); j1 = Math.max(j1, (j + 1) * cs);
       }
     }
     for (const p of m.props) {
@@ -104,20 +106,29 @@ export class PlanView {
 
     // Grid, spanning the whole panel rather than just the fitted box: an
     // unruled margin reads as "outside the drawing area", which it is not.
+    // Lines follow the grid pitch, with metre and 5 m lines emphasised; the
+    // finer rulings drop out as soon as they would sit less than ~7 px apart.
+    const cs = cellSizeOf(m);
     const tl = this.toWorld(0, 0);
     const br = this.toWorld(map.w, map.h);
-    const gx0 = Math.floor(Math.min(tl[0], br[0])), gx1 = Math.ceil(Math.max(tl[0], br[0]));
-    const gy0 = Math.floor(Math.min(tl[1], br[1])), gy1 = Math.ceil(Math.max(tl[1], br[1]));
-    const step = map.scale < 9 ? 5 : 1;
-    for (let i = gx0; i <= gx1; i++) {
-      if (i % step) continue;
-      const a = this.toPx(i, gy0), b = this.toPx(i, gy1);
-      gGrid.appendChild(el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: i % 5 ? '' : 'major' }));
+    const gx0 = Math.min(tl[0], br[0]), gx1 = Math.max(tl[0], br[0]);
+    const gy0 = Math.min(tl[1], br[1]), gy1 = Math.max(tl[1], br[1]);
+    const step = map.scale * cs >= 7 ? cs : map.scale >= 7 ? 1 : 5;
+    const perMetre = Math.round(1 / step);
+    const classOf = (n) => {
+      const metres = n * step;
+      if (Math.abs(metres / 5 - Math.round(metres / 5)) < 1e-9) return 'major';
+      return perMetre > 1 && n % perMetre ? 'sub' : '';
+    };
+    for (let n = Math.ceil(gx0 / step); n * step <= gx1; n++) {
+      const x = n * step;
+      const a = this.toPx(x, gy0), b = this.toPx(x, gy1);
+      gGrid.appendChild(el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: classOf(n) }));
     }
-    for (let j = gy0; j <= gy1; j++) {
-      if (j % step) continue;
-      const a = this.toPx(gx0, j), b = this.toPx(gx1, j);
-      gGrid.appendChild(el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: j % 5 ? '' : 'major' }));
+    for (let n = Math.ceil(gy0 / step); n * step <= gy1; n++) {
+      const y = n * step;
+      const a = this.toPx(gx0, y), b = this.toPx(gx1, y);
+      gGrid.appendChild(el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: classOf(n) }));
     }
 
     // Ground items, drawn under the house.
@@ -141,19 +152,33 @@ export class PlanView {
     // Footprint.
     for (const k of cells) {
       const [i, j] = parseKey(k);
-      const a = this.toPx(i, j + 1);
+      const a = this.toPx(i * cs, (j + 1) * cs);
       gCells.appendChild(el('rect', {
-        x: a[0], y: a[1], width: map.scale, height: map.scale, class: 'cell',
+        x: a[0], y: a[1], width: map.scale * cs, height: map.scale * cs, class: 'cell',
       }));
     }
 
     // Exterior walls, thicker so they read as the building outline.
     for (const e of boundaryEdges(cells)) {
-      const a = this.toPx(e.a[0], e.a[1]);
-      const b = this.toPx(e.b[0], e.b[1]);
+      const a = this.toPx(e.a[0] * cs, e.a[1] * cs);
+      const b = this.toPx(e.b[0] * cs, e.b[1] * cs);
       const line = el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: 'edge' });
       line.dataset.edge = e.id;
       gEdges.appendChild(line);
+    }
+
+    // Dimensions, one per straight wall run — the answer to "how long is this
+    // wall?" without counting cells. Short runs stay unlabelled: the label
+    // would cover more wall than it measures.
+    const gDims = g('plan-dims');
+    for (const run of boundaryRuns(cells)) {
+      const metres = run.cells * cs;
+      if (metres * map.scale < 26) continue;
+      const mid = [((run.a[0] + run.b[0]) / 2) * cs, ((run.a[1] + run.b[1]) / 2) * cs];
+      const p = this.toPx(mid[0] + run.n[0] * 0.9, mid[1] + run.n[1] * 0.9);
+      const t = el('text', { x: p[0], y: p[1], dy: 4 });
+      t.textContent = `${fmtMetres(metres)} m`;
+      gDims.appendChild(t);
     }
 
     // Openings, as marks straddling their wall.
@@ -161,12 +186,13 @@ export class PlanView {
     for (const op of m.openings) {
       const e = byId.get(op.edge);
       if (!e) continue;
-      const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]);
-      const u = [(e.b[0] - e.a[0]) / len, (e.b[1] - e.a[1]) / len];
+      const a = [e.a[0] * cs, e.a[1] * cs];
+      const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
+      const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
       const c = op.offset ?? 0.5;
       const w = (op.width ?? 1.2) / 2;
-      const p0 = this.toPx(e.a[0] + u[0] * (c - w), e.a[1] + u[1] * (c - w));
-      const p1 = this.toPx(e.a[0] + u[0] * (c + w), e.a[1] + u[1] * (c + w));
+      const p0 = this.toPx(a[0] + u[0] * (c - w), a[1] + u[1] * (c - w));
+      const p1 = this.toPx(a[0] + u[0] * (c + w), a[1] + u[1] * (c + w));
       const line = el('line', {
         x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1],
         class: `opening opening-${op.kind}${this.store.selection?.id === op.id ? ' selected' : ''}`,
@@ -203,16 +229,21 @@ export class PlanView {
 
   /** Nearest exterior wall to a world point, within `maxDist` metres. */
   nearestEdge(pt, maxDist = 1.5) {
-    const cells = cellSet(this.store.model);
+    const m = this.store.model;
+    const cs = cellSizeOf(m);
+    const cells = cellSet(m);
     let best = null, bestD = maxDist;
     for (const e of boundaryEdges(cells)) {
-      const ax = e.a[0], ay = e.a[1], bx = e.b[0], by = e.b[1];
+      const ax = e.a[0] * cs, ay = e.a[1] * cs;
+      const bx = e.b[0] * cs, by = e.b[1] * cs;
       const dx = bx - ax, dy = by - ay;
       const len2 = dx * dx + dy * dy;
       let t = ((pt[0] - ax) * dx + (pt[1] - ay) * dy) / len2;
       t = Math.max(0, Math.min(1, t));
       const d = Math.hypot(pt[0] - (ax + dx * t), pt[1] - (ay + dy * t));
-      if (d < bestD) { bestD = d; best = { edge: e, t }; }
+      // `offset` is the metre distance along the wall — the unit openings
+      // store, whatever the grid pitch.
+      if (d < bestD) { bestD = d; best = { edge: e, t, offset: t * Math.sqrt(len2) }; }
     }
     return best;
   }
@@ -265,7 +296,7 @@ export class PlanView {
       }
       if (OPENING_DEFAULTS[tool]) {
         const hit = this.nearestEdge(pt);
-        if (hit) placeOpening(s, tool, hit.edge.id, 0, hit.t);
+        if (hit) placeOpening(s, tool, hit.edge.id, 0, hit.offset);
         return;
       }
       if (ROOF_ITEM_DEFAULTS[tool]) { placeRoofItem(s, tool, pt); return; }
@@ -290,7 +321,7 @@ export class PlanView {
         this.previewRect();
       } else if (this.drag.mode === 'slide') {
         const hit = this.nearestEdge(pt, 3);
-        if (hit) s.patchSelected({ edge: hit.edge.id, offset: Math.round(hit.t * 20) / 20 }, 'move');
+        if (hit) s.patchSelected({ edge: hit.edge.id, offset: Math.round(hit.offset * 20) / 20 }, 'move');
       } else if (this.drag.mode === 'move' && this.drag.origin) {
         const dx = pt[0] - this.drag.from[0];
         const dy = pt[1] - this.drag.from[1];
@@ -356,7 +387,8 @@ export class PlanView {
   }
 
   paintAt(pt, erase, fresh) {
-    const i = Math.floor(pt[0]), j = Math.floor(pt[1]);
+    const cs = cellSizeOf(this.store.model);
+    const i = Math.floor(pt[0] / cs), j = Math.floor(pt[1] / cs);
     const k = key(i, j);
     const s = this.store;
     const cells = cellSet(s.model);
@@ -371,25 +403,35 @@ export class PlanView {
 
   previewRect() {
     this.render();
+    const cs = cellSizeOf(this.store.model);
     const [a, b] = [this.drag.from, this.drag.to];
-    const x0 = Math.min(Math.floor(a[0]), Math.floor(b[0]));
-    const y0 = Math.min(Math.floor(a[1]), Math.floor(b[1]));
-    const x1 = Math.max(Math.floor(a[0]), Math.floor(b[0])) + 1;
-    const y1 = Math.max(Math.floor(a[1]), Math.floor(b[1])) + 1;
-    const p = this.toPx(x0, y1);
+    const x0 = Math.min(Math.floor(a[0] / cs), Math.floor(b[0] / cs));
+    const y0 = Math.min(Math.floor(a[1] / cs), Math.floor(b[1] / cs));
+    const x1 = Math.max(Math.floor(a[0] / cs), Math.floor(b[0] / cs)) + 1;
+    const y1 = Math.max(Math.floor(a[1] / cs), Math.floor(b[1] / cs)) + 1;
+    const p = this.toPx(x0 * cs, y1 * cs);
     this.svg.appendChild(el('rect', {
       x: p[0], y: p[1],
-      width: (x1 - x0) * this.map.scale, height: (y1 - y0) * this.map.scale,
+      width: (x1 - x0) * this.map.scale * cs, height: (y1 - y0) * this.map.scale * cs,
       class: this.drag.erase ? 'rect-preview erase' : 'rect-preview',
     }));
+    // Live dimensions while dragging: this is how a wall gets its real length.
+    const label = el('text', {
+      x: p[0] + ((x1 - x0) * this.map.scale * cs) / 2,
+      y: p[1] - 9,
+      class: 'rect-size',
+    });
+    label.textContent = `${fmtMetres((x1 - x0) * cs)} × ${fmtMetres((y1 - y0) * cs)} m`;
+    this.svg.appendChild(label);
   }
 
   commitRect() {
+    const cs = cellSizeOf(this.store.model);
     const [a, b] = [this.drag.from, this.drag.to];
-    const x0 = Math.min(Math.floor(a[0]), Math.floor(b[0]));
-    const y0 = Math.min(Math.floor(a[1]), Math.floor(b[1]));
-    const x1 = Math.max(Math.floor(a[0]), Math.floor(b[0]));
-    const y1 = Math.max(Math.floor(a[1]), Math.floor(b[1]));
+    const x0 = Math.min(Math.floor(a[0] / cs), Math.floor(b[0] / cs));
+    const y0 = Math.min(Math.floor(a[1] / cs), Math.floor(b[1] / cs));
+    const x1 = Math.max(Math.floor(a[0] / cs), Math.floor(b[0] / cs));
+    const y1 = Math.max(Math.floor(a[1] / cs), Math.floor(b[1] / cs));
     const erase = this.drag.erase;
     this.store.update((m) => {
       const set = cellSet(m);

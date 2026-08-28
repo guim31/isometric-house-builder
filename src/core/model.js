@@ -52,6 +52,7 @@ export function normalise(input) {
   const base = emptyModel();
   const m = { ...base, ...(input || {}) };
   m.grid = { ...base.grid, ...(input?.grid || {}) };
+  if (![1, 0.5, 0.25].includes(m.grid.cellSize)) m.grid.cellSize = 1;
   m.roof = { ...base.roof, ...(input?.roof || {}) };
   m.ground = { ...base.ground, ...(input?.ground || {}) };
   m.camera = { ...base.camera, ...(input?.camera || {}) };
@@ -82,6 +83,57 @@ export function normalise(input) {
 }
 
 export const cellSet = (m) => new Set(m.cells);
+
+/** Metres per grid cell. Everything outside the grid already speaks metres. */
+export const cellSizeOf = (m) => m.grid?.cellSize || 1;
+
+/** "10,5" rather than "10.5": dimensions are displayed in French. */
+export const fmtMetres = (v) => String(Math.round(v * 100) / 100).replace('.', ',');
+
+/**
+ * Change the drawing grid pitch, preserving the built house.
+ *
+ * Refining (1 m -> 0,50 m) is exact: every cell subdivides in place, and each
+ * opening is re-anchored to the sub-cell that owns the same start corner, so
+ * its metre offset keeps naming the same spot on the wall. Coarsening rounds
+ * the footprint onto the larger grid and is only a best effort.
+ */
+export function withCellSize(m, size) {
+  const old = cellSizeOf(m);
+  if (size === old) return m;
+  const ratio = old / size;
+  const cells = new Set();
+  const openings = [];
+  if (Number.isInteger(ratio)) {
+    for (const c of m.cells) {
+      const [i, j] = c.split(',').map(Number);
+      for (let dj = 0; dj < ratio; dj++) {
+        for (let di = 0; di < ratio; di++) cells.add(`${i * ratio + di},${j * ratio + dj}`);
+      }
+    }
+    for (const op of m.openings) {
+      const [is, js, side] = op.edge.split(',');
+      const i = Number(is), j = Number(js);
+      const target = {
+        S: [i * ratio, j * ratio],
+        N: [(i + 1) * ratio - 1, (j + 1) * ratio - 1],
+        E: [(i + 1) * ratio - 1, j * ratio],
+        W: [i * ratio, (j + 1) * ratio - 1],
+      }[side];
+      openings.push({ ...op, edge: `${target[0]},${target[1]},${side}` });
+    }
+  } else {
+    for (const c of m.cells) {
+      const [i, j] = c.split(',').map(Number);
+      cells.add(`${Math.floor(i * old / size)},${Math.floor(j * old / size)}`);
+    }
+    for (const op of m.openings) {
+      const [is, js, side] = op.edge.split(',');
+      openings.push({ ...op, edge: `${Math.floor(Number(is) * old / size)},${Math.floor(Number(js) * old / size)},${side}` });
+    }
+  }
+  return { ...m, grid: { ...m.grid, cellSize: size }, cells: [...cells].sort(), openings };
+}
 
 export function setCells(m, set) {
   return { ...m, cells: [...set].sort() };

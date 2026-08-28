@@ -9,7 +9,7 @@
  */
 
 import { boundaryEdges, parseKey } from '../core/grid.js';
-import { cellSet, wallTop } from '../core/model.js';
+import { cellSet, wallTop, cellSizeOf } from '../core/model.js';
 import { heightField } from '../core/roof.js';
 import { decomposeRects } from '../core/grid.js';
 
@@ -23,21 +23,34 @@ function quadPath(camera, pts) {
 const depthOf = (camera, pts) =>
   pts.reduce((acc, p) => acc + camera.depth(p), 0) / pts.length;
 
-/** Build the pick targets for a model. Returns SVG markup. */
-export function hitLayer(model, camera) {
+/**
+ * Build the pick targets for a model. Returns SVG markup.
+ *
+ * `built` (a buildMesh result) is optional: when the caller already has one —
+ * the viewport caches it per model — its edges and roof field are reused
+ * instead of being recomputed on every pan frame.
+ */
+export function hitLayer(model, camera, built = null) {
+  const cs = cellSizeOf(model);
   const cells = cellSet(model);
-  const rects = decomposeRects(cells);
-  const field = rects.length ? heightField(rects, model.roof) : null;
+  const edges = built?.edges ?? boundaryEdges(cells);
+  const field = built ? (built.roof?.field ?? null) : (() => {
+    const rects = decomposeRects(cells).map((r) => ({
+      x0: r.x0 * cs, y0: r.y0 * cs, x1: r.x1 * cs, y1: r.y1 * cs,
+    }));
+    return rects.length ? heightField(rects, model.roof) : null;
+  })();
   const top = wallTop(model);
   const targets = [];
 
   const add = (pts, attrs) => targets.push({ d: quadPath(camera, pts), attrs, depth: depthOf(camera, pts) });
 
   // Wall segments, one per exterior edge and storey.
-  for (const e of boundaryEdges(cells)) {
-    const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]);
-    const u = [(e.b[0] - e.a[0]) / len, (e.b[1] - e.a[1]) / len];
-    const p = (s, z) => [e.a[0] + u[0] * s, e.a[1] + u[1] * s, z];
+  for (const e of edges) {
+    const a = [e.a[0] * cs, e.a[1] * cs];
+    const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
+    const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
+    const p = (s, z) => [a[0] + u[0] * s, a[1] + u[1] * s, z];
     for (let st = 0; st < model.storeys; st++) {
       const z0 = model.plinth + st * model.storeyHeight;
       const z1 = z0 + model.storeyHeight;
@@ -47,14 +60,15 @@ export function hitLayer(model, camera) {
   }
 
   // Openings sit slightly proud of their wall so they win the hit test.
-  const edgeById = new Map(boundaryEdges(cells).map((e) => [e.id, e]));
+  const edgeById = new Map(edges.map((e) => [e.id, e]));
   for (const op of model.openings) {
     const e = edgeById.get(op.edge);
     if (!e) continue;
-    const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]);
-    const u = [(e.b[0] - e.a[0]) / len, (e.b[1] - e.a[1]) / len];
+    const a = [e.a[0] * cs, e.a[1] * cs];
+    const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
+    const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
     const o = 0.05;
-    const p = (s, z) => [e.a[0] + u[0] * s + e.n[0] * o, e.a[1] + u[1] * s + e.n[1] * o, z];
+    const p = (s, z) => [a[0] + u[0] * s + e.n[0] * o, a[1] + u[1] * s + e.n[1] * o, z];
     const w = op.width ?? 1.2, h = op.height ?? 1.25;
     const c = op.offset ?? 0.5, sill = op.sill ?? 0.95;
     const zb = model.plinth + (op.storey || 0) * model.storeyHeight + sill;

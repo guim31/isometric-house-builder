@@ -5,7 +5,7 @@
 import { renderScene } from '../render/svg.js';
 import { hitLayer, screenToGround } from '../render/hit.js';
 import { boundaryEdges } from '../core/grid.js';
-import { cellSet } from '../core/model.js';
+import { cellSet, cellSizeOf } from '../core/model.js';
 import { buildMesh } from '../core/scene.js';
 import { mergeCoplanar } from '../core/mesh.js';
 import { rotateDir } from '../core/iso.js';
@@ -49,7 +49,7 @@ export class Viewport {
     });
     this.lastRender = out;
 
-    const hits = hitLayer(m, out.camera);
+    const hits = hitLayer(m, out.camera, this.cache.built);
     const selected = this.selectionOverlay(out.camera);
     const compass = this.compass(out.camera, height);
     this.root.innerHTML = out.svg.replace(
@@ -93,14 +93,16 @@ export class Viewport {
       const z = sel.type === 'roofItem' ? 6 : 0.06;
       pts.push([x0, y0, z], [x0 + w, y0, z], [x0 + w, y0 + d, z], [x0, y0 + d, z]);
     } else if (sel.type === 'opening') {
-      const e = boundaryEdges(cellSet(this.store.model)).find((x) => x.id === item.edge);
-      if (!e) return '';
-      const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]);
-      const u = [(e.b[0] - e.a[0]) / len, (e.b[1] - e.a[1]) / len];
       const m = this.store.model;
+      const cs = cellSizeOf(m);
+      const e = boundaryEdges(cellSet(m)).find((x) => x.id === item.edge);
+      if (!e) return '';
+      const a = [e.a[0] * cs, e.a[1] * cs];
+      const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
+      const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
       const zb = m.plinth + (item.storey || 0) * m.storeyHeight + (item.sill ?? 0);
       const w = item.width ?? 1.2, h = item.height ?? 1.25, c = item.offset ?? 0.5;
-      const p = (s, z) => [e.a[0] + u[0] * s + e.n[0] * 0.06, e.a[1] + u[1] * s + e.n[1] * 0.06, z];
+      const p = (s, z) => [a[0] + u[0] * s + e.n[0] * 0.06, a[1] + u[1] * s + e.n[1] * 0.06, z];
       pts.push(p(c - w / 2, zb), p(c + w / 2, zb), p(c + w / 2, zb + h), p(c - w / 2, zb + h));
     }
     if (!pts.length) return '';
@@ -235,7 +237,8 @@ export class Viewport {
     const dx = b[0] - a[0], dy = b[1] - a[1];
     const len2 = dx * dx + dy * dy || 1;
     const t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / len2));
-    placeOpening(this.store, kind, edgeId, storey || 0, t);
+    // t is a fraction of the edge; openings store metres along the wall.
+    placeOpening(this.store, kind, edgeId, storey || 0, t * cellSizeOf(this.store.model));
   }
 
   resetView() {

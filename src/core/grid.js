@@ -51,6 +51,43 @@ export function boundaryEdges(cells) {
 }
 
 /**
+ * Straight exterior wall runs: contiguous same-side edges merged into one
+ * segment. This is what a dimension label should measure — nobody wants one
+ * cote per metre of wall.
+ */
+export function boundaryRuns(cells) {
+  const groups = new Map();
+  for (const e of boundaryEdges(cells)) {
+    const horiz = e.side === 'S' || e.side === 'N';
+    const g = `${e.side}:${horiz ? e.j : e.i}`;
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(e);
+  }
+  const runs = [];
+  for (const [g, list] of groups) {
+    const side = g[0];
+    const horiz = side === 'S' || side === 'N';
+    list.sort((p, q) => (horiz ? p.i - q.i : p.j - q.j));
+    let start = 0;
+    for (let k = 1; k <= list.length; k++) {
+      const prev = horiz ? list[k - 1].i : list[k - 1].j;
+      const cur = k < list.length ? (horiz ? list[k].i : list[k].j) : NaN;
+      if (cur !== prev + 1) {
+        const seg = list.slice(start, k);
+        const lo = horiz ? seg[0].i : seg[0].j;
+        const hi = horiz ? seg[seg.length - 1].i : seg[seg.length - 1].j;
+        const first = seg[0];
+        runs.push(horiz
+          ? { side, cells: seg.length, n: first.n, a: [lo, first.a[1]], b: [hi + 1, first.a[1]] }
+          : { side, cells: seg.length, n: first.n, a: [first.a[0], lo], b: [first.a[0], hi + 1] });
+        start = k;
+      }
+    }
+  }
+  return runs;
+}
+
+/**
  * Cover the footprint with maximal rectangles.
  *
  * The roof is built as the upper envelope of one hip roof per rectangle, so

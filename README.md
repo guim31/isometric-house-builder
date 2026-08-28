@@ -48,7 +48,8 @@ tout moment, et *Page blanche* reste disponible.
 
 | | |
 |---|---|
-| **Volume** | Emprise dessinée à main levée sur une trame d'un mètre, jusqu'à 4 niveaux, hauteur d'étage et soubassement réglables |
+| **Volume** | Emprise dessinée à main levée sur une trame de 1 m ou 0,50 m, jusqu'à 4 niveaux, hauteur d'étage et soubassement réglables |
+| **Cotes** | Longueur affichée sur chaque pan de mur, dimensions en direct pendant le tracé, emprise et surface dans l'inspecteur |
 | **Toiture** | Croupe, deux pans, appentis, toit plat — inclinaison, débord et épaisseur de rive ; les noues entre ailes sont calculées |
 | **Ouvertures** | Fenêtres, fenêtres à volets, portes, portes de garage, posées sur n'importe quel mur et à n'importe quel niveau |
 | **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente |
@@ -62,7 +63,11 @@ tout moment, et *Page blanche* reste disponible.
 
 1. **Partez d'un modèle** proche du vôtre, puis **corrigez l'emprise** : outil
    *Rectangle* pour poser un volume, *Pinceau* pour affiner, *Gomme* pour
-   retirer. Une case vaut un mètre.
+   retirer. Chaque pan de mur affiche sa longueur, et l'outil *Rectangle*
+   montre les dimensions pendant le tracé. La trame vaut 1 m par défaut ;
+   passez-la à **0,50 m** (panneau *Bâtiment*) pour caler les dimensions
+   réelles de votre maison — l'emprise existante est conservée à l'identique,
+   ouvertures comprises.
 2. **Réglez la toiture** dans le panneau de droite. Le débord se cale par pas de
    25 cm, pour que la rive tombe sur la trame.
 3. **Choisissez matières et couleurs** dans *Couleurs et matières* : une palette
