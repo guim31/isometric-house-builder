@@ -9,8 +9,8 @@
 import { key, parseKey, boundaryEdges, boundaryRuns } from '../core/grid.js';
 import { cellSet, cellSizeOf, fmtMetres } from '../core/model.js';
 import {
-  OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS,
-  placeOpening, placeRoofItem, placeProp,
+  OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS,
+  placeOpening, placeRoofItem, placeProp, placeRun,
 } from './actions.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -142,7 +142,14 @@ export class PlanView {
       const selected = this.store.selection?.id === p.id;
       const shape = p.kind === 'tree' || p.kind === 'bush'
         ? el('circle', { cx: a[0] + (pw * map.scale) / 2, cy: a[1] + (pd * map.scale) / 2, r: (pw * map.scale) / 2 })
-        : el('rect', { x: a[0], y: a[1], width: pw * map.scale, height: pd * map.scale, rx: p.kind === 'pool' ? 8 : 2 });
+        : el('rect', {
+          x: a[0], y: a[1],
+          // A wall or a gate can be thinner than a hairline on screen; give it
+          // a floor so it stays grabbable and visible.
+          width: Math.max(pw * map.scale, p.kind === 'muret' || p.kind === 'gate' ? 3 : 0),
+          height: Math.max(pd * map.scale, p.kind === 'muret' || p.kind === 'gate' ? 3 : 0),
+          rx: p.kind === 'pool' ? 8 : 2,
+        });
       shape.setAttribute('class', `prop prop-${p.kind}${selected ? ' selected' : ''}`);
       shape.dataset.id = p.id;
       shape.dataset.type = 'prop';
@@ -300,6 +307,12 @@ export class PlanView {
         return;
       }
       if (ROOF_ITEM_DEFAULTS[tool]) { placeRoofItem(s, tool, pt); return; }
+      if (LINEAR_KINDS.has(tool)) {
+        // Drawn as a run: for a wall or a hedge the length is the point, and
+        // clicking then hunting for a slider is the long way round.
+        this.drag = { mode: 'run', kind: tool, from: pt, to: pt };
+        return;
+      }
       if (PROP_DEFAULTS[tool]) { placeProp(s, tool, pt); return; }
     });
 
@@ -319,6 +332,9 @@ export class PlanView {
       } else if (this.drag.mode === 'rect') {
         this.drag.to = pt;
         this.previewRect();
+      } else if (this.drag.mode === 'run') {
+        this.drag.to = pt;
+        this.previewRun();
       } else if (this.drag.mode === 'slide') {
         const hit = this.nearestEdge(pt, 3);
         if (hit) s.patchSelected({ edge: hit.edge.id, offset: Math.round(hit.offset * 20) / 20 }, 'move');
@@ -338,6 +354,7 @@ export class PlanView {
         this.pointers.delete(ev.pointerId);
         if (this.pointers.size < 2) this.pinch = null;
       }
+      if (this.drag?.mode === 'run') placeRun(s, this.drag.kind, this.drag.from, this.drag.to);
       if (this.drag?.mode === 'rect' && this.drag.to) this.commitRect();
       this.drag = null;
       s.commit();
@@ -422,6 +439,25 @@ export class PlanView {
       class: 'rect-size',
     });
     label.textContent = `${fmtMetres((x1 - x0) * cs)} × ${fmtMetres((y1 - y0) * cs)} m`;
+    this.svg.appendChild(label);
+  }
+
+  previewRun() {
+    this.render();
+    const { from, to, kind } = this.drag;
+    const horiz = Math.abs(to[0] - from[0]) >= Math.abs(to[1] - from[1]);
+    const a = horiz ? [from[0], from[1]] : [from[0], from[1]];
+    const b = horiz ? [to[0], from[1]] : [from[0], to[1]];
+    const p0 = this.toPx(a[0], a[1]);
+    const p1 = this.toPx(b[0], b[1]);
+    this.svg.appendChild(el('line', {
+      x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1], class: `run-preview run-${kind}`,
+    }));
+    const len = Math.abs(horiz ? to[0] - from[0] : to[1] - from[1]);
+    const label = el('text', {
+      x: (p0[0] + p1[0]) / 2, y: (p0[1] + p1[1]) / 2 - 10, class: 'rect-size',
+    });
+    label.textContent = `${fmtMetres(Math.round(len * 4) / 4)} m`;
     this.svg.appendChild(label);
   }
 

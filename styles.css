@@ -217,6 +217,10 @@ button:disabled { opacity: .45; cursor: default; }
 .prop-path { fill: #cfc9bb; stroke: #b6ada0; }
 .prop-tree, .prop-hedge { fill: #5fa855; stroke: #3f7f39; }
 .prop-fence { fill: #d9cfbf; stroke: #a9a093; }
+.prop-muret { fill: #b9a892; stroke: #8d7f6c; fill-opacity: .85; }
+.prop-gate { fill: #ffffff; stroke: #6b7c8c; fill-opacity: .95; }
+.run-preview { stroke: var(--accent); stroke-width: 5; stroke-linecap: round; opacity: .75; }
+.run-gate { stroke: #7f9ab5; }
 .prop-car { fill: #d94f4f; stroke: #9e3535; }
 .roof-item { fill: #2f4a72; fill-opacity: .55; stroke: #1d2f4a; stroke-width: 1.4; cursor: pointer; }
 .roof-chimney { fill: #8c8880; }

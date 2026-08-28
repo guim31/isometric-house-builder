@@ -79,6 +79,7 @@ const OPENING_LABELS = { window: 'Fenêtre', shutter: 'Fenêtre à volets', door
 const ROOF_ITEM_LABELS = { solar: 'Panneaux solaires', chimney: 'Cheminée', velux: 'Fenêtre de toit', dish: 'Parabole' };
 const PROP_LABELS = {
   pool: 'Piscine', terrace: 'Terrasse', path: 'Allée', deck: 'Terrasse bois', bush: 'Buisson',
+  muret: 'Muret', gate: 'Portillon / portail',
   tree: 'Arbre', hedge: 'Haie', fence: 'Clôture', car: 'Voiture',
 };
 
@@ -379,9 +380,14 @@ export class Inspector {
           onInput: (v) => patch({ z: v }, 'z'),
         }), 'la dalle reçoit ses joues — et masque ce qui reste au sol dessous'));
       }
-      if (item.kind === 'hedge' || item.kind === 'fence') {
+      if (item.kind === 'gate') {
+        s.appendChild(field('Type', select(item.style || 'swing',
+          [['swing', 'Portillon battant'], ['sliding', 'Portail coulissant']],
+          (v) => patch({ style: v }))));
+      }
+      if (['hedge', 'fence', 'muret', 'gate'].includes(item.kind)) {
         s.appendChild(field('Hauteur', slider(item.h ?? 1, {
-          min: 0.3, max: 3, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          min: 0.3, max: 3, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
           onInput: (v) => patch({ h: v }, 'h'),
         })));
       }

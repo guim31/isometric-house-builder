@@ -46,6 +46,8 @@ const TOOL_GROUPS = [
       ['bush', 'Buisson'],
       ['hedge', 'Haie'],
       ['fence', 'Clôture'],
+      ['muret', 'Muret'],
+      ['gate', 'Portillon / portail'],
       ['car', 'Voiture'],
     ],
   },
@@ -69,9 +71,11 @@ const HINTS = {
   path: 'Cliquez dans le plan ou sur le rendu pour poser l’allée.',
   tree: 'Cliquez dans le plan ou sur le rendu pour planter un arbre.',
   bush: 'Cliquez dans le plan ou sur le rendu pour planter un buisson.',
-  hedge: 'Cliquez dans le plan ou sur le rendu pour poser une haie.',
-  fence: 'Cliquez dans le plan ou sur le rendu pour poser une clôture.',
+  hedge: 'Glissez dans le plan pour tracer la haie.',
+  fence: 'Glissez dans le plan pour tracer la clôture.',
   car: 'Cliquez dans le plan ou sur le rendu pour garer la voiture.',
+  muret: 'Glissez dans le plan pour tracer le muret — sa longueur s’affiche pendant le tracé.',
+  gate: 'Cliquez près d’un muret : le portail s’y aligne et l’ouvre automatiquement.',
 };
 
 const $ = (id) => document.getElementById(id);

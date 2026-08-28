@@ -90,9 +90,62 @@ function blob(mesh, cx, cy, z0, r, h, mat, anchor, sides = 12) {
   }
 }
 
+/**
+ * A garden wall, in the material of the house so a boundary wall reads as
+ * belonging to it, capped with a slightly proud coping.
+ */
+function muretRun(mesh, a0, a1, c0, c1, h, horiz) {
+  if (a1 - a0 < 0.05) return;
+  const [x0, y0, x1, y1] = horiz ? [a0, c0, a1, c1] : [c0, a0, c1, a1];
+  mesh.box([x0, y0, 0], [x1, y1, h - 0.06], 'wall', 'muret', ['bottom']);
+  const o = 0.035;
+  mesh.box([x0 - o, y0 - o, h - 0.06], [x1 + o, y1 + o, h], 'trim', 'muret', ['bottom']);
+}
+
+/**
+ * A white gate: two posts, a frame, and vertical bars.
+ *
+ * `slide` adds the ground guide and the counterweight tail of a sliding gate,
+ * which is what tells it apart from a swing gate at a glance.
+ */
+function gate(mesh, a0, a1, c0, c1, h, horiz, slide, id) {
+  const g = `gate:${id}`;
+  const span = a1 - a0;
+  const post = 0.11;
+  const at = (p0, p1, q0, q1, z0, z1, mat) => {
+    const [x0, y0, x1, y1] = horiz ? [p0, q0, p1, q1] : [q0, p0, q1, p1];
+    mesh.box([x0, y0, z0], [x1, y1, z1], mat, g, ['bottom']);
+  };
+  at(a0, a0 + post, c0 - 0.03, c1 + 0.03, 0, h + 0.12, 'trim');
+  at(a1 - post, a1, c0 - 0.03, c1 + 0.03, 0, h + 0.12, 'trim');
+
+  const i0 = a0 + post, i1 = a1 - post;
+  at(i0, i1, c0, c1, 0.06, 0.18, 'trim');       // bottom rail
+  at(i0, i1, c0, c1, h - 0.14, h, 'trim');      // top rail
+  const step = 0.16;
+  const count = Math.max(1, Math.round((i1 - i0) / step));
+  for (let k = 1; k < count; k++) {
+    const x = i0 + ((i1 - i0) * k) / count;
+    at(x - 0.025, x + 0.025, c0 + 0.01, c1 - 0.01, 0.18, h - 0.14, 'trim');
+  }
+  if (slide) {
+    // Ground guide rail, and the tail the leaf slides back onto.
+    at(a0 - span * 0.55, a1, c0 + 0.02, c1 - 0.02, 0, 0.05, 'garageLine');
+  }
+}
+
+/** Extent of a prop along and across a given axis. */
+function extent(p, horiz) {
+  const w = p.w ?? 2, d = p.d ?? 0.2;
+  return horiz
+    ? { a0: p.x, a1: p.x + w, c0: p.y, c1: p.y + d }
+    : { a0: p.y, a1: p.y + d, c0: p.x, c1: p.x + w };
+}
+
 export function buildProps(mesh, m) {
   const anchor = groundAnchor(m);
   const occupied = cellSet(m);
+  const gates = m.props.filter((p) => p.kind === 'gate');
 
   for (const p of m.props) {
     switch (p.kind) {
@@ -167,6 +220,36 @@ export function buildProps(mesh, m) {
           if (horizontal) mesh.box([p.x, p.y - t / 2, z - 0.06], [p.x + p.w, p.y + t / 2, z + 0.06], 'fence', 'fence', [], anchor);
           else mesh.box([p.x - t / 2, p.y, z - 0.06], [p.x + t / 2, p.y + p.d, z + 0.06], 'fence', 'fence', [], anchor);
         }
+        break;
+      }
+      case 'muret': {
+        // Gates are not linked to a wall by hand: any gate straddling this run
+        // opens it. Dropping a gate onto a wall, or sliding it along, then
+        // does the obvious thing without a relationship to maintain.
+        const horiz = (p.w ?? 4) >= (p.d ?? 0.2);
+        const e = extent(p, horiz);
+        const h = p.h ?? 1.5;
+        const cuts = [];
+        for (const g of gates) {
+          const ge = extent(g, horiz);
+          const thin = horiz ? (g.d ?? 0.2) : (g.w ?? 0.2);
+          if (Math.abs((ge.c0 + ge.c1) / 2 - (e.c0 + e.c1) / 2) > 0.5 + thin) continue;
+          if (ge.a1 <= e.a0 || ge.a0 >= e.a1) continue;
+          cuts.push([Math.max(e.a0, ge.a0), Math.min(e.a1, ge.a1)]);
+        }
+        cuts.sort((u, v) => u[0] - v[0]);
+        let cur = e.a0;
+        for (const [s0, s1] of cuts) {
+          muretRun(mesh, cur, Math.max(cur, s0), e.c0, e.c1, h, horiz);
+          cur = Math.max(cur, s1);
+        }
+        muretRun(mesh, cur, e.a1, e.c0, e.c1, h, horiz);
+        break;
+      }
+      case 'gate': {
+        const horiz = (p.w ?? 1.1) >= (p.d ?? 0.2);
+        const e = extent(p, horiz);
+        gate(mesh, e.a0, e.a1, e.c0, e.c1, p.h ?? 1.5, horiz, p.style === 'sliding', p.id);
         break;
       }
       case 'car': {

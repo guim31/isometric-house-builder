@@ -54,6 +54,7 @@ tout moment, et *Page blanche* reste disponible.
 | **Ouvertures** | Fenêtres, fenêtres à volets, portes, portes de garage, posées sur n'importe quel mur et à n'importe quel niveau |
 | **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente |
 | **Extérieurs** | Piscine, terrasse, allée, pelouse, haies, clôtures, arbres, buissons, voiture — terrasses et piscines pouvant être **surélevées**, avec leurs joues |
+| **Clôture** | **Muret** tracé au glisser, avec chaperon ; **portillon** battant et **portail coulissant**, qui ouvrent le muret là où on les pose |
 | **Matières** | Tuiles, **tuiles canal panachées**, ardoises, bac acier sur le toit ; briques, bardage, pierre, colombages sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
@@ -77,7 +78,9 @@ tout moment, et *Page blanche* reste disponible.
    ce qui fait son allure.
 4. **Posez les ouvertures.** Choisissez *Fenêtre*, *Porte* ou *Porte de garage*,
    puis cliquez le long d'un mur — dans le plan, ou directement sur le rendu.
-5. **Aménagez les abords** avec les outils *Extérieur*.
+5. **Aménagez les abords** avec les outils *Extérieur*. Muret, clôture et haie
+   se **tracent au glisser**, leur longueur s'affichant pendant le tracé ; un
+   portail posé près d'un muret s'y aligne et l'ouvre automatiquement.
 6. **Exportez.** Le fond transparent est celui à préférer : l'image se pose alors
    sur n'importe quelle couleur de tableau de bord.
 
@@ -156,6 +159,11 @@ modifier le moteur :
   les noues correctes là où deux ailes se rejoignent. Les murs, eux, montent
   jusqu'à la sous-face du toit : un pignon n'est pas une pièce à part, c'est une
   conséquence.
+- **Un portail n'est pas rattaché à un muret, il le recoupe.** Le muret est
+  reconstruit en tronçons de part et d'autre de tout portail qui l'enjambe,
+  plutôt que de tenir une liste d'ouvertures. Poser un portail, le faire
+  glisser le long du muret ou le supprimer fait donc ce qu'on attend, sans
+  relation à maintenir entre deux objets.
 - **Les aménagements au sol se superposent dans un ordre fixe.** Terrasse,
   margelle et eau sont de grandes faces quasi coplanaires : leur profondeur de
   peintre dépend de leur position au sol, pas des millimètres qui les séparent
