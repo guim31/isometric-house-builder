@@ -31,8 +31,11 @@ const OPACITY = { shadow: 0.13 };
  * put half the garden in front of the house. Everything sits above it, so
  * drawing it first is unconditionally correct.
  */
-const LAYER = { ground: 0, shadow: 1 };
-const layerOf = (f) => LAYER[f.group] ?? 2;
+// Ground-level decals stack in a fixed order rather than by depth: they are
+// large and near-coplanar, so their centroids say almost nothing about which
+// one is on top. Anything with real height sorts by depth as usual.
+const LAYER = { ground: 0, shadow: 1, decal0: 2, decal1: 3, decal2: 4 };
+const layerOf = (f) => LAYER[f.group] ?? 5;
 
 /** Resolve `after` anchors and return faces in draw order. */
 function orderFaces(faces, camera) {
@@ -43,22 +46,32 @@ function orderFaces(faces, camera) {
     f.depth = camera.depth(f.centroid);
   });
 
-  // Index candidate anchor surfaces by material + group.
+  // Index candidate anchor surfaces, by material + group and by group alone.
+  // Anchoring by group only matters when the carrying surface's material is
+  // the user's choice — a terrace may be paving, gravel or wood, and a pool
+  // resting on it should not have to know which.
   const byGroup = new Map();
+  const byGroupOnly = new Map();
   for (const f of faces) {
     const k = `${f.mat}|${f.group}`;
     if (!byGroup.has(k)) byGroup.set(k, []);
     byGroup.get(k).push(f);
+    if (!byGroupOnly.has(f.group)) byGroupOnly.set(f.group, []);
+    byGroupOnly.get(f.group).push(f);
   }
 
   for (const f of faces) {
     f.sortDepth = f.depth;
+    f.carrier = null;
     if (!f.after) continue;
-    const cands = byGroup.get(`${f.after.mat}|${f.after.group}`);
+    const cands = f.after.mat
+      ? byGroup.get(`${f.after.mat}|${f.after.group}`)
+      : byGroupOnly.get(f.after.group);
     if (!cands || !cands.length) continue;
     // The carrying surface is the one whose plane passes closest to this face.
     let best = null, bestDist = Infinity;
     for (const c of cands) {
+      if (c === f) continue;
       const d = Math.abs(
         c.normal[0] * (f.centroid[0] - c.centroid[0]) +
         c.normal[1] * (f.centroid[1] - c.centroid[1]) +
@@ -66,7 +79,22 @@ function orderFaces(faces, camera) {
       );
       if (d < bestDist) { bestDist = d; best = c; }
     }
-    if (best) f.sortDepth = Math.max(f.sortDepth, best.depth + 1e-4);
+    f.carrier = best;
+  }
+
+  // Propagate along the chain rather than resolving each link once: water
+  // rests on its coping, which rests on the terrace. Reading the carrier's raw
+  // depth only ever moved a face past its immediate support, so the water
+  // stayed behind the terrace its own coping had already cleared. Passes are
+  // capped so a malformed cycle cannot spin here.
+  for (let pass = 0; pass < 4; pass++) {
+    let moved = false;
+    for (const f of faces) {
+      if (!f.carrier) continue;
+      const want = f.carrier.sortDepth + 1e-4;
+      if (want > f.sortDepth) { f.sortDepth = want; moved = true; }
+    }
+    if (!moved) break;
   }
 
   const visible = faces.filter((f) => f.facing > 1e-6);

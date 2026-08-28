@@ -369,9 +369,15 @@ export class Inspector {
         s.appendChild(field('Forme', select(item.shape || 'rounded',
           [['rounded', 'Arrondie'], ['rect', 'Rectangulaire']], (v) => patch({ shape: v }))));
       }
-      if (item.kind === 'terrace' || item.kind === 'path') {
-        s.appendChild(field('Revêtement', select(item.material || 'paving',
+      if (item.kind === 'terrace' || item.kind === 'path' || item.kind === 'deck') {
+        s.appendChild(field('Revêtement', select(item.material || (item.kind === 'deck' ? 'deck' : 'paving'),
           [['paving', 'Dallage'], ['gravel', 'Gravier'], ['deck', 'Bois']], (v) => patch({ material: v }))));
+      }
+      if (['terrace', 'path', 'deck', 'pool'].includes(item.kind)) {
+        s.appendChild(field('Élévation', slider(item.z ?? 0, {
+          min: 0, max: 1.2, step: 0.05, format: (v) => (v > 0 ? `${v.toFixed(2)} m` : 'au sol'),
+          onInput: (v) => patch({ z: v }, 'z'),
+        }), 'la dalle reçoit ses joues — et masque ce qui reste au sol dessous'));
       }
       if (item.kind === 'hedge' || item.kind === 'fence') {
         s.appendChild(field('Hauteur', slider(item.h ?? 1, {

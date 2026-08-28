@@ -53,7 +53,7 @@ tout moment, et *Page blanche* reste disponible.
 | **Toiture** | Croupe, deux pans, appentis, toit plat — inclinaison, débord et épaisseur de rive ; les noues entre ailes sont calculées |
 | **Ouvertures** | Fenêtres, fenêtres à volets, portes, portes de garage, posées sur n'importe quel mur et à n'importe quel niveau |
 | **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente |
-| **Extérieurs** | Piscine, terrasse, allée, pelouse, haies, clôtures, arbres, buissons, voiture |
+| **Extérieurs** | Piscine, terrasse, allée, pelouse, haies, clôtures, arbres, buissons, voiture — terrasses et piscines pouvant être **surélevées**, avec leurs joues |
 | **Matières** | Tuiles, **tuiles canal panachées**, ardoises, bac acier sur le toit ; briques, bardage, pierre, colombages sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
@@ -156,6 +156,14 @@ modifier le moteur :
   les noues correctes là où deux ailes se rejoignent. Les murs, eux, montent
   jusqu'à la sous-face du toit : un pignon n'est pas une pièce à part, c'est une
   conséquence.
+- **Les aménagements au sol se superposent dans un ordre fixe.** Terrasse,
+  margelle et eau sont de grandes faces quasi coplanaires : leur profondeur de
+  peintre dépend de leur position au sol, pas des millimètres qui les séparent
+  en hauteur, si bien qu'une piscine au fond d'une terrasse passait dessous.
+  Elles sont donc empilées explicitement, comme le plan de sol l'était déjà.
+  Surélevée, une dalle redevient de la géométrie ordinaire — et s'ancre alors à
+  ce qui la porte, la chaîne se propageant de l'eau à sa margelle puis à la
+  terrasse.
 - **Une palette peut nommer une couleur par orientation.** Certaines, dont
   Horizons, décalent la teinte dans l'ombre au lieu d'en baisser seulement la
   valeur : aucun assombrissement d'une couleur unique ne les reproduit. Les

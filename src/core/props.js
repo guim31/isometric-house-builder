@@ -13,10 +13,8 @@ import { cellSet } from './model.js';
 // a scene-sized quad would drag every prop to the front.
 const groundAnchor = () => null;
 
-/** Axis-aligned slab lying on the ground. */
-function slab(mesh, x0, y0, x1, y1, z, mat, anchor) {
-  mesh.quad([x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z], mat, mat, anchor);
-}
+/** Above this, a slab stops being a decal and becomes geometry with sides. */
+const RAISED = 0.05;
 
 /** Rounded rectangle as a closed ring of points, for pools and terraces. */
 function roundedRect(x0, y0, x1, y1, r, steps = 5) {
@@ -37,8 +35,33 @@ function roundedRect(x0, y0, x1, y1, r, steps = 5) {
   return pts;
 }
 
-function ringSlab(mesh, ring, z, mat, anchor) {
-  mesh.poly(ring.map(([x, y]) => [x, y, z]), mat, mat, anchor);
+/**
+ * A flat decal on the ground.
+ *
+ * `group` names a paint tier rather than the material. Terrace, coping and
+ * water are large, near-coplanar faces: their painter's depth is dominated by
+ * their position on the ground, not by the millimetres of height between them,
+ * so a pool sitting at the far end of a terrace would be painted over by it.
+ * Ordering them explicitly is the same remedy already used for the ground
+ * plane, and for the same reason.
+ */
+function ringSlab(mesh, ring, z, mat, group, anchor) {
+  mesh.poly(ring.map(([x, y]) => [x, y, z]), mat, group, anchor);
+}
+
+/**
+ * A raised slab: top face plus the vertical sides that make the height read.
+ *
+ * Once it has real height it is ordinary geometry, sorted by depth against the
+ * house like anything else — the flat-decal tiers no longer apply, and must
+ * not, or a raised terrace in front of the house would slide behind it.
+ */
+function raisedSlab(mesh, ring, z, matTop, matSide, group, after = null) {
+  mesh.poly(ring.map(([x, y]) => [x, y, z]), matTop, group, after);
+  for (let k = 0; k < ring.length; k++) {
+    const a = ring[k], b = ring[(k + 1) % ring.length];
+    mesh.quad([a[0], a[1], 0], [b[0], b[1], 0], [b[0], b[1], z], [a[0], a[1], z], matSide, group, after);
+  }
 }
 
 /** A tapered stack of rings, flat-shaded — reads as stylised foliage. */
@@ -74,22 +97,32 @@ export function buildProps(mesh, m) {
   for (const p of m.props) {
     switch (p.kind) {
       case 'terrace':
+      case 'deck':
       case 'path': {
-        const mat = p.material || (p.kind === 'path' ? 'gravel' : 'paving');
-        ringSlab(mesh, roundedRect(p.x, p.y, p.x + p.w, p.y + p.d, p.radius ?? 0.2), 0.012, mat, anchor);
+        const mat = p.material || (p.kind === 'path' ? 'gravel' : p.kind === 'deck' ? 'deck' : 'paving');
+        const ring = roundedRect(p.x, p.y, p.x + p.w, p.y + p.d, p.radius ?? (p.kind === 'deck' ? 0.1 : 0.2));
+        const z = p.z ?? 0;
+        if (z > RAISED) raisedSlab(mesh, ring, z, mat, mat, 'slab');
+        else ringSlab(mesh, ring, 0.012, mat, 'decal0', anchor);
         break;
       }
-      case 'deck':
-        ringSlab(mesh, roundedRect(p.x, p.y, p.x + p.w, p.y + p.d, p.radius ?? 0.1), 0.05, 'deck', anchor);
-        break;
       case 'pool': {
         const r = p.shape === 'rounded' ? Math.min(p.w, p.d) * 0.32 : 0.05;
-        // Coping first, then the water inset within it and slightly lower.
-        ringSlab(mesh, roundedRect(p.x, p.y, p.x + p.w, p.y + p.d, r + 0.25), 0.02, 'poolRim', anchor);
         const i = 0.28;
-        // Above the coping, not below: these are stacked decals, so painting
-        // order follows height and the water must come last.
-        ringSlab(mesh, roundedRect(p.x + i, p.y + i, p.x + p.w - i, p.y + p.d - i, r), 0.035, 'water', anchor);
+        const coping = roundedRect(p.x, p.y, p.x + p.w, p.y + p.d, r + 0.25);
+        const water = roundedRect(p.x + i, p.y + i, p.x + p.w - i, p.y + p.d - i, r);
+        const z = p.z ?? 0;
+        if (z > RAISED) {
+          // Raised, both are ordinary geometry — and two raised slabs sorted by
+          // their centres bring the original defect back one storey up, a large
+          // terrace swallowing the small pool standing on it. So the coping is
+          // anchored to whatever slab carries it, and the water to its coping.
+          raisedSlab(mesh, coping, z, 'poolRim', 'poolRim', 'poolslab', { group: 'slab' });
+          ringSlab(mesh, water, z + 0.015, 'water', 'poolwater', { group: 'poolslab' });
+        } else {
+          ringSlab(mesh, coping, 0.02, 'poolRim', 'decal1', anchor);
+          ringSlab(mesh, water, 0.035, 'water', 'decal2', anchor);
+        }
         break;
       }
       case 'bush': {
