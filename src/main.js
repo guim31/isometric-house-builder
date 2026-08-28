@@ -253,6 +253,15 @@ function scheduleRender() {
 store.subscribe(scheduleRender);
 window.addEventListener('resize', scheduleRender);
 
+// The panels also resize without the window doing so — when the inspector
+// wraps under the stage, for instance — and a view sized from a stale
+// measurement letterboxes itself.
+if (window.ResizeObserver) {
+  const ro = new ResizeObserver(scheduleRender);
+  ro.observe($('plan'));
+  ro.observe($('iso'));
+}
+
 buildTools();
 nameInput.value = store.model.name;
 store.setTool('select');

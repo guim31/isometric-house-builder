@@ -109,6 +109,11 @@ export class PlanView {
     const m = this.store.model;
     const map = this.layout();
     const cells = cellSet(m);
+    // Explicit pixel size, not just a viewBox: if the two ever disagree the
+    // browser letterboxes the drawing, which shows up as an unruled band along
+    // one edge of the panel.
+    this.svg.setAttribute('width', map.w);
+    this.svg.setAttribute('height', map.h);
     this.svg.setAttribute('viewBox', `0 0 ${map.w} ${map.h}`);
     this.svg.replaceChildren();
 
