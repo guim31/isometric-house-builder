@@ -5,8 +5,12 @@ figure{margin:0;background:#fff;border-radius:14px;overflow:hidden;width:340px}
 figcaption{padding:8px 10px;color:#5a6b7d}
 b{display:block;color:#1c2334;font-size:13px}
 pre{padding:10px;color:#b3392b;white-space:pre-wrap}
+small{display:none}
+body.debug small{display:inline}
 </style></head><body><pre id="warn"></pre><div class="r" id="o"></div>
 <script type="module">
+// ?debug affiche les compteurs ; sans lui la page sert de visuel pour le dépôt.
+if (location.search.includes('debug')) document.body.classList.add('debug');
 import { PRESETS } from '../src/data/presets.js';
 import { normalise, cellSet } from '../src/core/model.js';
 import { boundaryEdges } from '../src/core/grid.js';

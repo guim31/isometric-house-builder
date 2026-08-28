@@ -631,7 +631,10 @@ function loadApp(width, height) {
         const doc = frame.contentDocument;
         const done = doc.querySelector('#inspector .panel') && doc.querySelector('#iso svg');
         if (done) resolve(frame);
-        else if (Date.now() - started > 6000) reject(new Error('interface non prête après 6 s'));
+        // Generous on purpose: served from a CDN over a slow link, the first
+        // load of the modules can take several seconds, and a tight deadline
+        // would fail the suite for reasons that have nothing to do with it.
+        else if (Date.now() - started > 15000) reject(new Error('interface non prête après 15 s'));
         else setTimeout(ready, 60);
       };
       ready();
