@@ -9,13 +9,78 @@
  */
 
 import { cross, norm, dot } from '../core/mesh.js';
+import { hexToRgb, rgbToHex, rgbToHsl, hslToRgb } from '../core/palette.js';
 
 export const ROOF_TEXTURES = {
   none: { label: 'Lisse' },
   tiles: { label: 'Tuiles', course: 0.38, joint: 0.42, stagger: true },
+  canal: {
+    // Southern canal tiles: each one fired to its own shade, so the roof reads
+    // as a camaïeu rather than a flat plane. Drawn as filled tiles, unlike the
+    // line-only materials — the colour variation IS the material here.
+    label: 'Tuiles canal panachées',
+    course: 0.21,
+    contrast: 0.26,
+    // Wider than tall: a canal tile reads as a short strip within a fine
+    // course, not as a square. Square tiles turn the roof into brickwork.
+    tile: { along: 0.31, across: 0.21, inset: 0.011 },
+  },
   slate: { label: 'Ardoises', course: 0.3, joint: 0.34, stagger: true },
   seam: { label: 'Bac acier', seam: 0.55 },
 };
+
+/**
+ * The panaché mix, as [weight, hue shift °, saturation ×, lightness ×] around
+ * the roof's own colour: mostly terracotta, with straw, rosé and a few deeper
+ * weathered tiles. Weights are repeat counts, so a uniform pick reproduces
+ * the proportions.
+ */
+const CANAL_MIX = [
+  [9, 0, 1.00, 1.00],   // terre cuite, the ground note
+  [4, -3, 1.06, 0.945], // rouge profond
+  [3, 11, 0.84, 1.075], // paille
+  [2, -7, 0.78, 1.055], // rosé
+  [2, 5, 0.95, 1.03],   // ocre
+  [1, 16, 0.80, 1.11],  // paille claire
+  [1, -4, 1.10, 0.90],  // tuile vieillie
+];
+
+/**
+ * Build the shade set for one face.
+ *
+ * A fixed, small palette rather than free jitter: it bounds the number of
+ * distinct colours, which is what lets the renderer emit one path per shade
+ * instead of one per tile.
+ */
+export function tilePalette(fill, spread = 1) {
+  const [h0, s0, l0] = rgbToHsl(...hexToRgb(fill));
+  const out = [];
+  for (const [weight, dh, ms, ml] of CANAL_MIX) {
+    for (let i = 0; i < weight; i++) {
+      const t = weight > 1 ? (i / (weight - 1) - 0.5) * 2 : 0;
+      const h = h0 + (dh + t * 2.5) * spread;
+      const sat = Math.max(0, Math.min(1, s0 * (ms + t * 0.04 * spread)));
+      const lum = Math.max(0, Math.min(1, l0 * (ml + t * 0.022 * spread)));
+      out.push(rgbToHex(...hslToRgb(h, sat, lum)));
+    }
+  }
+  return out;
+}
+
+/**
+ * Deterministic per-tile pick.
+ *
+ * Seeded by the tile's own lattice position in world space, so the same roof
+ * always fires the same tiles: an export matches the preview, and re-exporting
+ * tomorrow gives a byte-identical image. Math.random would reshuffle the roof
+ * on every frame.
+ */
+function hash2(a, b) {
+  let h = Math.imul(a, 73856093) ^ Math.imul(b, 19349663);
+  h = Math.imul(h ^ (h >>> 15), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
 
 export const WALL_TEXTURES = {
   none: { label: 'Lisse' },
@@ -91,6 +156,65 @@ export function textureSegments(face, spec, scale, minSpacingPx = 3.5) {
     });
   }
   return segs;
+}
+
+/**
+ * Individually coloured tiles covering one face, as world-space quads.
+ *
+ * Same in-plane frame as the line materials, so courses follow the slope and
+ * align across coplanar faces. Returns [] when a tile would be too small to
+ * read — a roof of sub-pixel quads is a slow way to draw a flat colour. The
+ * threshold is far lower than for the line materials: at two pixels a tile
+ * still reads as mottling — which is what a tiled roof looks like from a
+ * distance — where a two-pixel rule is just noise. Measured against the sizes
+ * that matter: the app's own preview sits at roughly 2 px per tile, an export
+ * at 6, and a gallery thumbnail below the threshold, which keeps the ten
+ * thumbnails cheap.
+ */
+export function textureTiles(face, spec, scale, fill, minPx = 1.7) {
+  const t = spec.tile;
+  if (!t) return [];
+  if (t.along * scale < minPx || t.across * scale < minPx) return [];
+
+  const n = face.normal;
+  const { u, v } = frame(n);
+  const ring = face.loops[0];
+  let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+  for (const p of ring) {
+    const a = dot(p, u), b = dot(p, v);
+    if (a < a0) a0 = a;
+    if (a > a1) a1 = a;
+    if (b < b0) b0 = b;
+    if (b > b1) b1 = b;
+  }
+  const cols = Math.ceil((a1 - a0) / t.along) + 1;
+  const rows = Math.ceil((b1 - b0) / t.across) + 1;
+  if (cols * rows > 20000) return []; // pathological face; keep it flat
+
+  const w = dot(ring[0], n);
+  const at = (a, b) => [
+    u[0] * a + v[0] * b + n[0] * w,
+    u[1] * a + v[1] * b + n[1] * w,
+    u[2] * a + v[2] * b + n[2] * w,
+  ];
+  const palette = tilePalette(fill, spec.spread ?? 1);
+  const inset = t.inset ?? 0.01;
+  const out = [];
+  for (let ib = Math.floor(b0 / t.across); ib * t.across <= b1; ib++) {
+    for (let ia = Math.floor(a0 / t.along); ia * t.along <= a1; ia++) {
+      const a = ia * t.along, b = ib * t.across;
+      out.push({
+        colour: palette[Math.floor(hash2(ia, ib) * palette.length) % palette.length],
+        pts: [
+          at(a + inset, b + inset),
+          at(a + t.along - inset, b + inset),
+          at(a + t.along - inset, b + t.across - inset),
+          at(a + inset, b + t.across - inset),
+        ],
+      });
+    }
+  }
+  return out;
 }
 
 /** Which texture setting, if any, applies to a material. */

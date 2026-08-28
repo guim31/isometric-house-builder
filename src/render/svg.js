@@ -13,7 +13,7 @@ import { buildMesh } from '../core/scene.js';
 import { faceColour, materialColour, darken } from '../core/palette.js';
 import { cellSet } from '../core/model.js';
 import { bounds } from '../core/grid.js';
-import { specFor, textureSegments } from './texture.js';
+import { specFor, textureSegments, textureTiles } from './texture.js';
 
 const VIEW = 1 / Math.sqrt(3); // dot with (1,1,1)/sqrt(3)
 
@@ -153,21 +153,46 @@ export function renderScene(model, opts = {}) {
 
     const spec = specFor(f.mat, model.texture);
     if (!spec) return;
-    const segs = textureSegments(f, spec, camera.scale);
-    if (!segs.length) return;
-    // Clipping to the face itself is what lets the generator ignore the face
-    // outline entirely and simply rule lines across its bounding box.
+    // Clipping to the face itself is what lets the generators ignore the face
+    // outline entirely and simply rule across its bounding box.
     const id = `${prefix}-${i}`;
+    const layers = [];
+
+    const tiles = spec.tile ? textureTiles(f, spec, camera.scale, fill) : [];
+    if (tiles.length) {
+      // Grouped by shade, not emitted tile by tile: a full roof runs to
+      // thousands of tiles but only a score of colours, so this is the
+      // difference between twenty paths and several thousand.
+      const byShade = new Map();
+      for (const tile of tiles) {
+        const sub = tile.pts.map((p, k) => {
+          const s = camera.toScreen(p);
+          return `${k === 0 ? 'M' : 'L'}${s[0].toFixed(2)} ${s[1].toFixed(2)}`;
+        }).join('') + 'Z';
+        const acc = byShade.get(tile.colour);
+        if (acc) acc.push(sub); else byShade.set(tile.colour, [sub]);
+      }
+      for (const [colour, subs] of byShade) {
+        layers.push(`<path d="${subs.join('')}" clip-path="url(#${id})" fill="${colour}"/>`);
+      }
+    }
+
+    const segs = textureSegments(f, spec, camera.scale);
+    if (segs.length) {
+      const lines = segs.map(([p, q]) => {
+        const a = camera.toScreen(p), b = camera.toScreen(q);
+        return `M${a[0].toFixed(2)} ${a[1].toFixed(2)}L${b[0].toFixed(2)} ${b[1].toFixed(2)}`;
+      }).join('');
+      layers.push(
+        `<path d="${lines}" clip-path="url(#${id})" fill="none" ` +
+        `stroke="${darken(fill, spec.contrast ?? 0.2)}" ` +
+        `stroke-width="${(hair * (spec.weight ?? 1)).toFixed(2)}"/>`,
+      );
+    }
+
+    if (!layers.length) return;
     defs.push(`<clipPath id="${id}"><path d="${d}"/></clipPath>`);
-    const lines = segs.map(([p, q]) => {
-      const a = camera.toScreen(p), b = camera.toScreen(q);
-      return `M${a[0].toFixed(2)} ${a[1].toFixed(2)}L${b[0].toFixed(2)} ${b[1].toFixed(2)}`;
-    }).join('');
-    out.push(
-      `<path d="${lines}" clip-path="url(#${id})" fill="none" ` +
-      `stroke="${darken(fill, spec.contrast ?? 0.2)}" ` +
-      `stroke-width="${(hair * (spec.weight ?? 1)).toFixed(2)}"/>`,
-    );
+    out.push(...layers);
   });
 
   const bg = model.style.background;

@@ -11,8 +11,8 @@ import { defaultModel, emptyModel, normalise, cellSet, wallTop, withCellSize, fm
 import { buildMesh } from '../src/core/scene.js';
 import { renderScene } from '../src/render/svg.js';
 import { hitLayer, screenToGround } from '../src/render/hit.js';
-import { textureSegments, specFor, ROOF_TEXTURES, WALL_TEXTURES } from '../src/render/texture.js';
-import { THEMES, faceColour, materialColour } from '../src/core/palette.js';
+import { textureSegments, textureTiles, tilePalette, specFor, ROOF_TEXTURES, WALL_TEXTURES } from '../src/render/texture.js';
+import { THEMES, faceColour, materialColour, hexToRgb, rgbToHsl } from '../src/core/palette.js';
 import { PRESETS, getPreset } from '../src/data/presets.js';
 import { Gallery } from '../src/ui/gallery.js';
 import { Store } from '../src/ui/store.js';
@@ -419,6 +419,71 @@ check('les joints d’un appareillage sont décalés d’un rang à l’autre', 
   if (joints.length < 4) return `${joints.length} joints seulement`;
   const xs = new Set(joints.map(([a]) => Math.round(a[0] * 100) / 100));
   return xs.size > 2 || 'joints tous alignés';
+});
+
+check('les tuiles canal couvrent la face et restent dans son plan', () => {
+  const face = slopeFace();
+  const tiles = textureTiles(face, ROOF_TEXTURES.canal, 60, '#d98d64');
+  if (tiles.length < 200) return `${tiles.length} tuiles seulement`;
+  const d0 = face.normal[0] * face.loops[0][0][0] + face.normal[1] * face.loops[0][0][1]
+    + face.normal[2] * face.loops[0][0][2];
+  for (const t of tiles) {
+    if (t.pts.length !== 4) return 'tuile non quadrangulaire';
+    for (const p of t.pts) {
+      const d = face.normal[0] * p[0] + face.normal[1] * p[1] + face.normal[2] * p[2];
+      if (!near(d, d0, 1e-6)) return 'tuile hors du plan de la face';
+    }
+  }
+  return true;
+});
+
+check('le panachage est déterministe', () => {
+  // An export must match the preview, and re-exporting tomorrow must give the
+  // same image — hence a positional hash rather than Math.random.
+  const face = slopeFace();
+  const a = textureTiles(face, ROOF_TEXTURES.canal, 60, '#d98d64');
+  const b = textureTiles(face, ROOF_TEXTURES.canal, 60, '#d98d64');
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].colour !== b[i].colour) return `tuile ${i} : ${a[i].colour} puis ${b[i].colour}`;
+  }
+  const m = normalise({ ...defaultModel(), texture: { roof: 'canal', wall: 'none' } });
+  // Clip-path ids are deliberately unique per render, so they are normalised
+  // out: what must be identical is the geometry and the shades.
+  const strip = (svg) => svg.replace(/t\d+-\d+/g, 'id');
+  return strip(renderScene(m, { width: 500, height: 380 }).svg)
+    === strip(renderScene(m, { width: 500, height: 380 }).svg) || 'deux rendus divergent';
+});
+
+check('le camaïeu reste dans la famille de la teinte du toit', () => {
+  // Shades must vary, but a tile straying far in hue would read as a defect
+  // rather than as a fired-clay variation.
+  const fill = '#d98d64';
+  const [h0, , l0] = rgbToHsl(...hexToRgb(fill));
+  const shades = tilePalette(fill);
+  if (shades.length < 12) return `${shades.length} nuances`;
+  if (new Set(shades).size < 12) return 'nuances dupliquées';
+  for (const c of shades) {
+    const [h, , l] = rgbToHsl(...hexToRgb(c));
+    let dh = Math.abs(h - h0); if (dh > 180) dh = 360 - dh;
+    if (dh > 25) return `teinte à ${dh.toFixed(0)}° de la base : ${c}`;
+    if (Math.abs(l - l0) > 0.14) return `clarté trop écartée : ${c}`;
+  }
+  return true;
+});
+
+check('les tuiles disparaissent quand elles deviennent illisibles', () => {
+  return textureTiles(slopeFace(), ROOF_TEXTURES.canal, 3, '#d98d64').length === 0;
+});
+
+check('les tuiles sont regroupées par nuance, pas émises une à une', () => {
+  // Thousands of tiles, a score of shades: without the grouping the SVG would
+  // carry one path per tile and grow by an order of magnitude.
+  const m = normalise({ ...defaultModel(), texture: { roof: 'canal', wall: 'none' } });
+  const svg = renderScene(m, { width: 1200, height: 800 }).svg;
+  const paths = (svg.match(/<path/g) || []).length;
+  const tiles = (svg.match(/Z/g) || []).length;
+  if (tiles < 500) return `${tiles} tuiles : le panachage ne s'est pas déclenché`;
+  return paths < 400 || `${paths} chemins pour ${tiles} facettes`;
 });
 
 check('seuls les murs et la toiture reçoivent une matière', () => {

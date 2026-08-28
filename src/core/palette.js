@@ -34,6 +34,40 @@ export function hexToRgb(hex) {
   return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)];
 }
 
+/**
+ * RGB <-> HSL, used to vary a tile's shade without leaving its colour family.
+ * Jittering channels directly would drift the hue as soon as one channel
+ * clipped; going through lightness and saturation keeps the camaïeu coherent.
+ */
+export function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d < 1e-9) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+
+export function hslToRgb(h, s, l) {
+  h = (((h % 360) + 360) % 360) / 360;
+  if (s <= 0) return [l * 255, l * 255, l * 255];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const f = (t) => {
+    t = (t + 1) % 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
+}
+
 export function rgbToHex(r, g, b) {
   const c = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
   return `#${c(r)}${c(g)}${c(b)}`;

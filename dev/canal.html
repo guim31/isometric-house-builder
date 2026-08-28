@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Tuiles canal</title><style>
+body{margin:0;background:#fff;font:12px system-ui}.r{display:flex;flex-wrap:wrap}
+figure{margin:0}figcaption{text-align:center;color:#5a6b7d;padding-bottom:8px}</style></head>
+<body><div class="r" id="o"></div>
+<script type="module">
+import { PRESETS } from '../src/data/presets.js';
+import { normalise } from '../src/core/model.js';
+import { renderScene } from '../src/render/svg.js';
+const base = normalise(PRESETS.find((p) => p.id === 'provence').model);
+const cases = [
+  ['tuiles (lignes)', { roof: 'tiles', wall: 'none' }, 1],
+  ['canal panachées', { roof: 'canal', wall: 'none' }, 1],
+  ['canal, zoom', { roof: 'canal', wall: 'none' }, 2.6],
+];
+const o = document.getElementById('o');
+for (const [label, texture, zoom] of cases) {
+  const t0 = performance.now();
+  const { svg } = renderScene({ ...base, texture }, { width: 620, height: 460, zoom });
+  const ms = (performance.now() - t0).toFixed(0);
+  const paths = (svg.match(/<path/g) || []).length;
+  o.insertAdjacentHTML('beforeend',
+    `<figure>${svg}<figcaption>${label} — ${paths} chemins, ${ms} ms, ${(svg.length/1024).toFixed(0)} Ko</figcaption></figure>`);
+}
+</script></body></html>

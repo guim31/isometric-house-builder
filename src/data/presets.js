@@ -82,7 +82,7 @@ export const PRESETS = [
       cells: cells([12, 14, 24, 20], [19, 21, 24, 26]),
       storeys: 1, storeyHeight: 2.8, plinth: 0,
       roof: { type: 'hip', pitch: 25, overhang: 0.85, fascia: 0.2, shedDir: 'S' },
-      texture: { roof: 'tiles', wall: 'none' },
+      texture: { roof: 'canal', wall: 'none' },
       overrides: { wall: '#ead8b6', roof: '#dda678', shutter: '#94b1a0', door: '#7b9a8a', plinth: '#dccfae' },
       openings: [
         shut('13,20,N', { width: 1.4 }), shut('16,20,N', { width: 1.4 }), door('18,20,N'),

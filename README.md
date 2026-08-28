@@ -54,7 +54,7 @@ tout moment, et *Page blanche* reste disponible.
 | **Ouvertures** | Fenêtres, fenêtres à volets, portes, portes de garage, posées sur n'importe quel mur et à n'importe quel niveau |
 | **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente |
 | **Extérieurs** | Piscine, terrasse, allée, pelouse, haies, clôtures, arbres, buissons, voiture |
-| **Matières** | Tuiles, ardoises, bac acier sur le toit ; briques, bardage, pierre, colombages sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
+| **Matières** | Tuiles, **tuiles canal panachées**, ardoises, bac acier sur le toit ; briques, bardage, pierre, colombages sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
 | **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, copie directe dans le presse-papier |
@@ -162,6 +162,12 @@ modifier le moteur :
   faces d'axe reçoivent donc la teinte exacte, les faces inclinées une
   interpolation. Recolorer un matériau applique un rapport par canal, ce qui
   préserve cette structure au lieu de retomber sur une multiplication à plat.
+- **Le panachage des tuiles canal est déterministe.** Chaque tuile tire sa
+  nuance d'un hachage de sa propre position, jamais d'un tirage aléatoire :
+  l'export correspond exactement à l'aperçu, et réexporter demain redonne la
+  même image. Les nuances forment une palette fixe d'une vingtaine de tons, ce
+  qui permet d'émettre un chemin par teinte au lieu d'un par tuile — quelques
+  milliers de facettes tiennent ainsi en une vingtaine de chemins.
 - **Les matières sont générées dans le plan de la face, pas en motif SVG.** Un
   `<pattern>` vit dans l'espace de l'écran : les rangs de tuiles seraient
   identiques sur tous les pans et la texture semblerait collée sur l'image. Ici
