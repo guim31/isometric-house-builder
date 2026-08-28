@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Tests — Isometric House Builder</title>
+<style>
+body{font:14px/1.5 system-ui;margin:0;padding:18px;background:#f6f8fa;color:#16212b}
+h1{font-size:17px;margin:0 0 4px} .lead{color:#5a6b7d;margin:0 0 16px}
+li{list-style:none;padding:3px 0;font-family:ui-monospace,monospace;font-size:12.5px}
+.ok::before{content:"PASS  ";color:#177245;font-weight:700}
+.ko::before{content:"FAIL  ";color:#b3392b;font-weight:700}
+.ko{color:#b3392b}
+#summary{margin-top:14px;padding:9px 12px;border-radius:8px;font-weight:600}
+.green{background:#dff3e4;color:#177245} .red{background:#fbe3e0;color:#b3392b}
+#stage{position:fixed;left:-4000px;top:0;width:900px;height:600px}
+</style></head>
+<body>
+<h1>Tests — Isometric House Builder</h1>
+<p class="lead">Aucune dépendance, aucun build : ouvrez ce fichier depuis un serveur local.</p>
+<ul id="results"></ul>
+<div id="summary">…</div>
+<div id="stage"><div id="plan" style="width:440px;height:600px"></div><div id="iso" style="width:440px;height:600px"></div><div id="inspector"></div></div>
+<script type="module" src="run.js"></script>
+</body></html>

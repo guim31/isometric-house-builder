@@ -1,0 +1,164 @@
+/**
+ * Scene -> SVG.
+ *
+ * Faces are merged, back-face culled, depth sorted and emitted as flat paths.
+ * The output is deliberately plain SVG: no filters, no gradients, no fonts, so
+ * that it rasterises identically in every browser and can be dropped straight
+ * into a dashboard.
+ */
+
+import { mergeCoplanar } from '../core/mesh.js';
+import { Camera, rotateDir } from '../core/iso.js';
+import { buildMesh } from '../core/scene.js';
+import { materialColour, shade, shadeFactor, darken } from '../core/palette.js';
+import { cellSet } from '../core/model.js';
+import { bounds } from '../core/grid.js';
+
+const VIEW = 1 / Math.sqrt(3); // dot with (1,1,1)/sqrt(3)
+
+/** Materials drawn without an outline, or with a special opacity. */
+const NO_OUTLINE = new Set(['shadow', 'grass', 'water', 'solarCell', 'garageLine']);
+const OPACITY = { shadow: 0.13 };
+
+/**
+ * A few groups are backdrops rather than participants in the depth sort.
+ * The ground is a single huge quad at z=0: sorting it by its centroid would
+ * put half the garden in front of the house. Everything sits above it, so
+ * drawing it first is unconditionally correct.
+ */
+const LAYER = { ground: 0, shadow: 1 };
+const layerOf = (f) => LAYER[f.group] ?? 2;
+
+/** Resolve `after` anchors and return faces in draw order. */
+function orderFaces(faces, camera) {
+  faces.forEach((f, i) => {
+    f.seq = i;
+    f.nCam = rotateDir(f.normal, camera.rotation);
+    f.facing = (f.nCam[0] + f.nCam[1] + f.nCam[2]) * VIEW;
+    f.depth = camera.depth(f.centroid);
+  });
+
+  // Index candidate anchor surfaces by material + group.
+  const byGroup = new Map();
+  for (const f of faces) {
+    const k = `${f.mat}|${f.group}`;
+    if (!byGroup.has(k)) byGroup.set(k, []);
+    byGroup.get(k).push(f);
+  }
+
+  for (const f of faces) {
+    f.sortDepth = f.depth;
+    if (!f.after) continue;
+    const cands = byGroup.get(`${f.after.mat}|${f.after.group}`);
+    if (!cands || !cands.length) continue;
+    // The carrying surface is the one whose plane passes closest to this face.
+    let best = null, bestDist = Infinity;
+    for (const c of cands) {
+      const d = Math.abs(
+        c.normal[0] * (f.centroid[0] - c.centroid[0]) +
+        c.normal[1] * (f.centroid[1] - c.centroid[1]) +
+        c.normal[2] * (f.centroid[2] - c.centroid[2]),
+      );
+      if (d < bestDist) { bestDist = d; best = c; }
+    }
+    if (best) f.sortDepth = Math.max(f.sortDepth, best.depth + 1e-4);
+  }
+
+  const visible = faces.filter((f) => f.facing > 1e-6);
+  // Stable sort: ties keep mesh insertion order, which is how frame / glass /
+  // mullion end up stacked correctly on a window.
+  visible.sort((a, b) =>
+    (layerOf(a) - layerOf(b)) || (a.sortDepth - b.sortDepth) || (a.seq - b.seq));
+  return visible;
+}
+
+function pathData(face, camera) {
+  let d = '';
+  for (const loop of face.loops) {
+    for (let i = 0; i < loop.length; i++) {
+      const [x, y] = camera.toScreen(loop[i]);
+      d += `${i === 0 ? 'M' : 'L'}${x.toFixed(2)} ${y.toFixed(2)}`;
+    }
+    d += 'Z';
+  }
+  return d;
+}
+
+/**
+ * Render a model.
+ *
+ * Returns the SVG markup plus the camera actually used, so that interactive
+ * callers can hit-test against exactly the same projection.
+ */
+export function renderScene(model, opts = {}) {
+  const width = opts.width ?? 1200;
+  const height = opts.height ?? 800;
+  const built = opts.built ?? buildMesh(model);
+  const faces = mergeCoplanar(built.mesh.tris);
+
+  const b = built.bounds.empty ? { i0: 0, j0: 0, i1: 1, j1: 1 } : built.bounds;
+  const camera = new Camera({
+    rotation: model.camera.rotation,
+    projection: model.camera.projection,
+    centre: [(b.i0 + b.i1 + 1) / 2, (b.j0 + b.j1 + 1) / 2],
+  });
+
+  const pts = [];
+  for (const f of faces) for (const loop of f.loops) for (const p of loop) pts.push(p);
+  if (opts.camera) {
+    camera.scale = opts.camera.scale;
+    camera.offset = opts.camera.offset;
+  } else {
+    camera.fit(pts, width, height, opts.pad ?? Math.min(width, height) * 0.06);
+    camera.scale *= opts.zoom ?? 1;
+    camera.offset = [
+      camera.offset[0] + (opts.panX ?? 0),
+      camera.offset[1] + (opts.panY ?? 0),
+    ];
+    if (opts.zoom && opts.zoom !== 1) {
+      // Zoom about the centre of the canvas rather than the origin.
+      camera.offset = [
+        width / 2 + (camera.offset[0] - width / 2) * opts.zoom,
+        height / 2 + (camera.offset[1] - height / 2) * opts.zoom,
+      ];
+    }
+  }
+
+  const ordered = orderFaces(faces, camera);
+  const theme = model.theme;
+  const ov = model.overrides;
+  const out = [];
+  for (const f of ordered) {
+    const base = materialColour(f.mat, theme, ov);
+    const fill = f.mat === 'shadow' ? base : shade(base, shadeFactor(f.nCam));
+    const parts = [`d="${pathData(f, camera)}"`, `fill="${fill}"`];
+    if (OPACITY[f.mat] != null) parts.push(`opacity="${OPACITY[f.mat]}"`);
+    if (model.style.outline && !NO_OUTLINE.has(f.mat)) {
+      parts.push(`stroke="${darken(fill, 0.26)}"`, `stroke-width="${model.style.outlineWidth}"`);
+    }
+    out.push(`<path ${parts.join(' ')}/>`);
+  }
+
+  const bg = model.style.background;
+  const bgRect = bg && bg !== 'transparent'
+    ? `<rect width="${width}" height="${height}" fill="${bg}"/>` : '';
+
+  // The viewBox stays at the layout size while width/height carry the pixel
+  // ratio, so a 4x export re-rasterises the vectors instead of upscaling a
+  // bitmap — outlines stay one pixel crisp at any resolution.
+  const ratio = opts.pixelRatio ?? 1;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(width * ratio)}" ` +
+    `height="${Math.round(height * ratio)}" ` +
+    `viewBox="0 0 ${width} ${height}" shape-rendering="geometricPrecision">` +
+    bgRect +
+    `<g stroke-linejoin="round" stroke-linecap="round">${out.join('')}</g>` +
+    `</svg>`;
+
+  return { svg, camera, faces: ordered, built, width, height };
+}
+
+/** Bounding box of the footprint, used by the plan view. */
+export function footprintBounds(model) {
+  return bounds(cellSet(model));
+}

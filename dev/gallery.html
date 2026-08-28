@@ -1,0 +1,32 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Galerie de rendu — comparaison des toitures et des orientations</title>
+<style>body{margin:0;background:#f4f6f8;font:13px system-ui}
+.row{display:flex;flex-wrap:wrap}figure{margin:0;padding:4px}figcaption{text-align:center;color:#456}</style>
+</head><body><div class="row" id="out"></div>
+<script type="module">
+import { defaultModel, normalise } from '../src/core/model.js';
+import { renderScene } from '../src/render/svg.js';
+const out = document.getElementById('out');
+const cases = [
+  ['croupe (defaut)', (m)=>m],
+  ['deux pans', (m)=>({...m, roof:{...m.roof, type:'gable'}})],
+  ['toit plat', (m)=>({...m, roof:{...m.roof, type:'flat'}})],
+  ['appentis S', (m)=>({...m, roof:{...m.roof, type:'shed', shedDir:'S'}})],
+  ['rotation 1', (m)=>({...m, camera:{...m.camera, rotation:1}})],
+  ['rotation 2', (m)=>({...m, camera:{...m.camera, rotation:2}})],
+  ['rotation 3', (m)=>({...m, camera:{...m.camera, rotation:3}})],
+  ['2 etages', (m)=>({...m, storeys:2})],
+];
+const errs=[];
+for (const [label, fn] of cases) {
+  try {
+    const m = normalise(fn(defaultModel()));
+    const t0 = performance.now();
+    const { svg } = renderScene(m, { width: 460, height: 330 });
+    const ms = (performance.now()-t0).toFixed(0);
+    out.insertAdjacentHTML('beforeend',
+      `<figure>${svg}<figcaption>${label} — ${ms} ms</figcaption></figure>`);
+  } catch (e) { errs.push(label+': '+e.message); }
+}
+if (errs.length) out.insertAdjacentHTML('afterbegin','<pre style="color:#b00">'+errs.join('\n')+'</pre>');
+document.title = 'pret';
+</script></body></html>

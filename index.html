@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Isometric House Builder — modéliser sa maison en isométrie</title>
+<meta name="description" content="Outil libre pour modéliser sa maison en vue isométrique et en exporter des images PNG ou SVG, pensé pour les tableaux de bord domotiques comme Gladys Assistant.">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M4 18 16 11l12 7-12 7z' fill='%23c8663c'/><path d='M4 18v5l12 7v-5z' fill='%23e9c98d'/><path d='M28 18v5l-12 7v-5z' fill='%23c8a76d'/></svg>">
+</head>
+<body>
+<header class="app-bar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">Isometric House Builder</span>
+  </div>
+  <input id="project-name" class="project-name" aria-label="Nom du projet" spellcheck="false">
+  <div class="app-actions">
+    <button id="btn-undo" title="Annuler (Ctrl+Z)">Annuler</button>
+    <button id="btn-redo" title="Rétablir (Ctrl+Maj+Z)">Rétablir</button>
+    <span class="sep"></span>
+    <button id="btn-new">Nouveau</button>
+    <button id="btn-open">Ouvrir…</button>
+    <button id="btn-save">Enregistrer</button>
+    <span class="sep"></span>
+    <button id="btn-export" class="primary">Exporter une image</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="tools" id="tools" aria-label="Outils"></aside>
+
+  <section class="stage">
+    <div class="view">
+      <div class="view-head">
+        <h2>Plan — vue de dessus</h2>
+        <p class="view-hint" id="plan-hint">Dessinez l’emprise de la maison.</p>
+      </div>
+      <div class="view-body" id="plan"></div>
+    </div>
+    <div class="view">
+      <div class="view-head">
+        <h2>Rendu isométrique</h2>
+        <div class="view-tools">
+          <button id="btn-rot-left" title="Tourner à gauche ( [ )">↺</button>
+          <span id="rot-label" class="rot-label">Sud-Est</span>
+          <button id="btn-rot-right" title="Tourner à droite ( ] )">↻</button>
+          <button id="btn-fit" title="Recadrer">Recadrer</button>
+        </div>
+      </div>
+      <div class="view-body iso" id="iso"></div>
+    </div>
+  </section>
+
+  <aside class="inspector" id="inspector" aria-label="Réglages"></aside>
+</main>
+
+<dialog id="export-dialog" class="dialog">
+  <form method="dialog">
+    <h2>Exporter une image</h2>
+    <p class="dialog-lead">Le fond transparent permet de déposer l’image sur n’importe quel tableau de bord.</p>
+    <label class="field">
+      <span class="field-label">Taille</span>
+      <select id="export-size"></select>
+    </label>
+    <div class="dialog-actions">
+      <button type="button" id="btn-png" class="primary">PNG</button>
+      <button type="button" id="btn-svg">SVG</button>
+      <button type="button" id="btn-four">Les 4 faces</button>
+      <button type="button" id="btn-copy">Copier</button>
+    </div>
+    <p class="dialog-status" id="export-status" role="status"></p>
+    <menu class="dialog-close"><button value="close">Fermer</button></menu>
+  </form>
+</dialog>
+
+<input type="file" id="file-input" accept=".json,application/json" hidden>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
