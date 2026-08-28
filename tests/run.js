@@ -535,6 +535,54 @@ await checkAsync('le PNG conserve la transparence du fond', async () => {
   return alpha === 0 || `alpha du coin : ${alpha}`;
 });
 
+/**
+ * Load the real page in an iframe.
+ *
+ * The suite above exercises modules; this one exercises the assembled page,
+ * which is where a purely-CSS regression hides. One did: the layout grew past
+ * the viewport and pushed both drawings below the fold, and every module test
+ * still passed.
+ */
+function loadApp(width, height) {
+  return new Promise((resolve, reject) => {
+    const frame = document.createElement('iframe');
+    frame.style.cssText = `width:${width}px;height:${height}px`;
+    frame.src = '../index.html';
+    frame.onload = () => setTimeout(() => resolve(frame), 700);
+    frame.onerror = () => reject(new Error('page non chargée'));
+    document.getElementById('appframe').appendChild(frame);
+  });
+}
+
+await checkAsync('la page tient dans la fenêtre, sans déborder', async () => {
+  const frame = await loadApp(1280, 800);
+  const doc = frame.contentDocument;
+  const view = doc.documentElement.clientHeight;
+  const scroll = doc.body.scrollHeight;
+  if (scroll > view + 2) return `contenu ${scroll}px pour une fenêtre de ${view}px`;
+  // Both drawing panels must fit inside the viewport, not merely exist.
+  for (const id of ['plan', 'iso']) {
+    const r = doc.getElementById(id).getBoundingClientRect();
+    if (r.height > view) return `le panneau « ${id} » fait ${Math.round(r.height)}px`;
+    if (r.height < 120) return `le panneau « ${id} » est écrasé (${Math.round(r.height)}px)`;
+  }
+  return true;
+});
+
+await checkAsync('la page s’amorce avec ses outils et un rendu visible', async () => {
+  const frame = await loadApp(1280, 800);
+  const doc = frame.contentDocument;
+  if (doc.querySelectorAll('.tool').length < 10) return 'palette d’outils incomplète';
+  if (!doc.querySelector('#inspector .panel')) return 'inspecteur vide';
+  const svg = doc.querySelector('#iso svg');
+  if (!svg || svg.querySelectorAll('path').length < 20) return 'rendu isométrique vide';
+  // The drawing must land inside the panel, not somewhere off-screen below it.
+  const panel = doc.getElementById('iso').getBoundingClientRect();
+  const box = svg.getBBox();
+  return (box.y + box.height <= panel.height + 2 && box.height > 40)
+    || `dessin en dehors du panneau : y=${Math.round(box.y)} h=${Math.round(box.height)} pour ${Math.round(panel.height)}px`;
+});
+
 /* ---------------- summary ---------------- */
 
 const summary = document.getElementById('summary');

@@ -9,13 +9,22 @@ li{list-style:none;padding:3px 0;font-family:ui-monospace,monospace;font-size:12
 .ko{color:#b3392b}
 #summary{margin-top:14px;padding:9px 12px;border-radius:8px;font-weight:600}
 .green{background:#dff3e4;color:#177245} .red{background:#fbe3e0;color:#b3392b}
-#stage{position:fixed;left:-4000px;top:0;width:900px;height:600px}
+/* On-screen but clipped to a pixel: parked off-screen, Chrome suspends
+   requestAnimationFrame inside the iframe and the app never draws itself,
+   which reads as a failure that has nothing to do with the code. */
+#stage{position:fixed;right:0;bottom:0;width:1px;height:1px;overflow:hidden;opacity:.01;pointer-events:none;z-index:-1}
+/* The iframe tests need a genuinely visible frame: Chrome suspends
+   requestAnimationFrame in an off-screen iframe, so the app never draws and
+   the failure says nothing about the code. */
+#appframe iframe{border:1px solid #d8e0e8;border-radius:8px;background:#fff}
 </style></head>
 <body>
 <h1>Tests — Isometric House Builder</h1>
 <p class="lead">Aucune dépendance, aucun build : ouvrez ce fichier depuis un serveur local.</p>
 <ul id="results"></ul>
 <div id="summary">…</div>
+<h2 style="font-size:13px;margin:18px 0 6px">Banc d'essai — l'application, chargée telle quelle</h2>
+<div id="appframe"></div>
 <div id="stage"><div id="plan" style="width:440px;height:600px"></div><div id="iso" style="width:440px;height:600px"></div><div id="inspector"></div></div>
 <script type="module" src="run.js"></script>
 </body></html>

@@ -32,7 +32,15 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
+  /* A definite height, not a minimum.
+     With min-height the body grows to fit its content, so `flex: 1` on the
+     layout has no upper bound to distribute and the grid row resolves against
+     the tallest column instead of the viewport. The side columns then stop
+     scrolling and stretch the whole page — which is what pushed the drawings
+     far below the fold once the inspector gained a panel. */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -119,6 +127,11 @@ button:disabled { opacity: .45; cursor: default; }
 .stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* Same rule as .layout, and for the same reason: an auto row sizes itself to
+     its content, and a view whose height is 100% of an auto row has nothing to
+     resolve against. The panel then grows and the drawing is laid out inside a
+     box far taller than what is on screen. */
+  grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   min-height: 0;
 }
@@ -126,6 +139,7 @@ button:disabled { opacity: .45; cursor: default; }
 .view {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -316,7 +330,10 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12px; }
   .inspector { grid-column: 1 / -1; max-height: 40vh; }
 }
 @media (max-width: 820px) {
-  .layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; }
+  /* Stacked on a phone: let the page scroll normally again. */
+  body { height: auto; min-height: 100vh; overflow: auto; }
+  .layout { grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
+  .view-body { height: 60vh; }
   .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
   .tool-group { margin-bottom: 0; }
   .stage { grid-template-columns: 1fr; }
