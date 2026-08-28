@@ -99,7 +99,9 @@ export function renderScene(model, opts = {}) {
   const width = opts.width ?? 1200;
   const height = opts.height ?? 800;
   const built = opts.built ?? buildMesh(model);
-  const faces = mergeCoplanar(built.mesh.tris);
+  // Both stages can be supplied by the caller: the model is immutable, so a
+  // viewport can cache them and pay only the projection when panning.
+  const faces = opts.faces ?? mergeCoplanar(built.mesh.tris);
 
   const b = built.bounds.empty ? { i0: 0, j0: 0, i1: 1, j1: 1 } : built.bounds;
   const camera = new Camera({
@@ -184,7 +186,7 @@ export function renderScene(model, opts = {}) {
     `<g stroke-linejoin="round" stroke-linecap="round">${out.join('')}</g>` +
     `</svg>`;
 
-  return { svg, camera, faces: ordered, built, width, height };
+  return { svg, camera, faces: ordered, merged: faces, built, width, height };
 }
 
 /** Bounding box of the footprint, used by the plan view. */

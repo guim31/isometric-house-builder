@@ -87,6 +87,12 @@ export class Inspector {
   }
 
   render() {
+    // Never rebuild under a control that is being used: replacing a range or
+    // colour input mid-gesture detaches it, which kills the drag and can
+    // close a native colour picker. The control's 'change' event fires on
+    // release, and the shell listens for it to run the deferred refresh.
+    const active = document.activeElement;
+    if (active && this.root.contains(active) && (active.type === 'range' || active.type === 'color')) return;
     this.root.replaceChildren();
     const sel = this.store.selected;
     if (sel) this.root.appendChild(this.selectionSection(sel));
@@ -365,6 +371,9 @@ export class Inspector {
       }
     }
 
+    const dup = h('button', 'subtle', 'Dupliquer (Ctrl+D)');
+    dup.addEventListener('click', () => this.store.duplicateSelected());
+    s.appendChild(dup);
     const del = h('button', 'danger', 'Supprimer');
     del.addEventListener('click', () => this.store.deleteSelected());
     s.appendChild(del);

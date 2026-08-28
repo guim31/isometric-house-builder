@@ -17,6 +17,17 @@ export const PROJECTIONS = {
 
 export const DEFAULT_PROJECTION = 'iso30';
 
+/**
+ * Compass corner the camera looks FROM at each quarter-turn.
+ *
+ * Derivation, since an off-by-one here once shipped: a face is visible when
+ * its rotated normal has a positive dot with the view axis (1,1,1). At
+ * rotation 0 that selects the +y (north) and +x (east) walls, so the camera
+ * stands to the north-east. Each turn then walks the viewpoint clockwise
+ * around the house. The test suite checks this list against the geometry.
+ */
+export const VIEWPOINTS = ['Nord-Est', 'Sud-Est', 'Sud-Ouest', 'Nord-Ouest'];
+
 /** Rotate a world point by `r` quarter-turns around the vertical axis at (cx, cy). */
 export function rotatePoint(p, r, cx, cy) {
   const dx = p[0] - cx;

@@ -6,10 +6,11 @@ import { Store } from './ui/store.js';
 import { PlanView } from './ui/plan.js';
 import { Viewport } from './ui/viewport.js';
 import { Inspector } from './ui/panels.js';
-import { initialModel, exportProject, importProject, clearLocal, loadLocal, fromShareUrl } from './io/project.js';
+import { initialModel, exportProject, importProject, clearLocal, loadLocal, fromShareUrl, toShareUrl } from './io/project.js';
 import { Gallery } from './ui/gallery.js';
 import { defaultModel, emptyModel } from './core/model.js';
 import { SIZES, exportPng, exportSvg, exportFourViews, copyPngToClipboard } from './io/export.js';
+import { VIEWPOINTS } from './core/iso.js';
 
 const TOOL_GROUPS = [
   {
@@ -51,7 +52,7 @@ const TOOL_GROUPS = [
 ];
 
 const HINTS = {
-  select: 'Cliquez un élément pour le régler, glissez pour le déplacer.',
+  select: 'Cliquez un élément pour le régler, glissez pour le déplacer — une ouverture coulisse le long des murs. Maj + glisser déplace la vue.',
   paint: 'Dessinez l’emprise de la maison. Alt efface.',
   rect: 'Glissez pour ajouter un volume rectangulaire. Alt retire.',
   erase: 'Glissez pour retirer des cases.',
@@ -63,9 +64,15 @@ const HINTS = {
   chimney: 'Cliquez sur le toit pour poser une cheminée.',
   velux: 'Cliquez sur le toit pour poser une fenêtre de toit.',
   dish: 'Cliquez sur le toit pour poser une parabole.',
+  pool: 'Cliquez dans le plan — ou directement sur le rendu — pour poser la piscine.',
+  terrace: 'Cliquez dans le plan ou sur le rendu pour poser la terrasse.',
+  path: 'Cliquez dans le plan ou sur le rendu pour poser l’allée.',
+  tree: 'Cliquez dans le plan ou sur le rendu pour planter un arbre.',
+  bush: 'Cliquez dans le plan ou sur le rendu pour planter un buisson.',
+  hedge: 'Cliquez dans le plan ou sur le rendu pour poser une haie.',
+  fence: 'Cliquez dans le plan ou sur le rendu pour poser une clôture.',
+  car: 'Cliquez dans le plan ou sur le rendu pour garer la voiture.',
 };
-
-const ROTATION_LABELS = ['Sud-Est', 'Sud-Ouest', 'Nord-Ouest', 'Nord-Est'];
 
 const $ = (id) => document.getElementById(id);
 
@@ -154,6 +161,18 @@ $('btn-save').addEventListener('click', () => {
   toast('Projet enregistré');
 });
 
+$('btn-share').addEventListener('click', async () => {
+  // The whole model rides in the URL fragment: nothing touches a server.
+  const url = toShareUrl(store.model);
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('Lien copié — il contient tout le projet');
+  } catch {
+    // No clipboard on insecure origins; the prompt is copyable everywhere.
+    window.prompt('Copiez le lien :', url);
+  }
+});
+
 $('btn-open').addEventListener('click', () => $('file-input').click());
 $('file-input').addEventListener('change', async (ev) => {
   const file = ev.target.files?.[0];
@@ -234,6 +253,11 @@ document.addEventListener('keydown', (ev) => {
     return;
   }
   if (typing) return;
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'd') {
+    ev.preventDefault();
+    store.duplicateSelected();
+    return;
+  }
   if (ev.key === 'Delete' || ev.key === 'Backspace') {
     if (store.selection) { ev.preventDefault(); store.deleteSelected(); }
   } else if (ev.key === '[') rotate(-1);
@@ -254,13 +278,16 @@ function scheduleRender() {
     syncTools();
     $('btn-undo').disabled = !store.canUndo;
     $('btn-redo').disabled = !store.canRedo;
-    $('rot-label').textContent = ROTATION_LABELS[store.model.camera.rotation] || '';
+    $('rot-label').textContent = VIEWPOINTS[store.model.camera.rotation] || '';
     if (nameInput.value !== store.model.name) nameInput.value = store.model.name;
   });
 }
 
 store.subscribe(scheduleRender);
 window.addEventListener('resize', scheduleRender);
+// The inspector skips its own rebuild while one of its controls is mid-drag;
+// the release fires 'change', which runs the refresh it deferred.
+$('inspector').addEventListener('change', scheduleRender);
 
 // The panels also resize without the window doing so — when the inspector
 // wraps under the stage, for instance — and a view sized from a stale

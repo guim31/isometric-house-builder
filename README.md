@@ -80,14 +80,19 @@ tout moment, et *Page blanche* reste disponible.
 ouvertures semblent absentes, elles sont probablement sur les deux façades
 opposées — tournez la vue avec `[` et `]`.
 
-Raccourcis : `Ctrl+Z` / `Ctrl+Maj+Z` annuler et rétablir, `[` et `]` tourner,
-`Suppr` supprimer la sélection, `Échap` désélectionner. Molette pour zoomer,
-`Maj` + glisser pour déplacer la vue.
+Raccourcis : `Ctrl+Z` / `Ctrl+Maj+Z` annuler et rétablir, `Ctrl+D` dupliquer la
+sélection, `[` et `]` tourner, `Suppr` supprimer, `Échap` désélectionner. La
+molette zoome autour du curseur, le pincement à deux doigts fonctionne sur
+écran tactile, et `Maj` + glisser déplace la vue — quel que soit l'outil actif.
+Dans le plan, une ouverture sélectionnée **coulisse le long des murs** quand on
+la fait glisser ; les éléments d'extérieur se posent aussi d'un clic
+directement sur le rendu. Une boussole dans chaque vue rappelle où est le nord.
 
 Le projet en cours est conservé dans le navigateur. *Enregistrer* produit un
 fichier `.house.json` lisible et versionnable, qu'*Ouvrir* relit ; c'est aussi
 le format des dix modèles de départ, décrits dans
-[`src/data/presets.js`](src/data/presets.js).
+[`src/data/presets.js`](src/data/presets.js). *Partager* copie un lien qui
+encode tout le projet dans l'URL — rien ne transite par un serveur.
 
 ## Intégrer l'image à Gladys Assistant
 
@@ -175,7 +180,8 @@ modifier le moteur :
 | `src/data/presets.js` | Les dix modèles de départ |
 | `src/render/texture.js` | Rangs de tuiles, appareillages, bardages |
 | `src/render/hit.js` | Couche de sélection invisible |
-| `src/ui/` | Plan, rendu, inspecteur, historique |
+| `src/ui/` | Plan, rendu, inspecteur, galerie, historique |
+| `src/ui/actions.js` | Pose des ouvertures, objets de toit et extérieurs, partagée par les deux vues |
 | `src/io/` | Export image, fichiers de projet, lien de partage |
 
 Les contributions sont bienvenues : ouvrez une issue ou une pull request.

@@ -4,6 +4,7 @@
  */
 
 import { normalise, defaultModel } from '../core/model.js';
+import { download, slug } from './files.js';
 
 const STORAGE_KEY = 'isometric-house-builder/current';
 
@@ -29,19 +30,9 @@ export function clearLocal() {
   try { localStorage.removeItem(STORAGE_KEY); } catch { /* nothing to do */ }
 }
 
-const slug = (s) => (s || 'maison').toLowerCase().normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'maison';
-
 export function exportProject(model) {
   const blob = new Blob([JSON.stringify(model, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${slug(model.name)}.house.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  download(blob, `${slug(model.name)}.house.json`);
 }
 
 export function importProject(file) {

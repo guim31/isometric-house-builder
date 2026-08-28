@@ -6,38 +6,14 @@
  * view owns inspection and export.
  */
 
-import { key, parseKey, boundaryEdges, SIDES } from '../core/grid.js';
+import { key, parseKey, boundaryEdges } from '../core/grid.js';
 import { cellSet } from '../core/model.js';
-import { newId } from '../core/model.js';
+import {
+  OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS,
+  placeOpening, placeRoofItem, placeProp,
+} from './actions.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-
-/** Default footprint of each placeable item, in metres. */
-export const PROP_DEFAULTS = {
-  pool: { w: 7, d: 4, shape: 'rounded' },
-  terrace: { w: 6, d: 4, material: 'paving' },
-  path: { w: 3, d: 2, material: 'gravel' },
-  deck: { w: 5, d: 3 },
-  hedge: { w: 4, d: 0.6, h: 0.8 },
-  fence: { w: 6, d: 0.2, h: 1.1 },
-  tree: { r: 1.5 },
-  bush: { r: 1.1 },
-  car: { w: 1.8, d: 4.2 },
-};
-
-export const ROOF_ITEM_DEFAULTS = {
-  solar: { w: 4, d: 2.4 },
-  chimney: { w: 0.8, d: 0.8, h: 1.1 },
-  velux: { w: 1, d: 1.2 },
-  dish: { w: 0.8, d: 0.8 },
-};
-
-export const OPENING_DEFAULTS = {
-  window: { width: 1.3, height: 1.3, sill: 0.95 },
-  shutter: { width: 1.3, height: 1.3, sill: 0.95 },
-  door: { width: 1.0, height: 2.1, sill: 0 },
-  garage: { width: 2.6, height: 2.1, sill: 0 },
-};
 
 const el = (name, attrs = {}) => {
   const n = document.createElementNS(SVG_NS, name);
@@ -74,7 +50,7 @@ export class PlanView {
       }
     }
     for (const p of m.props) {
-      const centred = p.kind === 'tree' || p.kind === 'bush' || p.kind === 'car';
+      const centred = CENTRED_KINDS.has(p.kind);
       const pw = p.r ? p.r * 2 : p.w ?? 2;
       const pd = p.r ? p.r * 2 : p.d ?? 2;
       const px = centred ? p.x - pw / 2 : p.x;
@@ -146,7 +122,7 @@ export class PlanView {
 
     // Ground items, drawn under the house.
     for (const p of m.props) {
-      const centred = p.kind === 'tree' || p.kind === 'bush' || p.kind === 'car';
+      const centred = CENTRED_KINDS.has(p.kind);
       const pw = p.r ? p.r * 2 : p.w ?? 2;
       const pd = p.r ? p.r * 2 : p.d ?? 2;
       const px = centred ? p.x - pw / 2 : p.x;
@@ -212,6 +188,17 @@ export class PlanView {
       r.dataset.type = 'roofItem';
       gRoof.appendChild(r);
     }
+
+    // Compass. The plan flips y so north is up; the arrow makes it explicit,
+    // and pairs with the one in the render for orientation between views.
+    const comp = el('g', { class: 'plan-compass', transform: `translate(${map.w - 30}, 34)` });
+    comp.appendChild(el('circle', { cx: 0, cy: 0, r: 15 }));
+    comp.appendChild(el('line', { x1: 0, y1: 9, x2: 0, y2: -5 }));
+    comp.appendChild(el('path', { d: 'M -4 -3 L 0 -10 L 4 -3 Z' }));
+    const label = el('text', { x: 0, y: 26 });
+    label.textContent = 'N';
+    comp.appendChild(label);
+    this.svg.appendChild(comp);
   }
 
   /** Nearest exterior wall to a world point, within `maxDist` metres. */
@@ -232,15 +219,22 @@ export class PlanView {
 
   bindEvents() {
     const s = this.store;
+    this.pointers = new Map();
 
     this.svg.addEventListener('pointerdown', (ev) => {
       // Capture is a convenience, not a requirement: synthetic pointers (and
       // some browsers) reject an id they never issued.
       try { this.svg.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
+      this.pointers.set(ev.pointerId, [ev.clientX, ev.clientY]);
+      if (this.pointers.size === 2) { this.startPinch(); return; }
+      if (this.pinch) return;
+
       const pt = this.eventPoint(ev);
       const tool = s.tool;
 
-      if (ev.button === 1 || ev.shiftKey && tool === 'select') {
+      // Panning is available whatever the active tool — middle button or
+      // shift — so nobody has to switch back to Select just to move around.
+      if (ev.button === 1 || ev.shiftKey) {
         this.drag = { mode: 'pan', from: [ev.clientX, ev.clientY], pan: [...this.pan] };
         return;
       }
@@ -256,21 +250,31 @@ export class PlanView {
       }
       if (tool === 'select') {
         const target = ev.target.dataset?.type ? ev.target : null;
-        if (target) {
-          s.select({ type: target.dataset.type, id: target.dataset.id });
+        if (!target) { s.select(null); return; }
+        s.select({ type: target.dataset.type, id: target.dataset.id });
+        if (target.dataset.type === 'opening') {
+          // An opening has no free x/y — it lives on a wall. Dragging slides
+          // it along the walls (and across corners) instead of writing
+          // meaningless coordinates onto it.
+          this.drag = { mode: 'slide' };
+        } else {
           const item = s.selected;
           this.drag = { mode: 'move', from: pt, origin: item ? { x: item.x, y: item.y } : null };
-        } else {
-          s.select(null);
         }
         return;
       }
-      if (OPENING_DEFAULTS[tool]) { this.placeOpening(tool, pt); return; }
-      if (ROOF_ITEM_DEFAULTS[tool]) { this.placeRoofItem(tool, pt); return; }
-      if (PROP_DEFAULTS[tool]) { this.placeProp(tool, pt); return; }
+      if (OPENING_DEFAULTS[tool]) {
+        const hit = this.nearestEdge(pt);
+        if (hit) placeOpening(s, tool, hit.edge.id, 0, hit.t);
+        return;
+      }
+      if (ROOF_ITEM_DEFAULTS[tool]) { placeRoofItem(s, tool, pt); return; }
+      if (PROP_DEFAULTS[tool]) { placeProp(s, tool, pt); return; }
     });
 
     this.svg.addEventListener('pointermove', (ev) => {
+      if (this.pointers.has(ev.pointerId)) this.pointers.set(ev.pointerId, [ev.clientX, ev.clientY]);
+      if (this.pinch && this.pointers.size >= 2) { this.movePinch(); return; }
       if (!this.drag) return;
       const pt = this.eventPoint(ev);
       if (this.drag.mode === 'pan') {
@@ -284,6 +288,9 @@ export class PlanView {
       } else if (this.drag.mode === 'rect') {
         this.drag.to = pt;
         this.previewRect();
+      } else if (this.drag.mode === 'slide') {
+        const hit = this.nearestEdge(pt, 3);
+        if (hit) s.patchSelected({ edge: hit.edge.id, offset: Math.round(hit.t * 20) / 20 }, 'move');
       } else if (this.drag.mode === 'move' && this.drag.origin) {
         const dx = pt[0] - this.drag.from[0];
         const dy = pt[1] - this.drag.from[1];
@@ -295,7 +302,11 @@ export class PlanView {
       }
     });
 
-    const finish = () => {
+    const finish = (ev) => {
+      if (ev) {
+        this.pointers.delete(ev.pointerId);
+        if (this.pointers.size < 2) this.pinch = null;
+      }
       if (this.drag?.mode === 'rect' && this.drag.to) this.commitRect();
       this.drag = null;
       s.commit();
@@ -306,9 +317,42 @@ export class PlanView {
 
     this.svg.addEventListener('wheel', (ev) => {
       ev.preventDefault();
+      if (!this.map) this.layout();
+      const rect = this.svg.getBoundingClientRect();
+      const cx = ev.clientX - rect.left, cy = ev.clientY - rect.top;
+      // Anchored to the cursor: the grid point under the pointer stays put.
+      const before = this.toWorld(cx, cy);
       this.zoom = Math.max(0.35, Math.min(6, this.zoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12)));
+      this.layout();
+      const after = this.toPx(before[0], before[1]);
+      this.pan = [this.pan[0] + cx - after[0], this.pan[1] + cy - after[1]];
       this.render();
     }, { passive: false });
+  }
+
+  startPinch() {
+    if (!this.map) this.layout();
+    const rect = this.svg.getBoundingClientRect();
+    const [a, b] = [...this.pointers.values()];
+    this.drag = null;
+    this.pinch = {
+      dist: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1,
+      world: this.toWorld((a[0] + b[0]) / 2 - rect.left, (a[1] + b[1]) / 2 - rect.top),
+    };
+  }
+
+  movePinch() {
+    const rect = this.svg.getBoundingClientRect();
+    const [a, b] = [...this.pointers.values()];
+    const mid = [(a[0] + b[0]) / 2 - rect.left, (a[1] + b[1]) / 2 - rect.top];
+    const dist = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1;
+    this.zoom = Math.max(0.35, Math.min(6, this.zoom * (dist / this.pinch.dist)));
+    this.layout();
+    // The two-finger midpoint pins the world point grabbed at the start.
+    const p = this.toPx(this.pinch.world[0], this.pinch.world[1]);
+    this.pan = [this.pan[0] + mid[0] - p[0], this.pan[1] + mid[1] - p[1]];
+    this.pinch.dist = dist;
+    this.render();
   }
 
   paintAt(pt, erase, fresh) {
@@ -356,42 +400,5 @@ export class PlanView {
       }
       return { ...m, cells: [...set].sort() };
     });
-  }
-
-  placeOpening(kind, pt) {
-    const hit = this.nearestEdge(pt);
-    if (!hit) return;
-    const id = newId('o');
-    const def = OPENING_DEFAULTS[kind];
-    this.store.update((m) => ({
-      ...m,
-      openings: [...m.openings, {
-        id, edge: hit.edge.id, storey: 0, kind,
-        offset: Math.round(hit.t * 4) / 4 || 0.5, ...def,
-      }],
-    }));
-    this.store.select({ type: 'opening', id });
-  }
-
-  placeRoofItem(kind, pt) {
-    const id = newId('r');
-    this.store.update((m) => ({
-      ...m,
-      roofItems: [...m.roofItems, {
-        id, kind, x: Math.round(pt[0] * 4) / 4, y: Math.round(pt[1] * 4) / 4,
-        ...ROOF_ITEM_DEFAULTS[kind],
-      }],
-    }));
-    this.store.select({ type: 'roofItem', id });
-  }
-
-  placeProp(kind, pt) {
-    const id = newId('p');
-    const def = PROP_DEFAULTS[kind];
-    const centred = kind === 'tree' || kind === 'bush' || kind === 'car';
-    const x = Math.round((centred ? pt[0] : pt[0] - (def.w ?? 2) / 2) * 4) / 4;
-    const y = Math.round((centred ? pt[1] : pt[1] - (def.d ?? 2) / 2) * 4) / 4;
-    this.store.update((m) => ({ ...m, props: [...m.props, { id, kind, x, y, ...def }] }));
-    this.store.select({ type: 'prop', id });
   }
 }

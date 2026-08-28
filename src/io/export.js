@@ -4,6 +4,8 @@
  */
 
 import { renderScene } from '../render/svg.js';
+import { VIEWPOINTS } from '../core/iso.js';
+import { download, slug } from './files.js';
 
 export const SIZES = [
   // Gladys downscales anything past 2560 px on the long edge, and keeps the
@@ -42,20 +44,6 @@ export function svgToPng(svg, width, height) {
   });
 }
 
-export function download(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-}
-
-const slug = (s) => (s || 'maison').toLowerCase().normalize('NFD')
-  .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'maison';
-
 export async function exportPng(model, size) {
   const svg = svgFor(model, size);
   const blob = await svgToPng(svg, size.width * size.ratio, size.height * size.ratio);
@@ -69,7 +57,7 @@ export function exportSvg(model, size) {
 
 /** The four isometric views of the same house, as separate PNG files. */
 export async function exportFourViews(model, size, onProgress) {
-  const names = ['sud-est', 'sud-ouest', 'nord-ouest', 'nord-est'];
+  const names = VIEWPOINTS.map((v) => v.toLowerCase());
   for (let r = 0; r < 4; r++) {
     const view = { ...model, camera: { ...model.camera, rotation: r } };
     const svg = svgFor(view, size);

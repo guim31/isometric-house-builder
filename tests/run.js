@@ -6,7 +6,7 @@
 import { Mesh, mergeCoplanar } from '../src/core/mesh.js';
 import { decomposeRects, boundaryEdges, rectCells, key } from '../src/core/grid.js';
 import { heightField, snapOverhang, STEP } from '../src/core/roof.js';
-import { Camera, rotatePoint, project, PROJECTIONS } from '../src/core/iso.js';
+import { Camera, rotatePoint, project, PROJECTIONS, VIEWPOINTS, rotateDir } from '../src/core/iso.js';
 import { defaultModel, emptyModel, normalise, cellSet, wallTop } from '../src/core/model.js';
 import { buildMesh } from '../src/core/scene.js';
 import { renderScene } from '../src/render/svg.js';
@@ -165,7 +165,34 @@ check('écran → sol est bien la réciproque de sol → écran', () => {
   return true;
 });
 
+/* ---------------- viewpoints ---------------- */
+
+check('les libellés de point de vue désignent bien les façades visibles', () => {
+  // The regression this guards: rotation 0 shows the north and east facades,
+  // so the camera stands to the north-east — yet the labels once started at
+  // « Sud-Est », and the four exported files carried the wrong names.
+  const DIRS = { Nord: [0, 1, 0], Sud: [0, -1, 0], Est: [1, 0, 0], Ouest: [-1, 0, 0] };
+  for (let r = 0; r < 4; r++) {
+    for (const part of VIEWPOINTS[r].split('-')) {
+      const n = rotateDir(DIRS[part], r);
+      if (n[0] + n[1] + n[2] <= 0) {
+        return `${VIEWPOINTS[r]} : la façade ${part} n'est pas visible en rotation ${r}`;
+      }
+    }
+  }
+  return true;
+});
+
 /* ---------------- scene and rendering ---------------- */
+
+check('un rendu peut réutiliser les faces déjà fusionnées', () => {
+  // What the viewport's pan/zoom cache relies on.
+  const m = normalise({ ...emptyModel(), cells: [...rectCells(10, 10, 16, 14)] });
+  const first = renderScene(m, { width: 400, height: 300 });
+  const second = renderScene(m, { width: 400, height: 300, built: first.built, faces: first.merged });
+  return first.svg === second.svg || 'rendus différents';
+});
+
 
 check('tous les types de toit et toutes les rotations se rendent sans erreur', () => {
   for (const type of ['hip', 'gable', 'flat', 'shed']) {
@@ -535,6 +562,104 @@ check('poser une fenêtre l’accroche au mur le plus proche', () => {
   view.svg.dispatchEvent(pointer(view, 12.5, 9.8, 'pointerdown'));
   const op = s.model.openings[0];
   return (op && op.edge === '12,10,S') || `accroché à ${op ? op.edge : 'rien'}`;
+});
+
+check('glisser une fenêtre la fait coulisser le long du mur', () => {
+  const s = new Store(normalise({ ...emptyModel(), cells: [...rectCells(10, 10, 14, 13)] }));
+  const view = new PlanView(document.getElementById('plan'), s);
+  s.setTool('window');
+  view.render();
+  view.svg.dispatchEvent(pointer(view, 12.5, 9.8, 'pointerdown'));
+  view.svg.dispatchEvent(pointer(view, 12.5, 9.8, 'pointerup'));
+  const op = () => s.model.openings[0];
+  if (!op() || op().edge !== '12,10,S') return `pose initiale sur ${op()?.edge}`;
+  s.setTool('select');
+  view.render();
+  const line = view.svg.querySelector('.opening');
+  if (!line) return 'ouverture absente du plan';
+  line.dispatchEvent(pointer(view, 12.5, 9.9, 'pointerdown'));
+  view.svg.dispatchEvent(pointer(view, 14.4, 9.9, 'pointermove'));
+  view.svg.dispatchEvent(pointer(view, 14.4, 9.9, 'pointerup'));
+  if (op().edge !== '14,10,S') return `restée sur ${op().edge}`;
+  // The old drag path wrote {x: NaN, y: NaN} onto the opening.
+  return !('x' in op()) || 'des coordonnées x/y parasites ont été écrites';
+});
+
+check('le zoom à la molette garde le point sous le curseur', () => {
+  const s = new Store(defaultModel());
+  const view = new PlanView(document.getElementById('plan'), s);
+  view.render();
+  const r = view.svg.getBoundingClientRect();
+  const before = view.toWorld(120, 90);
+  view.svg.dispatchEvent(new WheelEvent('wheel', {
+    clientX: r.left + 120, clientY: r.top + 90, deltaY: -120, bubbles: true, cancelable: true,
+  }));
+  const after = view.toWorld(120, 90);
+  return (near(before[0], after[0], 0.05) && near(before[1], after[1], 0.05))
+    || `le point a dérivé de (${(after[0] - before[0]).toFixed(2)}, ${(after[1] - before[1]).toFixed(2)})`;
+});
+
+check('le pincement à deux doigts zoome le plan', () => {
+  const s = new Store(defaultModel());
+  const view = new PlanView(document.getElementById('plan'), s);
+  s.setTool('select');
+  view.render();
+  const r = view.svg.getBoundingClientRect();
+  const pev = (id, x, y, type) => new PointerEvent(type, {
+    pointerId: id, clientX: r.left + x, clientY: r.top + y,
+    bubbles: true, isPrimary: id === 1, button: 0,
+  });
+  view.svg.dispatchEvent(pev(1, 100, 100, 'pointerdown'));
+  view.svg.dispatchEvent(pev(2, 200, 100, 'pointerdown'));
+  view.svg.dispatchEvent(pev(2, 260, 100, 'pointermove'));
+  const zoomed = view.zoom > 1.2;
+  view.svg.dispatchEvent(pev(1, 100, 100, 'pointerup'));
+  view.svg.dispatchEvent(pev(2, 260, 100, 'pointerup'));
+  return zoomed || `zoom resté à ${view.zoom.toFixed(2)}`;
+});
+
+check('dupliquer la sélection crée une copie décalée', () => {
+  const s = new Store(defaultModel());
+  const first = s.model.props[0];
+  const count = s.model.props.length;
+  s.select({ type: 'prop', id: first.id });
+  s.duplicateSelected();
+  if (s.model.props.length !== count + 1) return 'aucune copie créée';
+  const copy = s.selected;
+  return (copy && copy.id !== first.id && copy.kind === first.kind && near(copy.x, first.x + 1.5))
+    || 'copie mal positionnée';
+});
+
+check('un extérieur peut se poser directement sur le rendu', () => {
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  div.style.cssText = 'width:440px;height:400px';
+  document.getElementById('stage').appendChild(div);
+  const vp = new Viewport(div, s);
+  vp.render();
+  s.setTool('tree');
+  const before = s.model.props.length;
+  const r = div.getBoundingClientRect();
+  div.dispatchEvent(new PointerEvent('pointerdown', {
+    clientX: r.left + r.width / 2, clientY: r.top + r.height / 2,
+    bubbles: true, pointerId: 9, isPrimary: true, button: 0,
+  }));
+  div.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 9 }));
+  return s.model.props.length === before + 1 || 'aucun arbre posé';
+});
+
+check('un curseur en cours de réglage survit au rafraîchissement', () => {
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  document.getElementById('stage').appendChild(div);
+  const insp = new Inspector(div, s);
+  insp.render();
+  const input = div.querySelector('input[type="range"]');
+  input.focus();
+  // If the environment refuses focus, the guard cannot be exercised here.
+  if (document.activeElement !== input) return true;
+  insp.render();
+  return div.contains(input) || 'le curseur a été détruit pendant son réglage';
 });
 
 check('le rendu isométrique et l’inspecteur se construisent sans erreur', () => {

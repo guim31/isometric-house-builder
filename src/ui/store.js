@@ -6,7 +6,7 @@
  * references.
  */
 
-import { normalise } from '../core/model.js';
+import { normalise, newId } from '../core/model.js';
 import { saveLocal } from '../io/project.js';
 
 const HISTORY_LIMIT = 80;
@@ -20,6 +20,7 @@ export class Store {
     this.tool = 'paint';
     this.listeners = new Set();
     this.saveTimer = null;
+    this.lastEditAt = 0;
   }
 
   subscribe(fn) {
@@ -44,12 +45,19 @@ export class Store {
     const next = typeof fn === 'function' ? fn(this.model) : fn;
     if (!next || next === this.model) return;
     if (!silent) {
+      const now = Date.now();
       const last = this.past[this.past.length - 1];
-      if (!(coalesce && last && last.coalesce === coalesce)) {
+      // Coalescing is bounded in time: one continuous gesture merges into a
+      // single undo step, but returning to the same control after a pause
+      // starts a fresh one — undo then rewinds the latest gesture, not every
+      // adjustment ever made with that slider.
+      const merge = coalesce && last && last.coalesce === coalesce && now - this.lastEditAt < 900;
+      if (!merge) {
         this.past.push({ model: this.model, coalesce });
         if (this.past.length > HISTORY_LIMIT) this.past.shift();
       }
       this.future.length = 0;
+      this.lastEditAt = now;
     }
     this.model = next;
     this.emit('model');
@@ -111,6 +119,20 @@ export class Store {
       ...m,
       [list]: m[list].map((it) => (it.id === sel.id ? { ...it, ...patch } : it)),
     }), { coalesce });
+  }
+
+  /** Clone the selected item, nudged aside so the copy is visibly distinct. */
+  duplicateSelected() {
+    const sel = this.selection;
+    if (!sel) return;
+    const list = { opening: 'openings', roofItem: 'roofItems', prop: 'props' }[sel.type];
+    const src = (this.model[list] || []).find((it) => it.id === sel.id);
+    if (!src) return;
+    const copy = { ...src, id: newId(sel.type[0]) };
+    if (sel.type === 'opening') copy.offset = (src.offset ?? 0.5) + 1;
+    else copy.x = (src.x ?? 0) + 1.5;
+    this.update((m) => ({ ...m, [list]: [...m[list], copy] }));
+    this.select({ type: sel.type, id: copy.id });
   }
 
   deleteSelected() {

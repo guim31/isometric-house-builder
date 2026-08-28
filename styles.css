@@ -225,6 +225,18 @@ button:disabled { opacity: .45; cursor: default; }
 }
 @media (prefers-color-scheme: dark) { .selection-outline { stroke: #fff; } }
 
+/* ---------- compasses ---------- */
+
+.plan-compass, .iso-compass { pointer-events: none; }
+.plan-compass circle, .iso-compass circle { fill: var(--panel); stroke: var(--line); }
+.plan-compass line, .iso-compass line { stroke: var(--ink-soft); stroke-width: 1.5; }
+.plan-compass path { fill: var(--ink-soft); }
+.plan-compass text, .iso-compass text {
+  fill: var(--ink-soft);
+  font: 600 10px system-ui, sans-serif;
+  text-anchor: middle;
+}
+
 /* ---------- inspector ---------- */
 
 .panel { margin-bottom: 14px; }
