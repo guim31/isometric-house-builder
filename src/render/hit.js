@@ -74,12 +74,12 @@ export function hitLayer(model, camera) {
   // Props: a horizontal patch at roughly half their height reads well enough
   // for picking and keeps them ordered against the house.
   for (const p of model.props) {
-    const centred = p.kind === 'tree' || p.kind === 'car';
+    const centred = p.kind === 'tree' || p.kind === 'bush' || p.kind === 'car';
     const w = centred ? (p.r ? p.r * 2 : p.w ?? 2) : p.w ?? 2;
     const d = centred ? (p.r ? p.r * 2 : p.d ?? 2) : p.d ?? 2;
     const x0 = centred ? p.x - w / 2 : p.x;
     const y0 = centred ? p.y - d / 2 : p.y;
-    const z = p.kind === 'tree' ? (p.r ?? 1.4) * 1.6 : p.kind === 'car' ? 0.7 : 0.06;
+    const z = p.kind === 'tree' ? (p.r ?? 1.4) * 1.6 : p.kind === 'bush' ? (p.r ?? 1.1) * 0.5 : p.kind === 'car' ? 0.7 : 0.06;
     add([[x0, y0, z], [x0 + w, y0, z], [x0 + w, y0 + d, z], [x0, y0 + d, z]],
       { 'data-pick': 'prop', 'data-id': p.id });
   }

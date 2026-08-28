@@ -36,7 +36,11 @@ function buildOpening(mesh, op, g, m) {
   const s0 = c - w / 2, s1 = c + w / 2;
   const z0 = zBase + sill, z1 = zBase + sill + h;
   const after = { mat: 'wall', group: 'wall' };
-  const F = 0.09; // frame thickness
+  // Plain openings read as a broad frame around one clear pane. Some palettes
+  // want that flatter treatment; the default keeps the mullions, which make a
+  // window legible at small sizes.
+  const bars = m.style.windowBars !== false;
+  const F = bars ? 0.09 : 0.14; // frame thickness
 
   if (op.kind === 'shutter') {
     // Shutters flank the opening, so they are drawn before it.
@@ -63,6 +67,7 @@ function buildOpening(mesh, op, g, m) {
       break;
     default: {
       inner('glass');
+      if (!bars) break;
       // A single mullion reads as a window at illustration scale.
       const mid = (s0 + s1) / 2;
       wallRect(mesh, g, mid - 0.04, mid + 0.04, z0 + F, z1 - F, 'trim', LIFT * 3, after);
@@ -113,11 +118,17 @@ function buildRoofItems(mesh, m, roof) {
       const b = 0.07;
       const p = (px, py) => plane(px, py, lift * 2);
       mesh.quad(p(x0 + b, y0 + b), p(x1 - b, y0 + b), p(x1 - b, y1 - b), p(x0 + b, y1 - b), 'solar', 'solar', after);
-      const cols = Math.max(2, Math.round(w / 1.05));
+      const r = (px, py) => plane(px, py, lift * 3);
+      const cell = 0.85; // roughly one photovoltaic cell across
+      const cols = Math.max(2, Math.round((w - 2 * b) / cell));
+      const rows = Math.max(2, Math.round((d - 2 * b) / cell));
       for (let k = 1; k < cols; k++) {
         const x = x0 + b + ((w - 2 * b) * k) / cols;
-        const r = (px, py) => plane(px, py, lift * 3);
         mesh.quad(r(x - 0.02, y0 + b), r(x + 0.02, y0 + b), r(x + 0.02, y1 - b), r(x - 0.02, y1 - b), 'solarCell', 'solarCell', after);
+      }
+      for (let k = 1; k < rows; k++) {
+        const y = y0 + b + ((d - 2 * b) * k) / rows;
+        mesh.quad(r(x0 + b, y - 0.02), r(x1 - b, y - 0.02), r(x1 - b, y + 0.02), r(x0 + b, y + 0.02), 'solarCell', 'solarCell', after);
       }
     } else if (it.kind === 'velux') {
       mesh.quad(q(x0, y0), q(x1, y0), q(x1, y1), q(x0, y1), 'frame', 'frame', after);
@@ -154,7 +165,7 @@ export function buildMesh(m) {
     const g = m.ground.margin;
     let x0 = b.i0, y0 = b.j0, x1 = b.i1 + 1, y1 = b.j1 + 1;
     for (const p of m.props) {
-      const centred = p.kind === 'tree' || p.kind === 'car';
+      const centred = p.kind === 'tree' || p.kind === 'bush' || p.kind === 'car';
       const pw = p.r ? p.r * 2 : p.w ?? 2;
       const pd = p.r ? p.r * 2 : p.d ?? 2;
       const px = centred ? p.x - pw / 2 : p.x;

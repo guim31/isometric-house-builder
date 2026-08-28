@@ -51,7 +51,7 @@ export class Viewport {
     if (!item) return '';
     const pts = [];
     if (sel.type === 'prop' || sel.type === 'roofItem') {
-      const centred = item.kind === 'tree' || item.kind === 'car' || sel.type === 'roofItem';
+      const centred = item.kind === 'tree' || item.kind === 'bush' || item.kind === 'car' || sel.type === 'roofItem';
       const w = item.r ? item.r * 2 : item.w ?? 2;
       const d = item.r ? item.r * 2 : item.d ?? 2;
       const x0 = centred ? item.x - w / 2 : item.x;

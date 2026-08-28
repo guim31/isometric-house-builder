@@ -76,7 +76,7 @@ const GROUND_LABELS = { grass: 'Pelouse', paving: 'Dallage', gravel: 'Gravier' }
 const OPENING_LABELS = { window: 'Fenêtre', shutter: 'Fenêtre à volets', door: 'Porte', garage: 'Porte de garage' };
 const ROOF_ITEM_LABELS = { solar: 'Panneaux solaires', chimney: 'Cheminée', velux: 'Fenêtre de toit', dish: 'Parabole' };
 const PROP_LABELS = {
-  pool: 'Piscine', terrace: 'Terrasse', path: 'Allée', deck: 'Terrasse bois',
+  pool: 'Piscine', terrace: 'Terrasse', path: 'Allée', deck: 'Terrasse bois', bush: 'Buisson',
   tree: 'Arbre', hedge: 'Haie', fence: 'Clôture', car: 'Voiture',
 };
 
@@ -160,14 +160,40 @@ export class Inspector {
     return s;
   }
 
+  /**
+   * Switch palette, applying whatever style that palette prescribes.
+   *
+   * A palette is not only a set of colours: the Gladys Horizons look depends
+   * just as much on having no outlines and no plinth. Only keys the palette
+   * declares are touched, so the palettes that prescribe nothing leave the
+   * user's settings alone.
+   */
+  applyTheme(name) {
+    const preset = (THEMES[name] || {}).style;
+    this.store.update((m) => {
+      const next = { ...m, theme: name };
+      if (!preset) return next;
+      if (preset.plinth !== undefined) next.plinth = preset.plinth;
+      if (preset.texture) next.texture = { ...m.texture, ...preset.texture };
+      const style = {};
+      if (preset.outline !== undefined) style.outline = preset.outline;
+      if (preset.shadow !== undefined) style.shadow = preset.shadow;
+      if (preset.windowBars !== undefined) style.windowBars = preset.windowBars;
+      if (Object.keys(style).length) next.style = { ...m.style, ...style };
+      return next;
+    });
+  }
+
   appearanceSection() {
     const m = this.store.model;
     const s = this.section('Apparence');
     s.append(
       field('Palette', select(m.theme, Object.entries(THEMES).map(([k, v]) => [k, v.label]),
-        (v) => this.set({ theme: v }))),
+        (v) => this.applyTheme(v)), 'certaines palettes règlent aussi contours et matières'),
       field('Contours', toggle(m.style.outline, (v) => this.setIn('style', { outline: v }))),
       field('Ombre portée', toggle(m.style.shadow, (v) => this.setIn('style', { shadow: v }))),
+      field('Croisillons des fenêtres', toggle(m.style.windowBars !== false,
+        (v) => this.setIn('style', { windowBars: v }))),
       field('Fond', select(m.style.background, [
         ['transparent', 'Transparent (recommandé)'],
         ['#ffffff', 'Blanc'],

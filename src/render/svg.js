@@ -10,7 +10,7 @@
 import { mergeCoplanar } from '../core/mesh.js';
 import { Camera, rotateDir } from '../core/iso.js';
 import { buildMesh } from '../core/scene.js';
-import { materialColour, shade, shadeFactor, darken } from '../core/palette.js';
+import { faceColour, materialColour, darken } from '../core/palette.js';
 import { cellSet } from '../core/model.js';
 import { bounds } from '../core/grid.js';
 import { specFor, textureSegments } from './texture.js';
@@ -137,8 +137,9 @@ export function renderScene(model, opts = {}) {
   const defs = [];
   const hair = Math.max(0.5, camera.scale * 0.02);
   ordered.forEach((f, i) => {
-    const base = materialColour(f.mat, theme, ov);
-    const fill = f.mat === 'shadow' ? base : shade(base, shadeFactor(f.nCam));
+    const fill = f.mat === 'shadow'
+      ? materialColour(f.mat, theme, ov)
+      : faceColour(f.mat, theme, ov, f.nCam);
     const d = pathData(f, camera);
     const parts = [`d="${d}"`, `fill="${fill}"`];
     if (OPACITY[f.mat] != null) parts.push(`opacity="${OPACITY[f.mat]}"`);

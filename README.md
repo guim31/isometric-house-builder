@@ -41,7 +41,7 @@ aussi bien l'affaire.
 | **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente |
 | **Extérieurs** | Piscine, terrasse, allée, pelouse, haies, clôtures, arbres, voiture |
 | **Matières** | Tuiles, ardoises, bac acier sur le toit ; briques, bardage, pierre sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
-| **Couleurs** | 4 palettes de départ, puis chaque matériau recolorable individuellement (murs, toiture, rive, menuiseries, volets, pelouse, eau…) |
+| **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
 | **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, copie directe dans le presse-papier |
 
@@ -53,7 +53,9 @@ aussi bien l'affaire.
    25 cm, pour que la rive tombe sur la trame.
 3. **Choisissez matières et couleurs** dans *Couleurs et matières* : une palette
    de départ, une matière de toit et de murs, puis autant de retouches
-   individuelles que vous voulez.
+   individuelles que vous voulez. Changer de palette applique aussi le style
+   qu'elle suppose — *Horizons* se passe de contours et de soubassement, c'est
+   ce qui fait son allure.
 4. **Posez les ouvertures.** Choisissez *Fenêtre*, *Porte* ou *Porte de garage*,
    puis cliquez le long d'un mur — dans le plan, ou directement sur le rendu.
 5. **Aménagez les abords** avec les outils *Extérieur*.
@@ -74,15 +76,27 @@ fichier `.house.json` lisible et versionnable ; deux exemples sont fournis dans
 
 ## Intégrer l'image à Gladys Assistant
 
-1. Exportez en **PNG, fond transparent**. La taille *Widget 640 × 400* convient à
-   une carte de tableau de bord ; prenez *2×* ou *4×* pour un écran dense.
-2. Dans Gladys, ajoutez une carte **Image** à votre tableau de bord et
-   téléversez le fichier.
-3. Pour montrer plusieurs orientations, exportez **les 4 faces** : vous obtenez
-   quatre fichiers nommés d'après leur point de vue.
+Gladys v5 embarque un widget **Vue de la maison** (*house-view*) qui propose
+quatre illustrations isométriques toutes faites — et qui accepte surtout **votre
+propre image**, sur laquelle vous pouvez ensuite poser des **pastilles liées à
+vos appareils**. C'est précisément ce que cet outil sert à produire.
 
-Le SVG est utile si vous voulez retoucher les couleurs à la main ensuite : c'est
-du vectoriel plat, sans filtre ni dégradé, éditable dans n'importe quel éditeur.
+1. Choisissez la palette **Horizons** (celle par défaut) : elle reprend les
+   couleurs exactes de la galerie de Gladys, pour que votre maison ne détonne
+   pas à côté du reste du tableau de bord.
+2. Exportez en **PNG, fond transparent**, taille **Gladys — 2560 × 1600**.
+3. Dans Gladys : ajoutez un widget *Vue de la maison*, **téléversez l'image**,
+   puis cliquez dessus pour poser vos pastilles.
+
+Sur la taille, une précision qui évite de perdre en netteté : Gladys ramène
+toute image à **2560 px de grand côté** et ne la ré-encode pas si elle pèse
+moins de 2 Mo. Exporter en 4× (4800 px) donne donc une image *moins* nette
+qu'en 2560, puisqu'elle sera rééchantillonnée à l'arrivée. Le préréglage
+*Gladys* vise exactement ce plafond.
+
+Rien n'empêche par ailleurs d'utiliser une simple carte **Image**, ou un tout
+autre logiciel : la sortie reste du PNG et du SVG ordinaires. Le SVG est du
+vectoriel plat, sans filtre ni dégradé, éditable dans n'importe quel éditeur.
 
 ## Développement
 
@@ -117,6 +131,12 @@ modifier le moteur :
   les noues correctes là où deux ailes se rejoignent. Les murs, eux, montent
   jusqu'à la sous-face du toit : un pignon n'est pas une pièce à part, c'est une
   conséquence.
+- **Une palette peut nommer une couleur par orientation.** Certaines, dont
+  Horizons, décalent la teinte dans l'ombre au lieu d'en baisser seulement la
+  valeur : aucun assombrissement d'une couleur unique ne les reproduit. Les
+  faces d'axe reçoivent donc la teinte exacte, les faces inclinées une
+  interpolation. Recolorer un matériau applique un rapport par canal, ce qui
+  préserve cette structure au lieu de retomber sur une multiplication à plat.
 - **Les matières sont générées dans le plan de la face, pas en motif SVG.** Un
   `<pattern>` vit dans l'espace de l'écran : les rangs de tuiles seraient
   identiques sur tous les pans et la texture semblerait collée sur l'image. Ici
@@ -136,6 +156,7 @@ modifier le moteur :
 | `src/core/mesh.js` | Fusion des faces coplanaires, trous, composantes |
 | `src/core/scene.js` | Assemblage : sol, murs, ouvertures, toit, objets |
 | `src/render/svg.js` | Tri, éclairage, émission SVG |
+| `src/core/palette.js` | Palettes, ancrages par orientation, éclairage |
 | `src/render/texture.js` | Rangs de tuiles, appareillages, bardages |
 | `src/render/hit.js` | Couche de sélection invisible |
 | `src/ui/` | Plan, rendu, inspecteur, historique |
@@ -162,6 +183,11 @@ Gladys Assistant, but the output is plain image files usable anywhere.
 Draw the footprint on a one-metre grid, pick a roof (hip, gable, shed, flat),
 place windows, doors, garage doors, solar panels, chimneys, a pool, trees, then
 export the current view or all four isometric orientations at once.
+
+The default palette matches the **Horizons** theme of Gladys Assistant v5, so an
+exported house drops straight into its *house-view* widget — which accepts a
+custom image and lets you pin device features onto it. Export at the *Gladys*
+preset (2560 px): the app downscales anything larger.
 
 No dependencies, no bundler, no account: clone it, serve the folder, open
 `index.html`. Roof and wall materials are generated in world space and projected, so courses follow each slope. Tests live in `tests/` and run in the browser, or headlessly via

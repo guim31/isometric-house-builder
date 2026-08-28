@@ -10,7 +10,7 @@ import { normalise } from '../src/core/model.js';
 import { renderScene } from '../src/render/svg.js';
 const load = async (n) => normalise(await (await fetch(`../examples/${n}.house.json`)).json());
 const a = await load('maison-en-l-avec-piscine');
-const b = await load('pavillon-rectangulaire');
+const b = await load('pavillon-solaire-gladys');
 document.getElementById('hero').innerHTML =
   renderScene({...a, style:{...a.style, background:'transparent'}}, { width: 700, height: 500 }).svg +
   renderScene({...b, style:{...b.style, background:'transparent'}}, { width: 560, height: 500 }).svg;

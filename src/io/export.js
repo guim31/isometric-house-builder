@@ -6,6 +6,9 @@
 import { renderScene } from '../render/svg.js';
 
 export const SIZES = [
+  // Gladys downscales anything past 2560 px on the long edge, and keeps the
+  // file untouched below 2 MB — so this is the largest size worth uploading.
+  { id: 'gladys', label: 'Gladys — 2560 × 1600', width: 1280, height: 800, ratio: 2 },
   { id: 'sd', label: '1× — 1200 × 800', width: 1200, height: 800, ratio: 1 },
   { id: 'hd', label: '2× — 2400 × 1600', width: 1200, height: 800, ratio: 2 },
   { id: 'uhd', label: '4× — 4800 × 3200', width: 1200, height: 800, ratio: 4 },

@@ -171,7 +171,7 @@
   ],
   "storeys": 1,
   "storeyHeight": 2.7,
-  "plinth": 0.2,
+  "plinth": 0,
   "roof": {
     "type": "hip",
     "pitch": 30,
@@ -179,11 +179,15 @@
     "fascia": 0.18,
     "shedDir": "S"
   },
-  "theme": "terracotta",
+  "theme": "horizons",
+  "texture": {
+    "roof": "none",
+    "wall": "none"
+  },
   "overrides": {},
   "openings": [
     {
-      "id": "o090",
+      "id": "o07y",
       "edge": "12,18,N",
       "storey": 0,
       "kind": "shutter",
@@ -193,7 +197,7 @@
       "sill": 0.95
     },
     {
-      "id": "o190",
+      "id": "o17y",
       "edge": "15,18,N",
       "storey": 0,
       "kind": "window",
@@ -203,7 +207,7 @@
       "sill": 0.9
     },
     {
-      "id": "o290",
+      "id": "o27y",
       "edge": "18,18,N",
       "storey": 0,
       "kind": "door",
@@ -213,7 +217,7 @@
       "sill": 0
     },
     {
-      "id": "o390",
+      "id": "o37y",
       "edge": "22,24,N",
       "storey": 0,
       "kind": "window",
@@ -223,7 +227,7 @@
       "sill": 0.95
     },
     {
-      "id": "o490",
+      "id": "o47y",
       "edge": "25,24,N",
       "storey": 0,
       "kind": "garage",
@@ -233,7 +237,7 @@
       "sill": 0
     },
     {
-      "id": "o590",
+      "id": "o57y",
       "edge": "27,15,E",
       "storey": 0,
       "kind": "shutter",
@@ -243,7 +247,7 @@
       "sill": 0.95
     },
     {
-      "id": "o690",
+      "id": "o67y",
       "edge": "27,21,E",
       "storey": 0,
       "kind": "window",
@@ -255,7 +259,7 @@
   ],
   "roofItems": [
     {
-      "id": "rc90",
+      "id": "rc7y",
       "kind": "solar",
       "x": 15,
       "y": 13.2,
@@ -263,7 +267,7 @@
       "d": 2.4
     },
     {
-      "id": "rd90",
+      "id": "rd7y",
       "kind": "chimney",
       "x": 24.5,
       "y": 14.5,
@@ -274,7 +278,7 @@
   ],
   "props": [
     {
-      "id": "p790",
+      "id": "p77y",
       "kind": "pool",
       "x": 12.5,
       "y": 20,
@@ -283,7 +287,7 @@
       "shape": "rounded"
     },
     {
-      "id": "p890",
+      "id": "p87y",
       "kind": "terrace",
       "x": 11,
       "y": 19,
@@ -292,7 +296,7 @@
       "material": "paving"
     },
     {
-      "id": "p990",
+      "id": "p97y",
       "kind": "path",
       "x": 17.5,
       "y": 19.2,
@@ -301,14 +305,14 @@
       "material": "paving"
     },
     {
-      "id": "pa90",
+      "id": "pa7y",
       "kind": "tree",
       "x": 8.5,
       "y": 22,
       "r": 1.4
     },
     {
-      "id": "pb90",
+      "id": "pb7y",
       "kind": "tree",
       "x": 30,
       "y": 15,
@@ -325,13 +329,10 @@
     "projection": "iso30"
   },
   "style": {
-    "outline": true,
+    "outline": false,
     "outlineWidth": 1.1,
     "background": "transparent",
-    "shadow": true
-  },
-  "texture": {
-    "roof": "tiles",
-    "wall": "none"
+    "shadow": false,
+    "windowBars": false
   }
 }

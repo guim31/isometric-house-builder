@@ -42,7 +42,7 @@ function ringSlab(mesh, ring, z, mat, anchor) {
 }
 
 /** A tapered stack of rings, flat-shaded — reads as stylised foliage. */
-function blob(mesh, cx, cy, z0, r, h, mat, anchor, sides = 8) {
+function blob(mesh, cx, cy, z0, r, h, mat, anchor, sides = 12) {
   const levels = [
     { t: 0.0, s: 0.55 }, { t: 0.32, s: 1.0 }, { t: 0.68, s: 0.86 }, { t: 1.0, s: 0.0 },
   ];
@@ -90,6 +90,19 @@ export function buildProps(mesh, m) {
         // Above the coping, not below: these are stacked decals, so painting
         // order follows height and the water must come last.
         ringSlab(mesh, roundedRect(p.x + i, p.y + i, p.x + p.w - i, p.y + p.d - i, r), 0.035, 'water', anchor);
+        break;
+      }
+      case 'bush': {
+        // A single flat disc, which projects to a clean ellipse and takes one
+        // uniform colour. A dome would be more literal but breaks into shaded
+        // facets, and reads as a faceted rock rather than a soft shrub.
+        const r = p.r ?? 1.1;
+        const pts = [];
+        for (let k = 0; k < 18; k++) {
+          const a = (k / 18) * Math.PI * 2;
+          pts.push([p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 0.045]);
+        }
+        mesh.poly(pts, 'foliage', `bush:${p.id}`, anchor);
         break;
       }
       case 'tree': {

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "Pavillon rectangulaire",
+  "name": "Pavillon solaire — style Gladys",
   "grid": {
     "w": 40,
     "d": 40,
@@ -18,7 +18,6 @@
     "22,14",
     "23,14",
     "24,14",
-    "25,14",
     "14,15",
     "15,15",
     "16,15",
@@ -30,7 +29,6 @@
     "22,15",
     "23,15",
     "24,15",
-    "25,15",
     "14,16",
     "15,16",
     "16,16",
@@ -42,7 +40,6 @@
     "22,16",
     "23,16",
     "24,16",
-    "25,16",
     "14,17",
     "15,17",
     "16,17",
@@ -54,7 +51,6 @@
     "22,17",
     "23,17",
     "24,17",
-    "25,17",
     "14,18",
     "15,18",
     "16,18",
@@ -66,7 +62,6 @@
     "22,18",
     "23,18",
     "24,18",
-    "25,18",
     "14,19",
     "15,19",
     "16,19",
@@ -78,7 +73,6 @@
     "22,19",
     "23,19",
     "24,19",
-    "25,19",
     "14,20",
     "15,20",
     "16,20",
@@ -89,155 +83,131 @@
     "21,20",
     "22,20",
     "23,20",
-    "24,20",
-    "25,20",
-    "14,21",
-    "15,21",
-    "16,21",
-    "17,21",
-    "18,21",
-    "19,21",
-    "20,21",
-    "21,21",
-    "22,21",
-    "23,21",
-    "24,21",
-    "25,21"
+    "24,20"
   ],
   "storeys": 1,
   "storeyHeight": 2.7,
-  "plinth": 0.2,
+  "plinth": 0,
   "roof": {
     "type": "gable",
-    "pitch": 35,
-    "overhang": 0.5,
-    "fascia": 0.18,
+    "pitch": 32,
+    "overhang": 0.75,
+    "fascia": 0.14,
     "shedDir": "S"
   },
-  "theme": "slate",
+  "theme": "horizons",
+  "texture": {
+    "roof": "none",
+    "wall": "none"
+  },
   "overrides": {},
   "openings": [
     {
-      "id": "o1",
-      "edge": "16,21,N",
-      "storey": 0,
-      "kind": "shutter",
-      "offset": 0.5,
-      "width": 1.3,
-      "height": 1.3,
-      "sill": 0.95
-    },
-    {
-      "id": "o2",
-      "edge": "19,21,N",
-      "storey": 0,
-      "kind": "door",
-      "offset": 0.5,
-      "width": 1.0,
-      "height": 2.1,
-      "sill": 0
-    },
-    {
-      "id": "o3",
-      "edge": "22,21,N",
-      "storey": 0,
-      "kind": "shutter",
-      "offset": 0.5,
-      "width": 1.3,
-      "height": 1.3,
-      "sill": 0.95
-    },
-    {
-      "id": "o4",
-      "edge": "25,17,E",
+      "id": "a",
+      "edge": "15,20,N",
       "storey": 0,
       "kind": "window",
       "offset": 0.5,
-      "width": 1.4,
-      "height": 1.3,
-      "sill": 0.95
+      "width": 1.7,
+      "height": 1.6,
+      "sill": 0.8
+    },
+    {
+      "id": "b",
+      "edge": "18,20,N",
+      "storey": 0,
+      "kind": "window",
+      "offset": 0.5,
+      "width": 1.7,
+      "height": 1.6,
+      "sill": 0.8
+    },
+    {
+      "id": "c",
+      "edge": "21,20,N",
+      "storey": 0,
+      "kind": "door",
+      "offset": 0.5,
+      "width": 1.05,
+      "height": 2.15,
+      "sill": 0
+    },
+    {
+      "id": "d",
+      "edge": "24,16,E",
+      "storey": 0,
+      "kind": "window",
+      "offset": 0.5,
+      "width": 1.7,
+      "height": 1.6,
+      "sill": 0.8
+    },
+    {
+      "id": "e",
+      "edge": "24,19,E",
+      "storey": 0,
+      "kind": "window",
+      "offset": 0.5,
+      "width": 1.7,
+      "height": 1.6,
+      "sill": 0.8
     }
   ],
   "roofItems": [
     {
       "id": "r1",
       "kind": "solar",
-      "x": 18,
-      "y": 16,
-      "w": 4.4,
-      "d": 2.4
+      "x": 17.4,
+      "y": 16.2,
+      "w": 3.2,
+      "d": 2.6
     },
     {
       "id": "r2",
-      "kind": "chimney",
-      "x": 23,
-      "y": 17.5,
-      "w": 0.8,
-      "d": 0.8,
-      "h": 1.2
-    },
-    {
-      "id": "r3",
-      "kind": "velux",
+      "kind": "solar",
       "x": 21,
-      "y": 16,
-      "w": 1,
-      "d": 1.2
+      "y": 16.2,
+      "w": 3.2,
+      "d": 2.6
     }
   ],
   "props": [
     {
       "id": "p1",
-      "kind": "path",
-      "x": 18.5,
-      "y": 22.1,
-      "w": 2.5,
-      "d": 2.5,
-      "material": "paving"
+      "kind": "bush",
+      "x": 12.4,
+      "y": 18,
+      "r": 1.1
     },
     {
       "id": "p2",
-      "kind": "hedge",
-      "x": 14.0,
-      "y": 26.0,
-      "w": 6.0,
-      "d": 0.6,
-      "h": 0.9
+      "kind": "bush",
+      "x": 26.4,
+      "y": 16.5,
+      "r": 0.95
     },
     {
       "id": "p3",
-      "kind": "tree",
-      "x": 29.5,
-      "y": 24.0,
-      "r": 1.8
-    },
-    {
-      "id": "p4",
-      "kind": "car",
-      "x": 28.0,
-      "y": 19.0,
-      "w": 1.8,
-      "d": 4.2
+      "kind": "bush",
+      "x": 19.5,
+      "y": 22.6,
+      "r": 1.25
     }
   ],
   "ground": {
     "enabled": true,
     "material": "grass",
-    "margin": 3
+    "margin": 2.5
   },
   "camera": {
     "rotation": 0,
     "projection": "iso30"
   },
   "style": {
-    "outline": true,
+    "outline": false,
     "outlineWidth": 1.1,
     "background": "transparent",
-    "shadow": true,
-    "windowBars": true
-  },
-  "texture": {
-    "roof": "slate",
-    "wall": "none"
+    "shadow": false,
+    "windowBars": false
   }
 }

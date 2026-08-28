@@ -12,6 +12,7 @@ import { buildMesh } from '../src/core/scene.js';
 import { renderScene } from '../src/render/svg.js';
 import { hitLayer, screenToGround } from '../src/render/hit.js';
 import { textureSegments, specFor, ROOF_TEXTURES, WALL_TEXTURES } from '../src/render/texture.js';
+import { THEMES, faceColour, materialColour } from '../src/core/palette.js';
 import { Store } from '../src/ui/store.js';
 import { PlanView } from '../src/ui/plan.js';
 import { Viewport } from '../src/ui/viewport.js';
@@ -299,6 +300,75 @@ check('le rendu texturé produit des chemins de découpe uniques', () => {
   if (new Set(ia).size !== ia.length) return 'identifiants dupliqués dans un même rendu';
   // Two renders on one page must not share ids, or they clip each other.
   return ia.every((id) => !ib.includes(id)) || 'identifiants partagés entre deux rendus';
+});
+
+/* ---------------- palettes ---------------- */
+
+check('la palette Horizons rend ses teintes exactes sur les faces d’axe', () => {
+  // The values are those of the Gladys v5 house-view gallery; drifting from
+  // them is exactly what this test is for.
+  const cases = [
+    ['wall', [0, 1, 0], '#efe8dc'], ['wall', [1, 0, 0], '#e0d6c6'], ['wall', [0, 0, 1], '#f8f4ed'],
+    ['roof', [0, 1, 0], '#e8a37c'], ['roof', [1, 0, 0], '#c97e56'],
+    ['grass', [0, 0, 1], '#e3ecdf'],
+  ];
+  for (const [mat, n, expected] of cases) {
+    const got = faceColour(mat, 'horizons', {}, n);
+    if (got.toLowerCase() !== expected) return `${mat} ${JSON.stringify(n)} → ${got}, attendu ${expected}`;
+  }
+  return true;
+});
+
+check('une face inclinée reste entre les teintes voisines', () => {
+  const n = [0, -Math.sin(Math.PI / 6), Math.cos(Math.PI / 6)];
+  const got = faceColour('roof', 'horizons', {}, n);
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(got.slice(i, i + 2), 16));
+  const between = (v, lo, hi) => v >= Math.min(lo, hi) - 1 && v <= Math.max(lo, hi) + 1;
+  // Bounded by the two anchors it blends: yNeg #d98d64 and up #eeb08d.
+  return (between(r, 0xd9, 0xee) && between(g, 0x8d, 0xb0) && between(b, 0x64, 0x8d))
+    || `teinte hors bornes : ${got}`;
+});
+
+check('recolorer un matériau conserve la structure d’ombrage', () => {
+  const ov = { wall: '#8fb3d9' };
+  const lit = faceColour('wall', 'horizons', ov, [0, 1, 0]);
+  const shaded = faceColour('wall', 'horizons', ov, [1, 0, 0]);
+  const top = faceColour('wall', 'horizons', ov, [0, 0, 1]);
+  const lum = (h) => [1, 3, 5].reduce((a, i) => a + parseInt(h.slice(i, i + 2), 16), 0);
+  // Still three distinct values, ordered as the palette orders them.
+  if (lit === shaded || lit === top) return 'les faces ne se distinguent plus';
+  return lum(top) > lum(lit) && lum(lit) > lum(shaded)
+    || `ordre rompu : haut ${lum(top)}, gauche ${lum(lit)}, droite ${lum(shaded)}`;
+});
+
+check('chaque palette déclare le style qui va avec', () => {
+  for (const [name, t] of Object.entries(THEMES)) {
+    if (!t.style) return `${name} ne déclare aucun style`;
+    if (typeof t.style.outline !== 'boolean') return `${name} : contours non déclarés`;
+  }
+  return true;
+});
+
+check('un fichier incomplet hérite du style de sa propre palette', () => {
+  // No style block at all: the terracotta conventions must win, not whichever
+  // palette happens to be the current default.
+  const m = normalise({ theme: 'terracotta', cells: ['1,1'] });
+  if (m.style.outline !== true) return 'contours non repris de la palette';
+  if (m.plinth !== 0.2) return `soubassement ${m.plinth}`;
+  if (m.texture.roof !== 'tiles') return `matière ${m.texture.roof}`;
+  // An explicit choice in the file still wins over the palette.
+  const forced = normalise({ theme: 'terracotta', cells: ['1,1'], style: { outline: false } });
+  return forced.style.outline === false || 'le choix explicite du fichier a été écrasé';
+});
+
+check('la palette Horizons se passe de contours et de soubassement', () => {
+  const st = THEMES.horizons.style;
+  return st.outline === false && st.plinth === 0 && st.windowBars === false;
+});
+
+check('materialColour renvoie la teinte de référence d’un matériau orienté', () => {
+  return materialColour('wall', 'horizons', {}) === '#efe8dc'
+    && materialColour('wall', 'horizons', { wall: '#123456' }) === '#123456';
 });
 
 /* ---------------- model and storage ---------------- */

@@ -41,6 +41,7 @@ const TOOL_GROUPS = [
       ['terrace', 'Terrasse'],
       ['path', 'Allée'],
       ['tree', 'Arbre'],
+      ['bush', 'Buisson'],
       ['hedge', 'Haie'],
       ['fence', 'Clôture'],
       ['car', 'Voiture'],

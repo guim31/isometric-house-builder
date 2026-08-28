@@ -56,26 +56,69 @@ export function darken(hex, amount = 0.22) {
 }
 
 export const THEMES = {
+  horizons: {
+    label: 'Horizons — terre cuite',
+    // Taken from the Gladys Assistant v5 house-view gallery, so a house
+    // modelled here sits in that widget without looking like a foreign body.
+    // Light stays fixed to the camera rather than to the world: the palette's
+    // own drawings light the far slope, which looks right from one angle only,
+    // whereas this tool has to give four exportable views of equal quality.
+    style: { outline: false, shadow: false, windowBars: false, plinth: 0, texture: { roof: 'none', wall: 'none' } },
+    wall: { base: '#efe8dc', up: '#f8f4ed', yPos: '#efe8dc', xPos: '#e0d6c6', yNeg: '#e7ded0', xNeg: '#d6cab4', down: '#cfc2ab' },
+    roof: { base: '#d98d64', up: '#eeb08d', yPos: '#e8a37c', xPos: '#c97e56', yNeg: '#d98d64', xNeg: '#bf7550', down: '#b06c48' },
+    roofEdge: '#f8f4ed',
+    plinth: '#e0d6c6',
+    trim: '#ffffff', door: '#54749e', shutter: '#f2f2f0', garage: '#f2f2f0',
+    glass: '#bcd6f2', glassDark: '#aac9e8',
+    grass: '#e3ecdf', grassEdge: '#d7e4d1',
+    paving: '#eef0f2', gravel: '#e0d6c6', deck: '#e0d6c6',
+    water: '#aac9e8', waterDeep: '#8fb8de', poolRim: '#f2f2f0',
+    foliage: '#9fd0b2', foliageDark: '#8cc7a4', trunk: '#c9b79c',
+    solar: '#41608f', solarCell: '#54749e', solarFrame: '#2e4468',
+    chimney: '#efe8dc', chimneyCap: '#e0d6c6',
+    fence: '#efe8dc', carBody: '#54749e', carGlass: '#bcd6f2', carTyre: '#48555f',
+  },
+  horizonsSlate: {
+    label: 'Horizons — ardoise',
+    style: { outline: false, shadow: false, windowBars: false, plinth: 0, texture: { roof: 'none', wall: 'none' } },
+    wall: { base: '#eef0f2', up: '#f7f8f9', yPos: '#eef0f2', xPos: '#e0d6c6', yNeg: '#e6e9ec', xNeg: '#d6cab4', down: '#cdd2d6' },
+    roof: { base: '#54636f', up: '#6b7d8b', yPos: '#5f7183', xPos: '#48555f', yNeg: '#54636f', xNeg: '#404b54', down: '#39434b' },
+    roofEdge: '#f2f2f0',
+    plinth: '#e0d6c6',
+    trim: '#ffffff', door: '#54749e', shutter: '#eef0f2', garage: '#f2f2f0',
+    glass: '#bcd6f2', glassDark: '#aac9e8',
+    grass: '#e3ecdf', grassEdge: '#d7e4d1',
+    paving: '#eef0f2', gravel: '#e0d6c6', deck: '#e0d6c6',
+    water: '#aac9e8', waterDeep: '#8fb8de', poolRim: '#f2f2f0',
+    foliage: '#9fd0b2', foliageDark: '#8cc7a4', trunk: '#c9b79c',
+    solar: '#41608f', solarCell: '#54749e', solarFrame: '#2e4468',
+    chimney: '#eef0f2', chimneyCap: '#e0d6c6',
+    fence: '#eef0f2', carBody: '#54749e', carGlass: '#bcd6f2', carTyre: '#48555f',
+  },
   terracotta: {
     label: 'Terre cuite',
+    style: { outline: true, shadow: true, windowBars: true, plinth: 0.2, texture: { roof: 'tiles', wall: 'none' } },
     plinth: '#cdb894',
     wall: '#e9c98d', roof: '#c8663c', roofEdge: '#f2f0ea',
     trim: '#f4f1e8', door: '#cfd8dc', shutter: '#eef2f4',
   },
   slate: {
     label: 'Ardoise',
+    style: { outline: true, shadow: true, windowBars: true, plinth: 0.2, texture: { roof: 'slate', wall: 'none' } },
     plinth: '#ccd1d5',
     wall: '#eceff1', roof: '#5b6771', roofEdge: '#ffffff',
     trim: '#ffffff', door: '#37474f', shutter: '#607d8b',
   },
   provence: {
     label: 'Provence',
+    style: { outline: true, shadow: true, windowBars: true, plinth: 0.2, texture: { roof: 'tiles', wall: 'stone' } },
     plinth: '#d8c7a8',
     wall: '#f0dfc0', roof: '#b8563a', roofEdge: '#faf7f0',
     trim: '#ffffff', door: '#6b8fa3', shutter: '#7fa8bd',
   },
   nordic: {
     label: 'Nordique',
+    style: { outline: true, shadow: true, windowBars: true, plinth: 0.2, texture: { roof: 'seam', wall: 'siding' } },
     plinth: '#6d4636',
     wall: '#8d5c46', roof: '#3c4550', roofEdge: '#f5f1ea',
     trim: '#f5f1ea', door: '#2f3640', shutter: '#f5f1ea',
@@ -96,10 +139,54 @@ export const FIXED = {
   shadow: '#000000',
 };
 
+/**
+ * Blend a set of per-orientation colours by the face normal.
+ *
+ * Some palettes cannot be reproduced by darkening one base colour: their
+ * shadows shift hue rather than just value. Naming a colour per orientation
+ * and interpolating between them reproduces those palettes exactly on the
+ * axis-aligned faces, and stays inside the same family on the sloped ones.
+ */
+function blendOriented(spec, n, tint) {
+  const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
+  const w = ax + ay + az || 1;
+  const pick = (key, fallback) => hexToRgb(spec[key] || spec[fallback] || spec.base);
+  const up = pick(n[2] > 0 ? 'up' : 'down', 'up');
+  const sx = pick(n[0] > 0 ? 'xPos' : 'xNeg', 'xPos');
+  const sy = pick(n[1] > 0 ? 'yPos' : 'yNeg', 'yPos');
+  const out = [0, 1, 2].map((i) => (up[i] * az + sx[i] * ax + sy[i] * ay) / w);
+  return rgbToHex(out[0] * tint[0], out[1] * tint[1], out[2] * tint[2]);
+}
+
+/**
+ * Final colour of a face.
+ *
+ * A recoloured material keeps its palette's shading structure: the override is
+ * applied as a per-channel ratio against the base, so picking a blue wall in a
+ * palette whose shadows shift warm still yields warm-shifted blue shadows,
+ * instead of collapsing back to a flat multiply.
+ */
+export function faceColour(mat, theme, overrides, n) {
+  const t = THEMES[theme] || THEMES.terracotta;
+  const spec = t[mat] !== undefined ? t[mat] : FIXED[mat];
+  const override = overrides[mat];
+
+  if (spec && typeof spec === 'object') {
+    let tint = [1, 1, 1];
+    if (override) {
+      const a = hexToRgb(override), b = hexToRgb(spec.base);
+      tint = [0, 1, 2].map((i) => (b[i] < 4 ? 1 : a[i] / b[i]));
+    }
+    return blendOriented(spec, n, tint);
+  }
+  const base = override || spec || '#cccccc';
+  return shade(base, shadeFactor(n));
+}
+
 export function materialColour(mat, theme, overrides = {}) {
   if (overrides[mat]) return overrides[mat];
   const t = THEMES[theme] || THEMES.terracotta;
-  if (t[mat]) return t[mat];
-  if (FIXED[mat]) return FIXED[mat];
-  return '#cccccc';
+  const spec = t[mat] !== undefined ? t[mat] : FIXED[mat];
+  if (spec && typeof spec === 'object') return spec.base;
+  return spec || '#cccccc';
 }

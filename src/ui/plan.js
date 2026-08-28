@@ -21,6 +21,7 @@ export const PROP_DEFAULTS = {
   hedge: { w: 4, d: 0.6, h: 0.8 },
   fence: { w: 6, d: 0.2, h: 1.1 },
   tree: { r: 1.5 },
+  bush: { r: 1.1 },
   car: { w: 1.8, d: 4.2 },
 };
 
@@ -73,7 +74,7 @@ export class PlanView {
       }
     }
     for (const p of m.props) {
-      const centred = p.kind === 'tree' || p.kind === 'car';
+      const centred = p.kind === 'tree' || p.kind === 'bush' || p.kind === 'car';
       const pw = p.r ? p.r * 2 : p.w ?? 2;
       const pd = p.r ? p.r * 2 : p.d ?? 2;
       const px = centred ? p.x - pw / 2 : p.x;
@@ -145,14 +146,14 @@ export class PlanView {
 
     // Ground items, drawn under the house.
     for (const p of m.props) {
-      const centred = p.kind === 'tree' || p.kind === 'car';
+      const centred = p.kind === 'tree' || p.kind === 'bush' || p.kind === 'car';
       const pw = p.r ? p.r * 2 : p.w ?? 2;
       const pd = p.r ? p.r * 2 : p.d ?? 2;
       const px = centred ? p.x - pw / 2 : p.x;
       const py = centred ? p.y - pd / 2 : p.y;
       const a = this.toPx(px, py + pd);
       const selected = this.store.selection?.id === p.id;
-      const shape = p.kind === 'tree'
+      const shape = p.kind === 'tree' || p.kind === 'bush'
         ? el('circle', { cx: a[0] + (pw * map.scale) / 2, cy: a[1] + (pd * map.scale) / 2, r: (pw * map.scale) / 2 })
         : el('rect', { x: a[0], y: a[1], width: pw * map.scale, height: pd * map.scale, rx: p.kind === 'pool' ? 8 : 2 });
       shape.setAttribute('class', `prop prop-${p.kind}${selected ? ' selected' : ''}`);
@@ -387,7 +388,7 @@ export class PlanView {
   placeProp(kind, pt) {
     const id = newId('p');
     const def = PROP_DEFAULTS[kind];
-    const centred = kind === 'tree' || kind === 'car';
+    const centred = kind === 'tree' || kind === 'bush' || kind === 'car';
     const x = Math.round((centred ? pt[0] : pt[0] - (def.w ?? 2) / 2) * 4) / 4;
     const y = Math.round((centred ? pt[1] : pt[1] - (def.d ?? 2) / 2) * 4) / 4;
     this.store.update((m) => ({ ...m, props: [...m.props, { id, kind, x, y, ...def }] }));

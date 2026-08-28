@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#f6f8fa;font:12px system-ui}
+.r{display:flex;flex-wrap:wrap;gap:8px;padding:8px}
+figure{margin:0;background:#fff;border-radius:18px;overflow:hidden}
+figcaption{text-align:center;color:#7c8396;padding:6px}
+.ref{padding:8px}</style></head>
+<body>
+<div class="ref"><img src="./ref-house-solar.svg" width="420"><div style="color:#7c8396">référence Gladys : house-solar.svg</div></div>
+<div class="r" id="o"></div>
+<script type="module">
+import { normalise, emptyModel, newId } from '../src/core/model.js';
+import { rectCells } from '../src/core/grid.js';
+import { renderScene } from '../src/render/svg.js';
+import { THEMES } from '../src/core/palette.js';
+
+// A simple gabled house with solar panels, close to the reference drawing.
+function house(theme) {
+  const st = THEMES[theme].style || {};
+  return normalise({
+    ...emptyModel(), theme,
+    cells: [...rectCells(14, 14, 25, 21)],
+    storeys: 1, storeyHeight: 2.7, plinth: st.plinth ?? 0.2,
+    roof: { type: 'gable', pitch: 30, overhang: 0.75, fascia: 0.14, shedDir: 'S' },
+    texture: { roof: 'none', wall: 'none', ...(st.texture || {}) },
+    style: { outline: st.outline ?? true, outlineWidth: 1.1, background: 'transparent', shadow: st.shadow ?? true, windowBars: st.windowBars ?? true },
+    ground: { enabled: true, material: 'grass', margin: 2.5 },
+    openings: [
+      { id: 'a', edge: '16,21,N', storey: 0, kind: 'window', offset: 0.5, width: 1.6, height: 1.5, sill: 0.8 },
+      { id: 'b', edge: '19,21,N', storey: 0, kind: 'window', offset: 0.5, width: 1.6, height: 1.5, sill: 0.8 },
+      { id: 'c', edge: '22,21,N', storey: 0, kind: 'door', offset: 0.5, width: 1.0, height: 2.1, sill: 0 },
+      { id: 'd', edge: '25,16,E', storey: 0, kind: 'window', offset: 0.5, width: 1.6, height: 1.5, sill: 0.8 },
+      { id: 'e', edge: '25,19,E', storey: 0, kind: 'window', offset: 0.5, width: 1.6, height: 1.5, sill: 0.8 },
+    ],
+    roofItems: [
+      { id: 'r1', kind: 'solar', x: 18, y: 16.6, w: 3.4, d: 2.6 },
+      { id: 'r2', kind: 'solar', x: 21.8, y: 16.6, w: 3.4, d: 2.6 },
+    ],
+    props: [
+      { id: 'p1', kind: 'bush', x: 12.2, y: 19, r: 1.1 },
+      { id: 'p2', kind: 'bush', x: 27.5, y: 17, r: 1.0 },
+      { id: 'p3', kind: 'bush', x: 20, y: 24.5, r: 1.2 },
+    ],
+  });
+}
+const o = document.getElementById('o');
+for (const theme of ['horizons', 'horizonsSlate', 'terracotta']) {
+  const { svg } = renderScene(house(theme), { width: 460, height: 340 });
+  o.insertAdjacentHTML('beforeend', `<figure>${svg}<figcaption>${THEMES[theme].label}</figcaption></figure>`);
+}
+</script></body></html>
