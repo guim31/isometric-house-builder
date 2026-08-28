@@ -2,9 +2,10 @@
  * The inspector: global settings, plus whatever is currently selected.
  */
 
-import { THEMES } from '../core/palette.js';
+import { THEMES, materialColour } from '../core/palette.js';
 import { PROJECTIONS } from '../core/iso.js';
 import { ROOF_TYPES, STEP } from '../core/roof.js';
+import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
 
 const h = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -62,6 +63,13 @@ function number(value, { min, max, step, onChange }) {
   return input;
 }
 
+/** Materials the user can recolour, grouped as they are presented. */
+const COLOUR_GROUPS = [
+  ['Bâtiment', [['wall', 'Murs'], ['roof', 'Toiture'], ['roofEdge', 'Rive'], ['plinth', 'Soubassement']]],
+  ['Menuiseries', [['trim', 'Dormants'], ['door', 'Porte'], ['shutter', 'Volets'], ['garage', 'Garage'], ['glass', 'Vitrage']]],
+  ['Extérieur', [['grass', 'Pelouse'], ['paving', 'Dallage'], ['water', 'Eau'], ['foliage', 'Feuillage']]],
+];
+
 const ROOF_LABELS = { hip: 'Croupe (4 pans)', gable: 'Deux pans', flat: 'Plat', shed: 'Appentis (1 pan)' };
 const DIR_LABELS = { S: 'vers le sud', N: 'vers le nord', W: "vers l'ouest", E: "vers l'est" };
 const GROUND_LABELS = { grass: 'Pelouse', paving: 'Dallage', gravel: 'Gravier' };
@@ -85,6 +93,7 @@ export class Inspector {
     this.root.appendChild(this.buildingSection());
     this.root.appendChild(this.roofSection());
     this.root.appendChild(this.appearanceSection());
+    this.root.appendChild(this.coloursSection());
     this.root.appendChild(this.groundSection());
     this.root.appendChild(this.viewSection());
   }
@@ -166,6 +175,49 @@ export class Inspector {
         ['#0f172a', 'Sombre'],
       ], (v) => this.setIn('style', { background: v })), 'appliqué à l’export seulement'),
     );
+    return s;
+  }
+
+  /** Textures and per-material colour overrides. */
+  coloursSection() {
+    const m = this.store.model;
+    const s = this.section('Couleurs et matières');
+    s.append(
+      field('Matière du toit', select(m.texture.roof,
+        Object.entries(ROOF_TEXTURES).map(([k, v]) => [k, v.label]),
+        (v) => this.setIn('texture', { roof: v }))),
+      field('Matière des murs', select(m.texture.wall,
+        Object.entries(WALL_TEXTURES).map(([k, v]) => [k, v.label]),
+        (v) => this.setIn('texture', { wall: v }))),
+    );
+
+    for (const [title, mats] of COLOUR_GROUPS) {
+      const group = h('div', 'colour-group');
+      group.appendChild(h('span', 'colour-group-title', title));
+      const grid = h('div', 'colour-grid');
+      for (const [mat, label] of mats) {
+        const cell = h('label', 'colour-cell');
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = materialColour(mat, m.theme, m.overrides);
+        input.addEventListener('input', () => {
+          this.store.update(
+            (mm) => ({ ...mm, overrides: { ...mm.overrides, [mat]: input.value } }),
+            { coalesce: `colour:${mat}` },
+          );
+        });
+        cell.append(input, h('span', null, label));
+        grid.appendChild(cell);
+      }
+      group.appendChild(grid);
+      s.appendChild(group);
+    }
+
+    const count = Object.keys(m.overrides).length;
+    const reset = h('button', 'subtle', count ? `Revenir à la palette (${count})` : 'Revenir à la palette');
+    reset.disabled = !count;
+    reset.addEventListener('click', () => this.store.update((mm) => ({ ...mm, overrides: {} })));
+    s.appendChild(reset);
     return s;
   }
 

@@ -58,21 +58,25 @@ export function darken(hex, amount = 0.22) {
 export const THEMES = {
   terracotta: {
     label: 'Terre cuite',
+    plinth: '#cdb894',
     wall: '#e9c98d', roof: '#c8663c', roofEdge: '#f2f0ea',
     trim: '#f4f1e8', door: '#cfd8dc', shutter: '#eef2f4',
   },
   slate: {
     label: 'Ardoise',
+    plinth: '#ccd1d5',
     wall: '#eceff1', roof: '#5b6771', roofEdge: '#ffffff',
     trim: '#ffffff', door: '#37474f', shutter: '#607d8b',
   },
   provence: {
     label: 'Provence',
+    plinth: '#d8c7a8',
     wall: '#f0dfc0', roof: '#b8563a', roofEdge: '#faf7f0',
     trim: '#ffffff', door: '#6b8fa3', shutter: '#7fa8bd',
   },
   nordic: {
     label: 'Nordique',
+    plinth: '#6d4636',
     wall: '#8d5c46', roof: '#3c4550', roofEdge: '#f5f1ea',
     trim: '#f5f1ea', door: '#2f3640', shutter: '#f5f1ea',
   },

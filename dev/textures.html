@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#fff;font:12px system-ui}.r{display:flex;flex-wrap:wrap}
+figcaption{text-align:center;color:#5a6b7d;padding-bottom:6px}</style></head>
+<body><div class="r" id="o"></div>
+<script type="module">
+import { normalise } from '../src/core/model.js';
+import { renderScene } from '../src/render/svg.js';
+const base = normalise(await (await fetch('../examples/maison-en-l-avec-piscine.house.json')).json());
+const cases = [
+  ['toit lisse', {roof:'none',wall:'none'}, 'terracotta'],
+  ['tuiles', {roof:'tiles',wall:'none'}, 'terracotta'],
+  ['ardoises + pierre', {roof:'slate',wall:'stone'}, 'slate'],
+  ['bac acier + bardage', {roof:'seam',wall:'siding'}, 'nordic'],
+  ['tuiles + briques', {roof:'tiles',wall:'brick'}, 'provence'],
+  ['tuiles, zoom', {roof:'tiles',wall:'brick'}, 'terracotta'],
+];
+const o = document.getElementById('o');
+cases.forEach(([label, texture, theme], i) => {
+  const m = { ...base, texture, theme };
+  const { svg } = renderScene(m, { width: 640, height: 460, zoom: i === 5 ? 2.4 : 1 });
+  o.insertAdjacentHTML('beforeend', `<figure>${svg}<figcaption>${label}</figcaption></figure>`);
+});
+</script></body></html>

@@ -249,6 +249,28 @@ button:disabled { opacity: .45; cursor: default; }
   text-align: right;
 }
 
+.colour-group { margin: 10px 0 4px; }
+.colour-group-title { font-size: 11px; color: var(--ink-soft); }
+.colour-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 8px;
+  margin-top: 4px;
+}
+.colour-cell { display: flex; align-items: center; gap: 6px; font-size: 12px; min-width: 0; }
+.colour-cell span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.colour-cell input[type="color"] {
+  width: 26px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+  flex: none;
+}
+button.subtle { width: 100%; margin-top: 10px; font-size: 12px; }
+
 /* ---------- dialog and toast ---------- */
 
 .dialog {

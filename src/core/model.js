@@ -23,6 +23,7 @@ export function emptyModel() {
     plinth: 0.2,
     roof: { type: 'hip', pitch: 30, overhang: 0.5, fascia: 0.18, shedDir: 'S' },
     theme: 'terracotta',
+    texture: { roof: 'tiles', wall: 'none' },
     overrides: {},
     openings: [],
     roofItems: [],
@@ -72,6 +73,7 @@ export function normalise(input) {
   m.roof = { ...base.roof, ...(input?.roof || {}) };
   m.ground = { ...base.ground, ...(input?.ground || {}) };
   m.camera = { ...base.camera, ...(input?.camera || {}) };
+  m.texture = { ...base.texture, ...(input?.texture || {}) };
   m.style = { ...base.style, ...(input?.style || {}) };
   m.overrides = { ...(input?.overrides || {}) };
   m.cells = Array.isArray(m.cells) ? m.cells.filter((c) => /^-?\d+,-?\d+$/.test(c)) : [];

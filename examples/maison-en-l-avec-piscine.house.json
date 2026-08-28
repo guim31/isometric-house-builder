@@ -329,5 +329,9 @@
     "outlineWidth": 1.1,
     "background": "transparent",
     "shadow": true
+  },
+  "texture": {
+    "roof": "tiles",
+    "wall": "none"
   }
 }

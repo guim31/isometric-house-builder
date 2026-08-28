@@ -13,8 +13,13 @@ import { buildMesh } from '../core/scene.js';
 import { materialColour, shade, shadeFactor, darken } from '../core/palette.js';
 import { cellSet } from '../core/model.js';
 import { bounds } from '../core/grid.js';
+import { specFor, textureSegments } from './texture.js';
 
 const VIEW = 1 / Math.sqrt(3); // dot with (1,1,1)/sqrt(3)
+
+// Clip paths need ids unique to the document, not just to one SVG: a gallery
+// page holding several renders would otherwise have them clip each other.
+let renderSeq = 0;
 
 /** Materials drawn without an outline, or with a special opacity. */
 const NO_OUTLINE = new Set(['shadow', 'grass', 'water', 'solarCell', 'garageLine']);
@@ -127,17 +132,38 @@ export function renderScene(model, opts = {}) {
   const ordered = orderFaces(faces, camera);
   const theme = model.theme;
   const ov = model.overrides;
+  const prefix = `t${renderSeq++}`;
   const out = [];
-  for (const f of ordered) {
+  const defs = [];
+  const hair = Math.max(0.5, camera.scale * 0.02);
+  ordered.forEach((f, i) => {
     const base = materialColour(f.mat, theme, ov);
     const fill = f.mat === 'shadow' ? base : shade(base, shadeFactor(f.nCam));
-    const parts = [`d="${pathData(f, camera)}"`, `fill="${fill}"`];
+    const d = pathData(f, camera);
+    const parts = [`d="${d}"`, `fill="${fill}"`];
     if (OPACITY[f.mat] != null) parts.push(`opacity="${OPACITY[f.mat]}"`);
     if (model.style.outline && !NO_OUTLINE.has(f.mat)) {
       parts.push(`stroke="${darken(fill, 0.26)}"`, `stroke-width="${model.style.outlineWidth}"`);
     }
     out.push(`<path ${parts.join(' ')}/>`);
-  }
+
+    const spec = specFor(f.mat, model.texture);
+    if (!spec) return;
+    const segs = textureSegments(f, spec, camera.scale);
+    if (!segs.length) return;
+    // Clipping to the face itself is what lets the generator ignore the face
+    // outline entirely and simply rule lines across its bounding box.
+    const id = `${prefix}-${i}`;
+    defs.push(`<clipPath id="${id}"><path d="${d}"/></clipPath>`);
+    const lines = segs.map(([p, q]) => {
+      const a = camera.toScreen(p), b = camera.toScreen(q);
+      return `M${a[0].toFixed(2)} ${a[1].toFixed(2)}L${b[0].toFixed(2)} ${b[1].toFixed(2)}`;
+    }).join('');
+    out.push(
+      `<path d="${lines}" clip-path="url(#${id})" fill="none" ` +
+      `stroke="${darken(fill, 0.2)}" stroke-width="${hair.toFixed(2)}"/>`,
+    );
+  });
 
   const bg = model.style.background;
   const bgRect = bg && bg !== 'transparent'
@@ -151,6 +177,7 @@ export function renderScene(model, opts = {}) {
     `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(width * ratio)}" ` +
     `height="${Math.round(height * ratio)}" ` +
     `viewBox="0 0 ${width} ${height}" shape-rendering="geometricPrecision">` +
+    (defs.length ? `<defs>${defs.join('')}</defs>` : '') +
     bgRect +
     `<g stroke-linejoin="round" stroke-linecap="round">${out.join('')}</g>` +
     `</svg>`;

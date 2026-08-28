@@ -11,6 +11,7 @@ import { defaultModel, emptyModel, normalise, cellSet, wallTop } from '../src/co
 import { buildMesh } from '../src/core/scene.js';
 import { renderScene } from '../src/render/svg.js';
 import { hitLayer, screenToGround } from '../src/render/hit.js';
+import { textureSegments, specFor, ROOF_TEXTURES, WALL_TEXTURES } from '../src/render/texture.js';
 import { Store } from '../src/ui/store.js';
 import { PlanView } from '../src/ui/plan.js';
 import { Viewport } from '../src/ui/viewport.js';
@@ -222,6 +223,82 @@ check('le fond transparent n’ajoute aucun rectangle de fond', () => {
   const m = normalise(defaultModel());
   const opaque = normalise({ ...m, style: { ...m.style, background: '#ffffff' } });
   return !svgFor(m, SIZES[0]).includes('<rect') && svgFor(opaque, SIZES[0]).includes('<rect');
+});
+
+/* ---------------- textures ---------------- */
+
+// A face standing in for one slope of a 30-degree roof.
+const slopeFace = () => {
+  const k = Math.tan((30 * Math.PI) / 180);
+  const n = [0, -Math.sin(Math.PI / 6), Math.cos(Math.PI / 6)];
+  return {
+    normal: n,
+    loops: [[[0, 0, 3], [8, 0, 3], [8, 4, 3 + 4 * k], [0, 4, 3 + 4 * k]].map(
+      (p) => [p[0], p[1], p[2]],
+    )],
+  };
+};
+
+check('les rangs de tuiles restent horizontaux sur une pente', () => {
+  const segs = textureSegments(slopeFace(), ROOF_TEXTURES.tiles, 60);
+  if (!segs.length) return 'aucun segment';
+  // Courses follow the eaves, so both ends of a course sit at the same height.
+  const courses = segs.filter(([a, b]) => Math.abs(a[0] - b[0]) > 0.5);
+  if (!courses.length) return 'aucun rang trouvé';
+  for (const [a, b] of courses) {
+    if (!near(a[2], b[2], 1e-6)) return `rang non horizontal : ${a[2]} vs ${b[2]}`;
+  }
+  return true;
+});
+
+check('les segments de texture restent dans le plan de la face', () => {
+  const face = slopeFace();
+  const d0 = face.normal[0] * face.loops[0][0][0] + face.normal[1] * face.loops[0][0][1]
+    + face.normal[2] * face.loops[0][0][2];
+  for (const spec of [ROOF_TEXTURES.tiles, ROOF_TEXTURES.slate, ROOF_TEXTURES.seam]) {
+    for (const [a, b] of textureSegments(face, spec, 60)) {
+      for (const p of [a, b]) {
+        const d = face.normal[0] * p[0] + face.normal[1] * p[1] + face.normal[2] * p[2];
+        if (!near(d, d0, 1e-6)) return 'segment hors du plan';
+      }
+    }
+  }
+  return true;
+});
+
+check('une texture trop fine à l’écran n’est pas dessinée', () => {
+  // At three pixels per metre a 0.38 m course would be sub-pixel noise.
+  return textureSegments(slopeFace(), ROOF_TEXTURES.tiles, 3).length === 0;
+});
+
+check('les joints d’un appareillage sont décalés d’un rang à l’autre', () => {
+  const wall = {
+    normal: [0, 1, 0],
+    loops: [[[0, 5, 0], [4, 5, 0], [4, 5, 2.5], [0, 5, 2.5]]],
+  };
+  const segs = textureSegments(wall, WALL_TEXTURES.brick, 80);
+  const joints = segs.filter(([a, b]) => Math.abs(a[2] - b[2]) > 0.01);
+  if (joints.length < 4) return `${joints.length} joints seulement`;
+  const xs = new Set(joints.map(([a]) => Math.round(a[0] * 100) / 100));
+  return xs.size > 2 || 'joints tous alignés';
+});
+
+check('seuls les murs et la toiture reçoivent une matière', () => {
+  const t = { roof: 'tiles', wall: 'brick' };
+  return specFor('roof', t) && specFor('wall', t)
+    && !specFor('grass', t) && !specFor('water', t) && !specFor('glass', t);
+});
+
+check('le rendu texturé produit des chemins de découpe uniques', () => {
+  const m = normalise({ ...defaultModel(), texture: { roof: 'tiles', wall: 'brick' } });
+  const a = renderScene(m, { width: 600, height: 400 }).svg;
+  const b = renderScene(m, { width: 600, height: 400 }).svg;
+  const ids = (svg) => [...svg.matchAll(/<clipPath id="([^"]+)"/g)].map((x) => x[1]);
+  const ia = ids(a), ib = ids(b);
+  if (!ia.length) return 'aucune découpe émise';
+  if (new Set(ia).size !== ia.length) return 'identifiants dupliqués dans un même rendu';
+  // Two renders on one page must not share ids, or they clip each other.
+  return ia.every((id) => !ib.includes(id)) || 'identifiants partagés entre deux rendus';
 });
 
 /* ---------------- model and storage ---------------- */

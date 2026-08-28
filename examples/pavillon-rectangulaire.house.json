@@ -234,5 +234,9 @@
     "outlineWidth": 1.1,
     "background": "transparent",
     "shadow": true
+  },
+  "texture": {
+    "roof": "slate",
+    "wall": "none"
   }
 }

@@ -40,7 +40,9 @@ aussi bien l'affaire.
 | **Ouvertures** | Fenêtres, fenêtres à volets, portes, portes de garage, posées sur n'importe quel mur et à n'importe quel niveau |
 | **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente |
 | **Extérieurs** | Piscine, terrasse, allée, pelouse, haies, clôtures, arbres, voiture |
-| **Rendu** | 4 palettes, contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
+| **Matières** | Tuiles, ardoises, bac acier sur le toit ; briques, bardage, pierre sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
+| **Couleurs** | 4 palettes de départ, puis chaque matériau recolorable individuellement (murs, toiture, rive, menuiseries, volets, pelouse, eau…) |
+| **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
 | **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, copie directe dans le presse-papier |
 
 ## Prise en main
@@ -49,10 +51,13 @@ aussi bien l'affaire.
    affiner, *Gomme* pour retirer. Une case vaut un mètre.
 2. **Réglez la toiture** dans le panneau de droite. Le débord se cale par pas de
    25 cm, pour que la rive tombe sur la trame.
-3. **Posez les ouvertures.** Choisissez *Fenêtre*, *Porte* ou *Porte de garage*,
+3. **Choisissez matières et couleurs** dans *Couleurs et matières* : une palette
+   de départ, une matière de toit et de murs, puis autant de retouches
+   individuelles que vous voulez.
+4. **Posez les ouvertures.** Choisissez *Fenêtre*, *Porte* ou *Porte de garage*,
    puis cliquez le long d'un mur — dans le plan, ou directement sur le rendu.
-4. **Aménagez les abords** avec les outils *Extérieur*.
-5. **Exportez.** Le fond transparent est celui à préférer : l'image se pose alors
+5. **Aménagez les abords** avec les outils *Extérieur*.
+6. **Exportez.** Le fond transparent est celui à préférer : l'image se pose alors
    sur n'importe quelle couleur de tableau de bord.
 
 À savoir : la vue par défaut regarde les façades **nord et est**. Si vos
@@ -112,6 +117,11 @@ modifier le moteur :
   les noues correctes là où deux ailes se rejoignent. Les murs, eux, montent
   jusqu'à la sous-face du toit : un pignon n'est pas une pièce à part, c'est une
   conséquence.
+- **Les matières sont générées dans le plan de la face, pas en motif SVG.** Un
+  `<pattern>` vit dans l'espace de l'écran : les rangs de tuiles seraient
+  identiques sur tous les pans et la texture semblerait collée sur l'image. Ici
+  les lignes sont tracées en coordonnées réelles puis projetées, et découpées
+  par la face elle-même.
 - **La géométrie est émise en triangles fins, puis refusionnée.** `mesh.js`
   recombine les triangles coplanaires de même matériau en polygones, en séparant
   les composantes connexes. Sans cette séparation, deux objets coplanaires
@@ -126,6 +136,7 @@ modifier le moteur :
 | `src/core/mesh.js` | Fusion des faces coplanaires, trous, composantes |
 | `src/core/scene.js` | Assemblage : sol, murs, ouvertures, toit, objets |
 | `src/render/svg.js` | Tri, éclairage, émission SVG |
+| `src/render/texture.js` | Rangs de tuiles, appareillages, bardages |
 | `src/render/hit.js` | Couche de sélection invisible |
 | `src/ui/` | Plan, rendu, inspecteur, historique |
 | `src/io/` | Export image, fichiers de projet, lien de partage |
@@ -153,7 +164,7 @@ place windows, doors, garage doors, solar panels, chimneys, a pool, trees, then
 export the current view or all four isometric orientations at once.
 
 No dependencies, no bundler, no account: clone it, serve the folder, open
-`index.html`. Tests live in `tests/` and run in the browser, or headlessly via
+`index.html`. Roof and wall materials are generated in world space and projected, so courses follow each slope. Tests live in `tests/` and run in the browser, or headlessly via
 `./dev/run-tests.sh`. MIT licensed.
 
 </details>
