@@ -8,8 +8,24 @@ import { boundaryEdges } from '../core/grid.js';
 import { cellSet, cellSizeOf } from '../core/model.js';
 import { buildMesh } from '../core/scene.js';
 import { mergeCoplanar } from '../core/mesh.js';
-import { rotateDir, project } from '../core/iso.js';
+import { rotateDir, project, clampPitch, normaliseYaw } from '../core/iso.js';
+import { focusModel } from '../core/focus.js';
 import { OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, placeOpening, placeProp } from './actions.js';
+
+/** Degrees of orbit per pixel dragged. */
+const ORBIT_YAW = 0.4;
+const ORBIT_PITCH = 0.3;
+
+/**
+ * What the built mesh depends on. Everything here is replaced by reference
+ * whenever it changes, so identity comparison is exact — and cheap.
+ */
+const geometryOf = (m) => [
+  m.buildings, m.openings, m.roofItems, m.props,
+  m.grid, m.ground, m.style.shadow, m.style.windowBars,
+];
+
+const sameSig = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 
 export class Viewport {
   constructor(root, store) {
@@ -29,14 +45,16 @@ export class Viewport {
     const r = this.root.getBoundingClientRect();
     const width = Math.max(320, Math.round(r.width));
     const height = Math.max(240, Math.round(r.height));
-    const m = this.store.model;
+    const m = focusModel(this.store.model);
 
-    // The model is immutable, so its identity is a complete cache key:
-    // panning and zooming reuse the built mesh and the merged faces, and pay
-    // only for the reprojection.
-    if (!this.cache || this.cache.model !== m) {
+    // Cached on what the mesh is actually made of, not on the model as a
+    // whole. Orbiting writes a new camera onto a new model object sixty times
+    // a second; keying the cache on model identity would rebuild the entire
+    // house on every frame of a drag, for a change that moves no vertex.
+    const sig = geometryOf(m);
+    if (!this.cache || !sameSig(this.cache.sig, sig)) {
       const built = buildMesh(m);
-      this.cache = { model: m, built, merged: mergeCoplanar(built.mesh.tris) };
+      this.cache = { sig, built, merged: mergeCoplanar(built.mesh.tris) };
     }
 
     // The on-screen view always has a background; only exports honour the
@@ -64,7 +82,7 @@ export class Viewport {
    * the direct answer to "why is my window not visible from here?".
    */
   compass(camera, height) {
-    const dir = rotateDir([0, 1, 0], this.store.model.camera.rotation);
+    const dir = rotateDir([0, 1, 0], this.store.model.camera.yaw);
     const v = project(dir, camera.proj);
     const l = Math.hypot(v[0], v[1]) || 1;
     const ux = (v[0] / l) * 10, uy = (v[1] / l) * 10;
@@ -131,10 +149,21 @@ export class Viewport {
         return;
       }
 
-      if (ev.button === 1 || ev.shiftKey || !pick) {
-        this.drag = { from: [ev.clientX, ev.clientY], pan: [...this.pan] };
+      // Middle button or Shift pans; a plain drag on the background orbits,
+      // which is the gesture anyone who has handled a 3D model already knows.
+      if (ev.button === 1 || ev.shiftKey) {
+        this.drag = { mode: 'pan', from: [ev.clientX, ev.clientY], pan: [...this.pan] };
         this.root.setPointerCapture?.(ev.pointerId);
-        if (!pick) s.select(null);
+        return;
+      }
+      if (!pick) {
+        this.drag = {
+          mode: 'orbit',
+          from: [ev.clientX, ev.clientY],
+          camera: { ...s.model.camera },
+        };
+        this.root.setPointerCapture?.(ev.pointerId);
+        s.select(null);
         return;
       }
       if (pick === 'wall') {
@@ -150,12 +179,28 @@ export class Viewport {
       if (this.pointers.has(ev.pointerId)) this.pointers.set(ev.pointerId, [ev.clientX, ev.clientY]);
       if (this.pinch && this.pointers.size >= 2) { this.movePinch(); return; }
       if (!this.drag) return;
+      const dx = ev.clientX - this.drag.from[0];
+      const dy = ev.clientY - this.drag.from[1];
+      if (this.drag.mode === 'orbit') {
+        // Dragging right turns the house to the right. That is the direction
+        // increasing yaw moves it: at yaw 0 the east corner sits on the screen
+        // left, and every added degree walks it back towards the centre.
+        this.store.update((mm) => ({
+          ...mm,
+          camera: {
+            ...mm.camera,
+            yaw: normaliseYaw(this.drag.camera.yaw + dx * ORBIT_YAW),
+            pitch: clampPitch(this.drag.camera.pitch - dy * ORBIT_PITCH),
+          },
+        }), { coalesce: 'orbit' });
+        return;
+      }
       // Pan lives upstream of the zoom in the projection, so the on-screen
       // shift is the raw delta divided by the zoom — without the division,
       // panning while zoomed in overshoots the cursor.
       this.pan = [
-        this.drag.pan[0] + (ev.clientX - this.drag.from[0]) / this.zoom,
-        this.drag.pan[1] + (ev.clientY - this.drag.from[1]) / this.zoom,
+        this.drag.pan[0] + dx / this.zoom,
+        this.drag.pan[1] + dy / this.zoom,
       ];
       this.render();
     });
@@ -165,6 +210,7 @@ export class Viewport {
         this.pointers.delete(ev.pointerId);
         if (this.pointers.size < 2) this.pinch = null;
       }
+      if (this.drag?.mode === 'orbit') this.store.commit();
       this.drag = null;
     };
     this.root.addEventListener('pointerup', end);

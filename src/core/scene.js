@@ -6,7 +6,8 @@
 import { Mesh } from './mesh.js';
 import { boundaryEdges, decomposeRects, bounds, parseKey, SIDES } from './grid.js';
 import { buildRoof, heightField, undersideAt, STEP } from './roof.js';
-import { cellSet, wallTop, cellSizeOf, buildingCells } from './model.js';
+import { cellSet, wallTop, cellSizeOf, buildingCells, propFootprint } from './model.js';
+import { focusRect } from './focus.js';
 import { buildProps } from './props.js';
 
 const LIFT = 0.015; // how far detail quads float off the surface they decorate
@@ -256,23 +257,35 @@ export function buildMesh(m) {
   // Sized to the footprint *and* everything placed around it. A prop left
   // hanging off the edge of the ground reads as floating above the roof rather
   // than standing behind the house, because nothing anchors it to a surface.
-  if (m.ground.enabled && !b.empty) {
+  // The framing rectangle counts too: a frame set on the far end of the garden
+  // may hold no building at all, and a gate standing on nothing looks broken.
+  if (m.ground.enabled) {
     const g = m.ground.margin;
-    let x0 = b.i0 * cs, y0 = b.j0 * cs, x1 = (b.i1 + 1) * cs, y1 = (b.j1 + 1) * cs;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    const cover = (ax0, ay0, ax1, ay1) => {
+      x0 = Math.min(x0, ax0); y0 = Math.min(y0, ay0);
+      x1 = Math.max(x1, ax1); y1 = Math.max(y1, ay1);
+    };
+    if (!b.empty) cover(b.i0 * cs, b.j0 * cs, (b.i1 + 1) * cs, (b.j1 + 1) * cs);
     for (const p of m.props) {
-      const centred = p.kind === 'tree' || p.kind === 'bush' || p.kind === 'car';
-      const pw = p.r ? p.r * 2 : p.w ?? 2;
-      const pd = p.r ? p.r * 2 : p.d ?? 2;
-      const px = centred ? p.x - pw / 2 : p.x;
-      const py = centred ? p.y - pd / 2 : p.y;
-      x0 = Math.min(x0, px - 1); y0 = Math.min(y0, py - 1);
-      x1 = Math.max(x1, px + pw + 1); y1 = Math.max(y1, py + pd + 1);
+      const [px0, py0, px1, py1] = propFootprint(p);
+      cover(px0 - 1, py0 - 1, px1 + 1, py1 + 1);
     }
-    mesh.quad(
-      [x0 - g, y0 - g, 0], [x1 + g, y0 - g, 0],
-      [x1 + g, y1 + g, 0], [x0 - g, y1 + g, 0],
-      m.ground.material, 'ground',
-    );
+    if (m.focus?.enabled) {
+      // Generously: the camera fits the frame tightly, so a ground plane that
+      // merely reaches the frame shows its own straight edge across the sky.
+      // One frame-width of slack puts that edge safely out of shot.
+      const [fx0, fy0, fx1, fy1] = focusRect(m.focus);
+      const slack = Math.max(fx1 - fx0, fy1 - fy0);
+      cover(fx0 - slack, fy0 - slack, fx1 + slack, fy1 + slack);
+    }
+    if (Number.isFinite(x0)) {
+      mesh.quad(
+        [x0 - g, y0 - g, 0], [x1 + g, y0 - g, 0],
+        [x1 + g, y1 + g, 0], [x0 - g, y1 + g, 0],
+        m.ground.material, 'ground',
+      );
+    }
   }
 
   // --- Contact shadow -----------------------------------------------------

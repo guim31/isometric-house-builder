@@ -3,9 +3,9 @@
  */
 
 import { THEMES, materialColour } from '../core/palette.js';
-import { PROJECTIONS } from '../core/iso.js';
+import { PROJECTIONS, PITCH_RANGE, DEFAULT_PITCH, viewpointLabel, normaliseYaw } from '../core/iso.js';
 import { ROOF_TYPES, STEP } from '../core/roof.js';
-import { withCellSize, cellSizeOf, fmtMetres, cellSet, buildingOfEdge } from '../core/model.js';
+import { withCellSize, cellSizeOf, fmtMetres, cellSet, buildingOfEdge, DEFAULT_FOCUS, newId } from '../core/model.js';
 import { bounds } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
 
@@ -105,6 +105,7 @@ export class Inspector {
     this.root.appendChild(this.coloursSection());
     this.root.appendChild(this.groundSection());
     this.root.appendChild(this.viewSection());
+    this.root.appendChild(this.focusSection());
   }
 
   section(title) {
@@ -349,9 +350,120 @@ export class Inspector {
   viewSection() {
     const m = this.store.model;
     const s = this.section('Vue');
-    s.appendChild(field('Projection', select(m.camera.projection,
-      Object.entries(PROJECTIONS).map(([k, v]) => [k, v.label]),
-      (v) => this.setIn('camera', { projection: v }))));
+    const deg = (v) => `${Math.round(v)}°`;
+    s.append(
+      // Free orbit, in numbers as well as by dragging: a saved view is worth
+      // little if it cannot be reproduced, and "37°" can be typed back in.
+      field('Orientation', slider(Math.round(m.camera.yaw), {
+        min: 0, max: 359, step: 1,
+        format: (v) => `${deg(v)} — ${viewpointLabel(v)}`,
+        onInput: (v) => this.setIn('camera', { yaw: normaliseYaw(v) }, 'camera'),
+      }), 'ou glissez directement dans le rendu'),
+      field('Hauteur de vue', slider(Math.round(m.camera.pitch), {
+        min: PITCH_RANGE[0], max: PITCH_RANGE[1], step: 1, format: deg,
+        onInput: (v) => this.setIn('camera', { pitch: v }, 'camera'),
+      }), 'de rasante à quasi verticale'),
+      field('Projection', select(m.camera.projection,
+        Object.entries(PROJECTIONS).map(([k, v]) => [k, v.label]),
+        (v) => this.setIn('camera', { projection: v }))),
+    );
+
+    const reset = h('button', 'subtle', 'Revenir à la vue isométrique');
+    reset.addEventListener('click', () => this.setIn('camera', {
+      yaw: Math.round(m.camera.yaw / 90) % 4 * 90, pitch: DEFAULT_PITCH,
+    }));
+    s.appendChild(reset);
+
+    // Saved views: one framing per widget, all re-exportable in one pass.
+    if (m.views.length) {
+      const list = h('div', 'building-list');
+      for (const v of m.views) {
+        const row = h('div', 'view-row');
+        const apply = h('button', 'building-row');
+        apply.type = 'button';
+        apply.innerHTML = '<span class="building-name"></span><span class="building-meta"></span>';
+        apply.querySelector('.building-name').textContent = v.name;
+        apply.querySelector('.building-meta').textContent = v.focus.enabled
+          ? `${viewpointLabel(v.camera.yaw)} — cadré ${fmtMetres(v.focus.w)} × ${fmtMetres(v.focus.d)} m`
+          : `${viewpointLabel(v.camera.yaw)} — vue d'ensemble`;
+        apply.addEventListener('click', () => this.set({
+          camera: { ...v.camera }, focus: { ...DEFAULT_FOCUS, ...v.focus },
+        }));
+        const del = h('button', 'icon-button', '×');
+        del.type = 'button';
+        del.title = 'Supprimer cette vue';
+        del.addEventListener('click', () =>
+          this.set({ views: m.views.filter((x) => x.id !== v.id) }));
+        row.append(apply, del);
+        list.appendChild(row);
+      }
+      s.appendChild(list);
+    }
+
+    const save = h('button', 'subtle', '+ Enregistrer cette vue');
+    save.addEventListener('click', () => {
+      const name = window.prompt('Nom de la vue :', m.focus.enabled ? 'Portail' : "Vue d'ensemble");
+      if (!name) return;
+      this.set({
+        views: [...m.views, {
+          id: newId('v'), name,
+          camera: { ...m.camera }, focus: { ...m.focus },
+        }],
+      });
+    });
+    s.appendChild(save);
+    return s;
+  }
+
+  /**
+   * The framing rectangle.
+   *
+   * Its reason for existing is the dashboard widget that drives one device: a
+   * picture of the whole property makes the gate a dozen pixels wide. Here the
+   * zone is nudged numerically; the "Zone de cadrage" tool draws it directly
+   * on the plan, which is faster for a first pass.
+   */
+  focusSection() {
+    const m = this.store.model;
+    const f = m.focus;
+    const s = this.section('Cadrage de l’export');
+    s.append(field('Cadrer sur une zone', toggle(f.enabled, (v) => {
+      if (!v) { this.setIn('focus', { enabled: false }); return; }
+      // Switching it on frames the house. The zone stored by default sits at
+      // the origin, which on most plans is an empty patch of lawn — turning
+      // the setting on would then appear to blank the drawing.
+      const b = bounds(cellSet(m));
+      const cs = cellSizeOf(m);
+      const box = b.empty ? {} : {
+        x: b.i0 * cs, y: b.j0 * cs, w: (b.i1 - b.i0 + 1) * cs, d: (b.j1 - b.j0 + 1) * cs,
+      };
+      this.setIn('focus', { enabled: true, ...box });
+    }), 'l’outil « Zone de cadrage » la dessine directement sur le plan'));
+    if (!f.enabled) {
+      s.appendChild(h('p', 'field-hint', 'Désactivé : l’export montre tout le modèle.'));
+      return s;
+    }
+
+    const num = (label, k, opts) => field(label, number(f[k], {
+      ...opts, onChange: (v) => this.setIn('focus', { [k]: v }),
+    }));
+    s.append(
+      num('Coin ouest (x)', 'x', { min: -200, max: 200, step: 0.25 }),
+      num('Coin sud (y)', 'y', { min: -200, max: 200, step: 0.25 }),
+      num('Largeur', 'w', { min: 2, max: 200, step: 0.25 }),
+      num('Profondeur', 'd', { min: 2, max: 200, step: 0.25 }),
+      field('Marge', slider(f.margin, {
+        min: 0, max: 10, step: 0.25, format: (v) => `${fmtMetres(v)} m`,
+        onInput: (v) => this.setIn('focus', { margin: v }, 'focus'),
+      }), 'air laissé autour de la zone'),
+      field('Fondu des bords', slider(f.vignette, {
+        min: 0, max: 0.8, step: 0.02,
+        format: (v) => (v < 0.01 ? 'net' : `${Math.round(v * 100)} %`),
+        onInput: (v) => this.setIn('focus', { vignette: v }, 'focus'),
+      }), 'estompe le bord de l’image au lieu de le couper'),
+      field('Masquer le reste', toggle(f.hide, (v) => this.setIn('focus', { hide: v })),
+        'sinon le reste est simplement hors champ — et un objet lointain peut malgré tout se projeter dans l’image'),
+    );
     return s;
   }
 

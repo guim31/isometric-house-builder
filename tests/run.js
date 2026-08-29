@@ -6,7 +6,11 @@
 import { Mesh, mergeCoplanar } from '../src/core/mesh.js';
 import { decomposeRects, boundaryEdges, boundaryRuns, rectCells, key } from '../src/core/grid.js';
 import { heightField, snapOverhang, STEP } from '../src/core/roof.js';
-import { Camera, rotatePoint, project, PROJECTIONS, VIEWPOINTS, rotateDir } from '../src/core/iso.js';
+import {
+  Camera, rotatePoint, project, projectionFor, PROJECTIONS, PITCH_RANGE,
+  VIEWPOINTS, viewpointLabel, rotateDir, depthOf, facingOf, DEFAULT_PITCH,
+} from '../src/core/iso.js';
+import { focusModel, focusRect, focusPoints } from '../src/core/focus.js';
 import {
   defaultModel, emptyModel, normalise, cellSet, wallTop, withCellSize, fmtMetres,
   makeBuilding, buildingOfEdge,
@@ -145,30 +149,107 @@ check('deux ailes perpendiculaires ne créent pas de falaise dans le toit', () =
 
 /* ---------------- projection ---------------- */
 
-check('la profondeur isométrique vaut x+y+z dans les deux projections', () => {
-  for (const [name, proj] of Object.entries(PROJECTIONS)) {
-    // Moving along (1,1,1) must not move the point on screen.
-    const a = project([1, 2, 3], proj);
-    const b = project([1 + 2, 2 + 2, 3 + 2], proj);
-    if (!near(a[0], b[0], 1e-9) || !near(a[1], b[1], 1e-9)) return `${name} dévie`;
+check('l’axe de vue reste (1, 1, lambda) à toutes les hauteurs de caméra', () => {
+  // The invariant the whole depth sort rests on: moving a point along the view
+  // axis must not move it on screen, so depth is a plain linear form. If this
+  // breaks, faces stop sorting and nothing else in the renderer is trustworthy.
+  for (const name of Object.keys(PROJECTIONS)) {
+    for (const pitch of [PITCH_RANGE[0], 20, DEFAULT_PITCH, 55, PITCH_RANGE[1]]) {
+      const proj = projectionFor(name, pitch);
+      // Two points one view-axis step apart. The axis is (1, 1, lambda), so
+      // advancing x and y by 2 means advancing z by 2*lambda.
+      const a = project([1, 2, 3], proj);
+      const b = project([3, 4, 3 + 2 * proj.lambda], proj);
+      if (!near(a[0], b[0], 1e-9) || !near(a[1], b[1], 1e-9)) {
+        return `${name} @ ${Math.round(pitch)}° dévie`;
+      }
+      if (!near(depthOf([1, 1, 1], proj.lambda), 2 + proj.lambda, 1e-9)) return 'depthOf incohérent';
+    }
   }
   return true;
 });
 
-check('quatre quarts de tour ramènent au point de départ', () => {
+check('la projection par défaut reproduit exactement les constantes d’origine', () => {
+  // sqrt(3)/2 : 1/2 : 1 — the values hard-coded before the pitch was a dial.
+  const p = projectionFor('iso30', DEFAULT_PITCH);
+  return (near(p.kx, Math.cos(Math.PI / 6), 1e-12)
+    && near(p.ky, 0.5, 1e-12) && near(p.kz, 1, 1e-12) && near(p.lambda, 1, 1e-12))
+    || `obtenu ${p.kx}, ${p.ky}, ${p.kz}`;
+});
+
+check('quatre quarts de tour ramènent exactement au point de départ', () => {
+  // Exactly, not nearly: cos(90°) is 6e-17 in floating point, and the four
+  // default views have to stay pixel-identical from one release to the next.
   let p = [3, 7, 2];
-  for (let i = 0; i < 4; i++) p = rotatePoint(p, 1, 5, 5);
-  return near(p[0], 3) && near(p[1], 7) && near(p[2], 2);
+  for (let i = 0; i < 4; i++) p = rotatePoint(p, 90, 5, 5);
+  return (p[0] === 3 && p[1] === 7 && p[2] === 2) || `obtenu ${p.join(', ')}`;
+});
+
+check('une rotation libre est réversible et conserve les distances', () => {
+  const p = rotatePoint([3, 7, 2], 37, 5, 5);
+  const back = rotatePoint(p, -37, 5, 5);
+  const d = (a) => Math.hypot(a[0] - 5, a[1] - 5);
+  if (!near(d(p), d([3, 7, 2]), 1e-9)) return 'la rotation change la distance au centre';
+  return (near(back[0], 3) && near(back[1], 7)) || 'aller-retour non nul';
+});
+
+check('à un lacet quelconque, deux volumes disjoints se trient dans le bon ordre', () => {
+  // The claim that made free orbit possible: for axis-aligned geometry, any
+  // yaw keeps the painter's order exact, because the separating plane between
+  // two disjoint boxes is perpendicular to a world axis. Checked directly —
+  // the near box must sort after the far one at every angle tried.
+  for (const yaw of [0, 17, 45, 63, 90, 128, 180, 233, 271, 344]) {
+    for (const pitch of [15, DEFAULT_PITCH, 65]) {
+      const cam = new Camera({ yaw, pitch, centre: [0, 0] });
+      // Two boxes separated along x only. Which one is nearer depends on the
+      // sign of the view axis' x component, so derive it rather than assume.
+      const far = cam.depth([0, 0, 0]);
+      const near2 = cam.depth([10, 0, 0]);
+      const expectNearer = rotateDir([1, 0, 0], yaw);
+      const sign = expectNearer[0] + expectNearer[1];
+      if (Math.abs(sign) < 1e-9) continue; // camera looks straight down that axis
+      if (Math.sign(near2 - far) !== Math.sign(sign)) {
+        return `lacet ${yaw}° : ordre inversé sur x`;
+      }
+    }
+  }
+  return true;
+});
+
+check('une face regardant la caméra est visible à tout angle', () => {
+  for (const yaw of [0, 33, 90, 150, 200, 300]) {
+    const cam = new Camera({ yaw, centre: [0, 0] });
+    // The roof always faces up, and up is always towards the camera.
+    if (facingOf(rotateDir([0, 0, 1], yaw), cam.lambda) <= 0) return `lacet ${yaw}° : toit invisible`;
+    // A wall and its opposite can never both be visible.
+    const a = facingOf(rotateDir([1, 0, 0], yaw), cam.lambda);
+    const b = facingOf(rotateDir([-1, 0, 0], yaw), cam.lambda);
+    if (a > 1e-9 && b > 1e-9) return `lacet ${yaw}° : deux façades opposées visibles`;
+  }
+  return true;
+});
+
+check('le libellé de point de vue suit le lacet en continu', () => {
+  const cases = [[0, 'Nord-Est'], [90, 'Sud-Est'], [180, 'Sud-Ouest'], [270, 'Nord-Ouest'],
+    [45, 'Est'], [315, 'Nord'], [22, 'Est-Nord-Est']];
+  for (const [yaw, want] of cases) {
+    if (viewpointLabel(yaw) !== want) return `${yaw}° donne ${viewpointLabel(yaw)}, attendu ${want}`;
+  }
+  return true;
 });
 
 check('écran → sol est bien la réciproque de sol → écran', () => {
-  for (let rot = 0; rot < 4; rot++) {
-    const cam = new Camera({ rotation: rot, centre: [10, 10] });
-    cam.scale = 24;
-    cam.offset = [300, 200];
-    const s = cam.toScreen([13, 7, 0]);
-    const g = screenToGround(cam, s[0], s[1]);
-    if (!near(g[0], 13, 1e-6) || !near(g[1], 7, 1e-6)) return `rotation ${rot} → ${g}`;
+  // Dropping a tree straight onto the render inverts this mapping, so it has
+  // to hold at the free angles too, not only on the four quarter turns.
+  for (const yaw of [0, 90, 180, 270, 23, 137, 291]) {
+    for (const pitch of [18, DEFAULT_PITCH, 62]) {
+      const cam = new Camera({ yaw, pitch, centre: [10, 10] });
+      cam.scale = 24;
+      cam.offset = [300, 200];
+      const s = cam.toScreen([13, 7, 0]);
+      const g = screenToGround(cam, s[0], s[1]);
+      if (!near(g[0], 13, 1e-6) || !near(g[1], 7, 1e-6)) return `lacet ${yaw}°/${pitch}° → ${g}`;
+    }
   }
   return true;
 });
@@ -290,7 +371,7 @@ check('les libellés de point de vue désignent bien les façades visibles', () 
   const DIRS = { Nord: [0, 1, 0], Sud: [0, -1, 0], Est: [1, 0, 0], Ouest: [-1, 0, 0] };
   for (let r = 0; r < 4; r++) {
     for (const part of VIEWPOINTS[r].split('-')) {
-      const n = rotateDir(DIRS[part], r);
+      const n = rotateDir(DIRS[part], r * 90);
       if (n[0] + n[1] + n[2] <= 0) {
         return `${VIEWPOINTS[r]} : la façade ${part} n'est pas visible en rotation ${r}`;
       }
@@ -1266,6 +1347,74 @@ check('un extérieur peut se poser directement sur le rendu', () => {
   return s.model.props.length === before + 1 || 'aucun arbre posé';
 });
 
+check('glisser sur le rendu fait pivoter la maison', () => {
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  div.style.cssText = 'width:440px;height:400px';
+  document.getElementById('stage').appendChild(div);
+  const vp = new Viewport(div, s);
+  s.setTool('select');
+  vp.render();
+  const r = div.getBoundingClientRect();
+  const at = (dx, dy, type, extra = {}) => div.dispatchEvent(new PointerEvent(type, {
+    clientX: r.left + r.width / 2 + dx, clientY: r.top + r.height / 2 + dy,
+    bubbles: true, pointerId: 11, isPrimary: true, button: 0, ...extra,
+  }));
+  const yaw0 = s.model.camera.yaw, pitch0 = s.model.camera.pitch;
+  at(0, 0, 'pointerdown');
+  at(60, -30, 'pointermove');
+  at(60, -30, 'pointerup');
+  const c = s.model.camera;
+  if (c.yaw === yaw0) return 'le lacet n’a pas bougé';
+  if (c.pitch <= pitch0) return 'monter la souris n’a pas levé la caméra';
+  // One gesture, one undo step — not sixty.
+  s.undo();
+  return (s.model.camera.yaw === yaw0) || `annuler laisse le lacet à ${s.model.camera.yaw}`;
+});
+
+check('avec Maj, glisser déplace la vue sans la faire pivoter', () => {
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  div.style.cssText = 'width:440px;height:400px';
+  document.getElementById('stage').appendChild(div);
+  const vp = new Viewport(div, s);
+  s.setTool('select');
+  vp.render();
+  const r = div.getBoundingClientRect();
+  const at = (dx, type) => div.dispatchEvent(new PointerEvent(type, {
+    clientX: r.left + r.width / 2 + dx, clientY: r.top + r.height / 2,
+    bubbles: true, pointerId: 12, isPrimary: true, button: 0, shiftKey: true,
+  }));
+  const yaw0 = s.model.camera.yaw;
+  at(0, 'pointerdown');
+  at(50, 'pointermove');
+  at(50, 'pointerup');
+  if (s.model.camera.yaw !== yaw0) return 'la vue a pivoté malgré Maj';
+  return vp.pan[0] !== 0 || 'la vue ne s’est pas déplacée';
+});
+
+check('pivoter ne reconstruit pas le maillage', () => {
+  // The cache that makes the orbit usable: a new camera on a new model object
+  // must not rebuild the house. Sixty times a second, it would be unusable.
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  div.style.cssText = 'width:440px;height:400px';
+  document.getElementById('stage').appendChild(div);
+  const vp = new Viewport(div, s);
+  vp.render();
+  const built = vp.cache.built;
+  s.update((m) => ({ ...m, camera: { ...m.camera, yaw: 33, pitch: 28 } }));
+  vp.render();
+  if (vp.cache.built !== built) return 'le maillage a été reconstruit';
+  // But moving a wall must.
+  s.update((m) => ({
+    ...m,
+    buildings: m.buildings.map((b, i) => (i ? b : { ...b, cells: [...b.cells, '99,99'] })),
+  }));
+  vp.render();
+  return vp.cache.built !== built || 'le maillage n’a pas suivi la modification';
+});
+
 check('un curseur en cours de réglage survit au rafraîchissement', () => {
   const s = new Store(defaultModel());
   const div = document.createElement('div');
@@ -1349,6 +1498,138 @@ await checkAsync('le PNG conserve la transparence du fond', async () => {
   // The top-left corner falls outside the ground plane, so it must stay clear.
   const alpha = ctx.getImageData(1, 1, 1, 1).data[3];
   return alpha === 0 || `alpha du coin : ${alpha}`;
+});
+
+/* ---------------- framing ---------------- */
+
+check('un ancien fichier retrouve sa vue : rotation 2 devient 180°', () => {
+  // Share links already in circulation carry `rotation`. They must open on the
+  // same view they were saved from, not silently swing round to the front.
+  const m = normalise({ ...emptyModel(), camera: { rotation: 2, projection: 'iso30' } });
+  if (m.camera.yaw !== 180) return `lacet ${m.camera.yaw}`;
+  if (m.camera.rotation !== undefined) return 'le champ hérité subsiste';
+  return near(m.camera.pitch, DEFAULT_PITCH) || `hauteur ${m.camera.pitch}`;
+});
+
+check('sans cadrage, le modèle traverse le filtre intact', () => {
+  // Identity, not just equality: the viewport compares by reference to decide
+  // whether its built mesh is still good.
+  const m = normalise(defaultModel());
+  return focusModel(m) === m || 'le modèle a été recopié sans raison';
+});
+
+check('le cadrage retire ce qui est hors zone et garde ce qui la traverse', () => {
+  const m = normalise({
+    ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 4)] })],
+    props: [
+      { id: 'p1', kind: 'tree', x: 40, y: 40, r: 1.5 },      // far away
+      { id: 'p2', kind: 'hedge', x: 3, y: -2, w: 12, d: 0.6 }, // starts inside, runs out
+      { id: 'p3', kind: 'bush', x: 2, y: 2, r: 1 },           // inside
+    ],
+    focus: { enabled: true, hide: true, x: 0, y: -3, w: 8, d: 8, margin: 1 },
+  });
+  const out = focusModel(m);
+  const kinds = out.props.map((p) => p.kind).sort().join(',');
+  if (kinds !== 'bush,hedge') return `restants : ${kinds || 'aucun'}`;
+  // Whole items only: half a hedge ending in mid-air is worse than one running
+  // past the edge of the picture.
+  const hedge = out.props.find((p) => p.kind === 'hedge');
+  return hedge.w === 12 || `la haie a été rognée à ${hedge.w} m`;
+});
+
+check('le cadrage emporte les ouvertures du corps qu’il retire', () => {
+  const m = normalise({
+    ...emptyModel(),
+    buildings: [
+      makeBuilding({ id: 'b1', cells: [...rectCells(0, 0, 4, 4)] }),
+      makeBuilding({ id: 'b2', cells: [...rectCells(30, 30, 33, 33)] }),
+    ],
+    openings: [
+      { id: 'o1', edge: '0,0,S', kind: 'door', offset: 0.5 },
+      { id: 'o2', edge: '30,30,S', kind: 'door', offset: 0.5 },
+    ],
+    focus: { enabled: true, hide: true, x: -1, y: -1, w: 8, d: 8, margin: 1 },
+  });
+  const out = focusModel(m);
+  if (out.buildings.length !== 1) return `${out.buildings.length} corps restants`;
+  return out.openings.map((o) => o.id).join(',') === 'o1' || 'porte orpheline conservée';
+});
+
+check('le cadrage encadre la zone en tenant compte de la hauteur', () => {
+  // The rectangle is drawn on the ground, but a house inside it is metres tall
+  // and would be beheaded by a frame fitted to the ground alone.
+  const m = normalise({
+    ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 4)] })],
+  });
+  const built = renderScene(m, { width: 400, height: 300 });
+  const focus = { enabled: true, x: 0, y: 0, w: 6, d: 5, margin: 1, hide: true, vignette: 0 };
+  const pts = focusPoints(focus, built.merged);
+  const zMax = Math.max(...pts.map((p) => p[2]));
+  if (zMax < 2) return `hauteur encadrée ${zMax} m — le toit sortirait du cadre`;
+  const [x0, y0, x1, y1] = focusRect(focus);
+  const inside = (p) => p[0] >= x0 - 1e-9 && p[0] <= x1 + 1e-9 && p[1] >= y0 - 1e-9 && p[1] <= y1 + 1e-9;
+  return pts.every(inside) || 'un point encadré tombe hors de la zone';
+});
+
+check('cadrer sur une zone agrandit vraiment ce qu’elle contient', () => {
+  // The whole point: the gate has to end up bigger on the image than it was.
+  const base = normalise({
+    ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 4)] })],
+    props: [{ id: 'p1', kind: 'tree', x: 40, y: 40, r: 1.5 }],
+  });
+  const framed = normalise({
+    ...base,
+    focus: { enabled: true, x: 0, y: 0, w: 6, d: 5, margin: 1, hide: true, vignette: 0 },
+  });
+  const a = renderScene(base, { width: 400, height: 300 });
+  const b = renderScene(framed, { width: 400, height: 300 });
+  if (!(b.camera.scale > a.camera.scale * 1.5)) {
+    return `échelle ${a.camera.scale.toFixed(1)} → ${b.camera.scale.toFixed(1)}`;
+  }
+  return b.model.props.length === 0 || 'l’arbre lointain est resté';
+});
+
+check('une vue enregistrée survit à l’enregistrement du projet', () => {
+  const m = normalise({
+    ...emptyModel(),
+    views: [{ name: 'Portail', camera: { yaw: 137, pitch: 24 }, focus: { enabled: true, w: 5, d: 4 } }],
+  });
+  const back = normalise(JSON.parse(JSON.stringify(m)));
+  const v = back.views[0];
+  if (!v || v.name !== 'Portail') return 'vue perdue';
+  if (!v.id) return 'vue sans identifiant';
+  return (near(v.camera.yaw, 137) && v.focus.enabled) || 'réglages perdus';
+});
+
+await checkAsync('le fondu des bords survit à la conversion en PNG', async () => {
+  // The one gradient in the output, and the reason it is a mask rather than a
+  // filter: browsers skip filters when rasterising an <img>, which would have
+  // dropped the effect from exactly the PNG it was asked for. Checked on real
+  // pixels, because reading the markup would prove nothing about that.
+  const m = normalise({
+    ...defaultModel(),
+    style: { ...defaultModel().style, background: '#ffffff' },
+    focus: { enabled: true, x: 0, y: 0, w: 40, d: 40, margin: 0, hide: false, vignette: 0.6 },
+  });
+  const W = 240, H = 180;
+  const blob = await svgToPng(svgFor(m, { width: W, height: H, ratio: 1 }), W, H);
+  const img = await loadBlob(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const px = (x, y) => [...ctx.getImageData(x, y, 1, 1).data];
+  // The background is opaque white everywhere; what the mask fades is the
+  // drawing on top of it. So the corner must be *whiter* than the centre.
+  const corner = px(3, 3);
+  const centre = px(W >> 1, H >> 1);
+  const lum = (c) => (c[0] + c[1] + c[2]) / 3;
+  if (corner[3] !== 255) return `le fond n’est plus opaque (alpha ${corner[3]})`;
+  return lum(corner) > lum(centre) + 12
+    || `coin ${Math.round(lum(corner))} vs centre ${Math.round(lum(centre))} — pas de fondu`;
 });
 
 /**

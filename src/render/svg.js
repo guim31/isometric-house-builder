@@ -2,20 +2,22 @@
  * Scene -> SVG.
  *
  * Faces are merged, back-face culled, depth sorted and emitted as flat paths.
- * The output is deliberately plain SVG: no filters, no gradients, no fonts, so
- * that it rasterises identically in every browser and can be dropped straight
- * into a dashboard.
+ * The output is deliberately plain SVG: no filters, no fonts, so that it
+ * rasterises identically in every browser and can be dropped straight into a
+ * dashboard. The one gradient is the framing vignette, and it is a mask over
+ * the finished drawing rather than a filter — filters are the part of SVG that
+ * browsers skip when rasterising an <img>, which would have silently dropped
+ * the effect from exactly the PNG it was asked for.
  */
 
 import { mergeCoplanar } from '../core/mesh.js';
-import { Camera, rotateDir } from '../core/iso.js';
+import { Camera, rotateDir, facingOf } from '../core/iso.js';
 import { buildMesh } from '../core/scene.js';
 import { faceColour, materialColour, darken } from '../core/palette.js';
 import { cellSet } from '../core/model.js';
+import { focusModel, focusPoints } from '../core/focus.js';
 import { bounds } from '../core/grid.js';
 import { specFor, textureSegments, textureTiles } from './texture.js';
-
-const VIEW = 1 / Math.sqrt(3); // dot with (1,1,1)/sqrt(3)
 
 // Clip paths need ids unique to the document, not just to one SVG: a gallery
 // page holding several renders would otherwise have them clip each other.
@@ -41,8 +43,8 @@ const layerOf = (f) => LAYER[f.group] ?? 5;
 function orderFaces(faces, camera) {
   faces.forEach((f, i) => {
     f.seq = i;
-    f.nCam = rotateDir(f.normal, camera.rotation);
-    f.facing = (f.nCam[0] + f.nCam[1] + f.nCam[2]) * VIEW;
+    f.nCam = rotateDir(f.normal, camera.yaw);
+    f.facing = facingOf(f.nCam, camera.lambda);
     f.depth = camera.depth(f.centroid);
   });
 
@@ -153,9 +155,12 @@ function pathData(face, camera) {
  * Returns the SVG markup plus the camera actually used, so that interactive
  * callers can hit-test against exactly the same projection.
  */
-export function renderScene(model, opts = {}) {
+export function renderScene(input, opts = {}) {
   const width = opts.width ?? 1200;
   const height = opts.height ?? 800;
+  // A frame removes whole items before anything is built, so the mesh, the
+  // pick targets and the export all agree on what exists.
+  const model = focusModel(input);
   const built = opts.built ?? buildMesh(model);
   // Both stages can be supplied by the caller: the model is immutable, so a
   // viewport can cache them and pay only the projection when panning.
@@ -163,14 +168,20 @@ export function renderScene(model, opts = {}) {
 
   const b = built.bounds.empty ? { i0: 0, j0: 0, i1: 1, j1: 1 } : built.bounds;
   const cs = model.grid?.cellSize || 1;
+  const framed = model.focus?.enabled;
   const camera = new Camera({
-    rotation: model.camera.rotation,
+    yaw: model.camera.yaw,
+    pitch: model.camera.pitch,
     projection: model.camera.projection,
+    // The rotation centre stays the house even when the frame is elsewhere:
+    // it only sets which point the yaw turns about, and the fit re-centres
+    // afterwards. Moving it would make the orbit swing rather than turn.
     centre: [((b.i0 + b.i1 + 1) / 2) * cs, ((b.j0 + b.j1 + 1) / 2) * cs],
   });
 
-  const pts = [];
+  let pts = [];
   for (const f of faces) for (const loop of f.loops) for (const p of loop) pts.push(p);
+  if (framed) pts = focusPoints(model.focus, faces);
   if (opts.camera) {
     camera.scale = opts.camera.scale;
     camera.offset = opts.camera.offset;
@@ -274,6 +285,29 @@ export function renderScene(model, opts = {}) {
   const bgRect = bg && bg !== 'transparent'
     ? `<rect width="${width}" height="${height}" fill="${bg}"/>` : '';
 
+  // The vignette fades the whole composite, not each face: fading faces one by
+  // one would make the house transparent to itself — you would read the far
+  // wall through the near one. Masking after compositing has no such problem.
+  // The background stays outside the mask, so an opaque export fades into its
+  // own colour rather than into a hole.
+  let maskAttr = '';
+  const vig = framed ? Math.max(0, Math.min(0.9, model.focus.vignette ?? 0)) : 0;
+  if (vig > 0.001) {
+    const id = `${prefix}-vignette`;
+    defs.push(
+      // r = 0.6, not 0.5: at 0.5 the gradient circle only touches the middle of
+      // each edge, so a mild setting fades the corners and nothing else, which
+      // reads as a mistake rather than an effect.
+      `<radialGradient id="${id}-g" cx="0.5" cy="0.5" r="0.6">` +
+      `<stop offset="${(1 - vig).toFixed(3)}" stop-color="#fff" stop-opacity="1"/>` +
+      `<stop offset="1" stop-color="#fff" stop-opacity="0"/>` +
+      `</radialGradient>` +
+      `<mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="${width}" height="${height}">` +
+      `<rect width="${width}" height="${height}" fill="url(#${id}-g)"/></mask>`,
+    );
+    maskAttr = ` mask="url(#${id})"`;
+  }
+
   // The viewBox stays at the layout size while width/height carry the pixel
   // ratio, so a 4x export re-rasterises the vectors instead of upscaling a
   // bitmap — outlines stay one pixel crisp at any resolution.
@@ -284,10 +318,10 @@ export function renderScene(model, opts = {}) {
     `viewBox="0 0 ${width} ${height}" shape-rendering="geometricPrecision">` +
     (defs.length ? `<defs>${defs.join('')}</defs>` : '') +
     bgRect +
-    `<g stroke-linejoin="round" stroke-linecap="round">${out.join('')}</g>` +
+    `<g stroke-linejoin="round" stroke-linecap="round"${maskAttr}>${out.join('')}</g>` +
     `</svg>`;
 
-  return { svg, camera, faces: ordered, merged: faces, built, width, height };
+  return { svg, camera, faces: ordered, merged: faces, built, model, width, height };
 }
 
 /** Bounding box of the footprint, used by the plan view. */

@@ -9,8 +9,8 @@ import { Inspector } from './ui/panels.js';
 import { initialModel, exportProject, importProject, clearLocal, loadLocal, fromShareUrl, toShareUrl } from './io/project.js';
 import { Gallery } from './ui/gallery.js';
 import { defaultModel, emptyModel, cellSet } from './core/model.js';
-import { SIZES, exportPng, exportSvg, exportFourViews, copyPngToClipboard } from './io/export.js';
-import { VIEWPOINTS } from './core/iso.js';
+import { SIZES, exportPng, exportSvg, exportFourViews, exportSavedViews, copyPngToClipboard } from './io/export.js';
+import { viewpointLabel, normaliseYaw } from './core/iso.js';
 
 const TOOL_GROUPS = [
   {
@@ -51,10 +51,15 @@ const TOOL_GROUPS = [
       ['car', 'Voiture'],
     ],
   },
+  {
+    title: 'Cadrage', tools: [
+      ['frame', 'Zone de cadrage'],
+    ],
+  },
 ];
 
 const HINTS = {
-  select: 'Cliquez un élément pour le régler, glissez pour le déplacer — une ouverture coulisse le long des murs. Maj + glisser déplace la vue.',
+  select: 'Cliquez un élément pour le régler, glissez pour le déplacer — une ouverture coulisse le long des murs. Dans le rendu, glisser fait pivoter la maison ; Maj + glisser déplace la vue.',
   paint: 'Dessinez l’emprise de la maison. Alt efface.',
   rect: 'Glissez pour ajouter un volume rectangulaire. Alt retire.',
   erase: 'Glissez pour retirer des cases.',
@@ -75,6 +80,7 @@ const HINTS = {
   fence: 'Glissez dans le plan pour tracer la clôture.',
   car: 'Cliquez dans le plan ou sur le rendu pour garer la voiture.',
   muret: 'Glissez dans le plan pour tracer le muret — sa longueur s’affiche pendant le tracé.',
+  frame: 'Glissez dans le plan pour délimiter la zone à montrer : le rendu se recadre dessus et le reste disparaît.',
   gate: 'Cliquez près d’un muret : le portail s’y aligne et l’ouvre automatiquement.',
 };
 
@@ -129,11 +135,19 @@ function syncTools() {
 
 /* ---------- toolbar ---------- */
 
+/**
+ * Step to the next quarter turn in the pressed direction.
+ *
+ * Floor/ceil rather than round: after orbiting by hand to 37°, pressing "turn
+ * right" must go to 90°, not snap backwards to 0° because that happens to be
+ * the nearest quarter turn. The buttons always move the way they point.
+ */
 function rotate(delta) {
-  store.update((m) => ({
-    ...m,
-    camera: { ...m.camera, rotation: (((m.camera.rotation + delta) % 4) + 4) % 4 },
-  }));
+  store.update((m) => {
+    const q = m.camera.yaw / 90;
+    const next = delta > 0 ? Math.floor(q) + 1 : Math.ceil(q) - 1;
+    return { ...m, camera: { ...m.camera, yaw: normaliseYaw(next * 90) } };
+  });
 }
 
 $('btn-undo').addEventListener('click', () => store.undo());
@@ -228,6 +242,16 @@ $('btn-four').addEventListener('click', async () => {
   } catch (e) { status('Échec : ' + e.message); }
 });
 
+$('btn-views').addEventListener('click', async () => {
+  const n = store.model.views.length;
+  if (!n) { status('Aucune vue enregistrée — cadrez une zone puis « Enregistrer cette vue ».'); return; }
+  status('Rendu des vues enregistrées…');
+  try {
+    await exportSavedViews(store.model, currentSize(), (i) => status(`Vue ${i} sur ${n}…`));
+    status(`${n} vue${n > 1 ? 's' : ''} téléchargée${n > 1 ? 's' : ''}.`);
+  } catch (e) { status('Échec : ' + e.message); }
+});
+
 $('btn-copy').addEventListener('click', async () => {
   try {
     await copyPngToClipboard(store.model, currentSize());
@@ -282,7 +306,7 @@ function scheduleRender() {
     syncTools();
     $('btn-undo').disabled = !store.canUndo;
     $('btn-redo').disabled = !store.canRedo;
-    $('rot-label').textContent = VIEWPOINTS[store.model.camera.rotation] || '';
+    $('rot-label').textContent = viewpointLabel(store.model.camera.yaw);
     if (nameInput.value !== store.model.name) nameInput.value = store.model.name;
   });
 }

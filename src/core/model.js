@@ -4,7 +4,7 @@
  */
 
 import { key, rectCells, connectedComponents } from './grid.js';
-import { DEFAULT_PROJECTION } from './iso.js';
+import { DEFAULT_PROJECTION, DEFAULT_PITCH, clampPitch, normaliseYaw } from './iso.js';
 import { THEMES } from './palette.js';
 import { PRESETS } from '../data/presets.js';
 
@@ -13,6 +13,36 @@ export const GRID = 40; // cells per side; 1 cell = 1 metre
 
 let seq = 0;
 export const newId = (prefix) => `${prefix}${(seq++).toString(36)}${Math.floor(performance.now() % 1e6).toString(36)}`;
+
+/** Items positioned by their centre rather than their minimum corner. */
+export const CENTRED_KINDS = new Set(['tree', 'bush', 'car']);
+
+/** Ground footprint of an outdoor item, in metres: [x0, y0, x1, y1]. */
+export function propFootprint(p) {
+  const w = p.r ? p.r * 2 : p.w ?? 2;
+  const d = p.r ? p.r * 2 : p.d ?? 2;
+  const x0 = CENTRED_KINDS.has(p.kind) ? p.x - w / 2 : p.x;
+  const y0 = CENTRED_KINDS.has(p.kind) ? p.y - d / 2 : p.y;
+  return [x0, y0, x0 + w, y0 + d];
+}
+
+/**
+ * The framing rectangle: which part of the model an export shows.
+ *
+ * Off by default — a whole house is what most people want. It earns its keep
+ * on a dashboard widget that drives one thing, where the useful image is the
+ * gate and the wall it sits in, not the garden it happens to stand at the end
+ * of. Distances are metres, `x`/`y` the lower-left corner, as for props.
+ */
+export const DEFAULT_CAMERA = { yaw: 0, pitch: DEFAULT_PITCH, projection: DEFAULT_PROJECTION };
+
+export const DEFAULT_FOCUS = {
+  enabled: false,
+  x: 0, y: 0, w: 12, d: 10,
+  margin: 1.5,
+  hide: true,     // drop what falls outside instead of merely cropping it
+  vignette: 0.3,  // 0 = hard edge; otherwise how much of the frame fades out
+};
 
 /**
  * One building volume: its own footprint, its own height, its own roof.
@@ -51,7 +81,9 @@ export function emptyModel() {
     roofItems: [],
     props: [],
     ground: { enabled: true, material: 'grass', margin: 3 },
-    camera: { rotation: 0, projection: DEFAULT_PROJECTION },
+    camera: { ...DEFAULT_CAMERA },
+    focus: { ...DEFAULT_FOCUS },
+    views: [],
     style: { outline: false, outlineWidth: 1.1, background: 'transparent', shadow: false, windowBars: false },
   };
 }
@@ -73,7 +105,9 @@ export function normalise(input) {
   if (![1, 0.5, 0.25].includes(m.grid.cellSize)) m.grid.cellSize = 1;
   m.roof = { ...base.roof, ...(input?.roof || {}) };
   m.ground = { ...base.ground, ...(input?.ground || {}) };
-  m.camera = { ...base.camera, ...(input?.camera || {}) };
+  m.camera = normaliseCamera(input?.camera, base.camera);
+  m.focus = normaliseFocus(input?.focus, base.focus);
+  m.views = normaliseViews(input?.views);
   m.texture = { ...base.texture, ...(input?.texture || {}) };
   m.style = { ...base.style, ...(input?.style || {}) };
   m.overrides = { ...(input?.overrides || {}) };
@@ -150,6 +184,49 @@ function normaliseBuildings(input, m) {
     { ...legacy, id: i ? newId('b') : legacy.id, cells },
     i ? `Bâtiment ${i + 1}` : 'Corps principal',
   ));
+}
+
+/**
+ * The camera, migrating the older quarter-turn field.
+ *
+ * `rotation` was an index in 0..3 back when only four viewpoints existed. Files
+ * saved then — and the share links already in circulation — must keep opening
+ * on the view they were saved from, so the index is read as its yaw in degrees.
+ */
+function normaliseCamera(input, base) {
+  const c = { ...base, ...(input || {}) };
+  if (input && input.yaw === undefined && input.rotation !== undefined) {
+    c.yaw = (((Math.round(input.rotation) % 4) + 4) % 4) * 90;
+  }
+  delete c.rotation;
+  c.yaw = normaliseYaw(c.yaw);
+  c.pitch = clampPitch(c.pitch);
+  return c;
+}
+
+/** A framing rectangle that is at least a rectangle. */
+function normaliseFocus(input, base) {
+  const f = { ...base, ...(input || {}) };
+  const num = (v, min, fallback) =>
+    (Number.isFinite(v) ? Math.max(min, v) : fallback);
+  f.w = num(f.w, 0.5, base.w);
+  f.d = num(f.d, 0.5, base.d);
+  f.margin = num(f.margin, 0, base.margin);
+  f.vignette = Math.min(0.9, num(f.vignette, 0, base.vignette));
+  f.x = Number.isFinite(f.x) ? f.x : base.x;
+  f.y = Number.isFinite(f.y) ? f.y : base.y;
+  return f;
+}
+
+/** Saved framings: a named camera and focus, re-exportable in one click. */
+function normaliseViews(input) {
+  if (!Array.isArray(input)) return [];
+  return input.filter(Boolean).map((v, i) => ({
+    id: v.id || newId('v'),
+    name: v.name || `Vue ${i + 1}`,
+    camera: normaliseCamera(v.camera, DEFAULT_CAMERA),
+    focus: normaliseFocus(v.focus, DEFAULT_FOCUS),
+  }));
 }
 
 /** Every cell of every building, for framing and for the ground. */

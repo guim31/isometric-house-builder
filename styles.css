@@ -157,9 +157,17 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .view-head h2 { margin: 0; font-size: 13px; font-weight: 620; }
 .view-hint { margin: 0; font-size: 12px; color: var(--ink-soft); }
-.view-tools { margin-left: auto; display: flex; align-items: center; gap: 5px; }
+.view-tools {
+  margin-left: auto; display: flex; align-items: center; gap: 5px;
+  flex-wrap: wrap; justify-content: flex-end;
+}
 .view-tools button { padding: 3px 8px; }
-.rot-label { font-size: 12px; color: var(--ink-soft); min-width: 68px; text-align: center; }
+/* Wide enough for « Ouest-Nord-Ouest », and never wrapped: a two-line label
+   reflows the whole header every few degrees of orbit. */
+.rot-label {
+  font-size: 12px; color: var(--ink-soft); min-width: 104px;
+  text-align: center; white-space: nowrap;
+}
 .view-body { flex: 1; min-height: 0; position: relative; }
 .view-body.iso { cursor: grab; }
 .view-body.iso:active { cursor: grabbing; }
@@ -412,4 +420,41 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12px; }
   .tool-group { margin-bottom: 0; }
   .stage { grid-template-columns: 1fr; }
   .view-body { min-height: 320px; }
+}
+
+/* ---------- framing ---------- */
+
+/* The zone as drawn, and the margin the camera actually gets. Dashed rather
+   than filled: it is an annotation over the plan, not another object on it. */
+.focus-zone {
+  fill: color-mix(in srgb, var(--focus) 10%, transparent);
+  stroke: var(--focus);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+}
+.focus-margin {
+  fill: none;
+  stroke: var(--focus);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  opacity: 0.55;
+}
+.focus-zone.drawing { fill: color-mix(in srgb, var(--focus) 16%, transparent); }
+
+.view-row { display: flex; gap: 4px; align-items: stretch; }
+.view-row .building-row { flex: 1; }
+.icon-button {
+  flex: 0 0 auto;
+  width: 30px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+.icon-button:hover { color: var(--danger); }
+
+.view-hint-inline {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-left: 6px;
+  white-space: nowrap;
 }

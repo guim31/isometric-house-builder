@@ -5,6 +5,7 @@
 
 import { renderScene } from '../render/svg.js';
 import { VIEWPOINTS } from '../core/iso.js';
+import { DEFAULT_FOCUS } from '../core/model.js';
 import { download, slug } from './files.js';
 
 export const SIZES = [
@@ -59,13 +60,35 @@ export function exportSvg(model, size) {
 export async function exportFourViews(model, size, onProgress) {
   const names = VIEWPOINTS.map((v) => v.toLowerCase());
   for (let r = 0; r < 4; r++) {
-    const view = { ...model, camera: { ...model.camera, rotation: r } };
+    // The quarter turns keep their own pitch: the four faces are meant to read
+    // as one set, and a hand-tilted camera is a different picture each time.
+    const view = { ...model, camera: { ...model.camera, yaw: r * 90 } };
     const svg = svgFor(view, size);
     const blob = await svgToPng(svg, size.width * size.ratio, size.height * size.ratio);
     download(blob, `${slug(model.name)}-${names[r]}.png`);
     if (onProgress) onProgress(r + 1, 4);
     // Browsers throttle bursts of downloads; a short gap keeps all four.
     await new Promise((r2) => setTimeout(r2, 350));
+  }
+}
+
+/**
+ * Every saved view, as its own PNG.
+ *
+ * This is the point of saving them: one file per widget — the gate, the pool,
+ * the whole house — regenerated as a set whenever the model changes, instead
+ * of being reframed by hand one at a time.
+ */
+export async function exportSavedViews(model, size, onProgress) {
+  const views = model.views || [];
+  for (let i = 0; i < views.length; i++) {
+    const v = views[i];
+    const shot = { ...model, camera: v.camera, focus: { ...DEFAULT_FOCUS, ...v.focus } };
+    const svg = svgFor(shot, size);
+    const blob = await svgToPng(svg, size.width * size.ratio, size.height * size.ratio);
+    download(blob, `${slug(model.name)}-${slug(v.name)}.png`);
+    if (onProgress) onProgress(i + 1, views.length);
+    await new Promise((r) => setTimeout(r, 350));
   }
 }
 

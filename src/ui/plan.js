@@ -8,6 +8,7 @@
 
 import { key, parseKey, boundaryEdges, boundaryRuns } from '../core/grid.js';
 import { cellSet, cellSizeOf, fmtMetres, buildingCells, setBuildingCells } from '../core/model.js';
+import { focusRect } from '../core/focus.js';
 import {
   OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS,
   placeOpening, placeRoofItem, placeProp, placeRun,
@@ -60,6 +61,11 @@ export class PlanView {
       i0 = Math.min(i0, px); j0 = Math.min(j0, py);
       i1 = Math.max(i1, px + pw); j1 = Math.max(j1, py + pd);
     }
+    if (m.focus?.enabled) {
+      const [fx0, fy0, fx1, fy1] = focusRect(m.focus);
+      i0 = Math.min(i0, fx0); j0 = Math.min(j0, fy0);
+      i1 = Math.max(i1, fx1); j1 = Math.max(j1, fy1);
+    }
     const pad = 4;
     i0 -= pad; j0 -= pad; i1 += pad; j1 += pad;
     const scale = Math.min(w / (i1 - i0), h / (j1 - j0)) * this.zoom;
@@ -104,6 +110,7 @@ export class PlanView {
     const gRoof = g('plan-roof');
     const gDims = g('plan-dims');
     const gOpen = g('plan-openings');
+    const gFrame = g('plan-frame');
 
     // Grid, spanning the whole panel rather than just the fitted box: an
     // unruled margin reads as "outside the drawing area", which it is not.
@@ -231,6 +238,29 @@ export class PlanView {
       gRoof.appendChild(r);
     }
 
+    // The framing rectangle. Two outlines: the zone as drawn, and the margin
+    // actually given to the camera, so the gap between the zone selected and
+    // what will end up in the picture is visible rather than guessed at.
+    if (m.focus?.enabled) {
+      const f = m.focus;
+      const [mx0, my0, mx1, my1] = focusRect(f);
+      const box = (x0, y0, x1, y1, cls) => {
+        const a = this.toPx(x0, y1);
+        gFrame.appendChild(el('rect', {
+          x: a[0], y: a[1],
+          width: (x1 - x0) * map.scale, height: (y1 - y0) * map.scale, class: cls,
+        }));
+      };
+      box(mx0, my0, mx1, my1, 'focus-margin');
+      box(f.x, f.y, f.x + f.w, f.y + f.d, 'focus-zone');
+      // Above the margin ring, not the zone: over the zone the label lands on
+      // whatever is being framed, which is exactly what one wants to look at.
+      const p = this.toPx(mx0, my1);
+      const t = el('text', { x: p[0] + ((mx1 - mx0) * map.scale) / 2, y: p[1] - 8, class: 'rect-size' });
+      t.textContent = `cadrage ${fmtMetres(f.w)} × ${fmtMetres(f.d)} m`;
+      gFrame.appendChild(t);
+    }
+
     // Compass. The plan flips y so north is up; the arrow makes it explicit,
     // and pairs with the one in the render for orientation between views.
     const comp = el('g', { class: 'plan-compass', transform: `translate(${map.w - 30}, 34)` });
@@ -295,6 +325,10 @@ export class PlanView {
         this.drag = { mode: 'rect', from: pt, erase: ev.altKey };
         return;
       }
+      if (tool === 'frame') {
+        this.drag = { mode: 'frame', from: pt, to: pt };
+        return;
+      }
       if (tool === 'select') {
         if (ev.target.dataset?.building) {
           s.setActiveBuilding(ev.target.dataset.building);
@@ -346,6 +380,9 @@ export class PlanView {
       } else if (this.drag.mode === 'rect') {
         this.drag.to = pt;
         this.previewRect();
+      } else if (this.drag.mode === 'frame') {
+        this.drag.to = pt;
+        this.previewFrame();
       } else if (this.drag.mode === 'run') {
         this.drag.to = pt;
         this.previewRun();
@@ -370,6 +407,7 @@ export class PlanView {
       }
       if (this.drag?.mode === 'run') placeRun(s, this.drag.kind, this.drag.from, this.drag.to);
       if (this.drag?.mode === 'rect' && this.drag.to) this.commitRect();
+      if (this.drag?.mode === 'frame' && this.drag.to) this.commitFrame();
       this.drag = null;
       s.commit();
       this.render();
@@ -475,6 +513,38 @@ export class PlanView {
     });
     label.textContent = `${fmtMetres(Math.round(len * 4) / 4)} m`;
     this.svg.appendChild(label);
+  }
+
+  previewFrame() {
+    this.render();
+    const [a, b] = [this.drag.from, this.drag.to];
+    const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]);
+    const y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]);
+    const p = this.toPx(x0, y1);
+    this.svg.appendChild(el('rect', {
+      x: p[0], y: p[1],
+      width: (x1 - x0) * this.map.scale, height: (y1 - y0) * this.map.scale,
+      class: 'focus-zone drawing',
+    }));
+    const label = el('text', {
+      x: p[0] + ((x1 - x0) * this.map.scale) / 2, y: p[1] - 9, class: 'rect-size',
+    });
+    label.textContent = `${fmtMetres(Math.round((x1 - x0) * 4) / 4)} × ${fmtMetres(Math.round((y1 - y0) * 4) / 4)} m`;
+    this.svg.appendChild(label);
+  }
+
+  commitFrame() {
+    const [a, b] = [this.drag.from, this.drag.to];
+    const snap = (v) => Math.round(v * 4) / 4;
+    const x0 = snap(Math.min(a[0], b[0])), x1 = snap(Math.max(a[0], b[0]));
+    const y0 = snap(Math.min(a[1], b[1])), y1 = snap(Math.max(a[1], b[1]));
+    // A click is not a frame. Below a couple of metres the zone would hold
+    // nothing and the camera would zoom to a blur, so it is read as a miss.
+    if (x1 - x0 < 2 || y1 - y0 < 2) return;
+    this.store.update((m) => ({
+      ...m,
+      focus: { ...m.focus, enabled: true, x: x0, y: y0, w: x1 - x0, d: y1 - y0 },
+    }));
   }
 
   commitRect() {

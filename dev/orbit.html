@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Orbite et cadrage</title><style>
+body{margin:0;background:#fff;font:13px system-ui}
+.grid{display:flex;flex-wrap:wrap;width:1360px}
+figure{margin:0}figcaption{text-align:center;color:#5a6b7d;padding-bottom:6px}
+h2{font:600 14px system-ui;margin:12px 0 4px 8px}
+</style></head><body>
+<h2>Hauteur de vue (lacet 0°)</h2><div class="grid" id="pitch"></div>
+<h2>Lacet libre (hauteur 35°)</h2><div class="grid" id="yaw"></div>
+<h2>Cadrage sur le portail</h2><div class="grid" id="focus"></div>
+<script type="module">
+import { PRESETS } from '../src/data/presets.js';
+import { normalise } from '../src/core/model.js';
+import { renderScene } from '../src/render/svg.js';
+import { DEFAULT_PITCH } from '../src/core/iso.js';
+
+// A plot shaped like a real one: the house at one end, the street frontage at
+// the other, and a garden long enough that a whole-property view makes the
+// gate unreadable — which is the case the framing exists for.
+const base = normalise({ ...PRESETS.find((p) => p.id === 'provence').model });
+const b0 = base.buildings[0];
+const model = normalise({
+  ...base,
+  props: [
+    { kind: 'muret', x: 10, y: 12, w: 16, d: 0.24, h: 1.5 },
+    { kind: 'gate', x: 14, y: 12, w: 1.1, d: 0.16, h: 1.5, style: 'swing' },
+    { kind: 'gate', x: 19, y: 12, w: 3.6, d: 0.16, h: 1.5, style: 'slide' },
+    { kind: 'terrace', x: 2, y: 16, w: 11, d: 8, material: 'paving' },
+    { kind: 'pool', x: 4, y: 18, w: 7, d: 4 },
+    { kind: 'tree', x: 6, y: 34, r: 2 },
+    { kind: 'hedge', x: 0, y: 38, w: 26, d: 0.6, h: 1 },
+  ],
+});
+
+const shot = (host, label, patch, w = 340, h = 250) => {
+  const svg = renderScene({ ...model, ...patch }, { width: w, height: h }).svg;
+  document.getElementById(host).insertAdjacentHTML('beforeend',
+    `<figure>${svg}<figcaption>${label}</figcaption></figure>`);
+};
+
+for (const pitch of [12, 22, DEFAULT_PITCH, 50, 70]) {
+  shot('pitch', `${Math.round(pitch)}°`, { camera: { ...model.camera, pitch } });
+}
+for (const yaw of [0, 18, 45, 72, 90, 155, 210, 300]) {
+  shot('yaw', `${yaw}°`, { camera: { ...model.camera, yaw } });
+}
+
+const focus = { enabled: true, x: 12, y: 10.5, w: 12, d: 4, margin: 1, hide: true, vignette: 0.3 };
+shot('focus', 'sans cadrage', {}, 420, 300);
+shot('focus', 'cadré, sans fondu', { focus: { ...focus, vignette: 0 } }, 420, 300);
+shot('focus', 'cadré + fondu', { focus }, 420, 300);
+shot('focus', 'cadré, tourné 40°', { focus, camera: { ...model.camera, yaw: 40 } }, 420, 300);
+const gate = { enabled: true, x: 16, y: 9, w: 8, d: 3.5, margin: 0.5, hide: true, vignette: 0.35 };
+shot('focus', 'widget portail', { focus: gate }, 420, 300);
+shot('focus', 'widget portail, 25°', { focus: gate, camera: { ...model.camera, yaw: 25, pitch: 22 } }, 420, 300);
+if (!b0) throw new Error('modèle vide');
+</script></body></html>

@@ -8,22 +8,32 @@ figure{margin:0}figcaption{text-align:center;color:#5a6b7d;padding-bottom:8px}
 import { PRESETS } from '../src/data/presets.js';
 import { normalise } from '../src/core/model.js';
 import { renderScene } from '../src/render/svg.js';
+import { viewpointLabel, DEFAULT_PITCH } from '../src/core/iso.js';
+
 const of = (id) => normalise({ ...PRESETS.find((p) => p.id === id).model });
 const hero = ['provence', 'chalet', 'passive'];
 document.getElementById('hero').innerHTML = hero
   .map((id, i) => renderScene(of(id), { width: i === 0 ? 480 : 400, height: 500 }).svg).join('');
+
 const g = document.getElementById('grid');
 const a = of('pavillon');
-for (const [label, roof] of [
-  ['Croupe', { ...a.roof, type: 'hip' }], ['Deux pans', { ...a.roof, type: 'gable' }],
-  ['Toit plat', { ...a.roof, type: 'flat' }], ['Appentis', { ...a.roof, type: 'shed' }],
-]) {
-  g.insertAdjacentHTML('beforeend',
-    `<figure>${renderScene({ ...a, roof }, { width: 320, height: 240 }).svg}<figcaption>${label}</figcaption></figure>`);
+const shot = (label, patch) => g.insertAdjacentHTML('beforeend',
+  `<figure>${renderScene({ ...a, ...patch }, { width: 320, height: 240 }).svg}` +
+  `<figcaption>${label}</figcaption></figure>`);
+
+// The roof belongs to the volume, not to the model.
+const withRoof = (type) => ({
+  buildings: a.buildings.map((b) => ({ ...b, roof: { ...b.roof, type } })),
+});
+for (const [label, type] of [['Croupe', 'hip'], ['Deux pans', 'gable'],
+  ['Toit plat', 'flat'], ['Appentis', 'shed']]) {
+  shot(label, withRoof(type));
 }
-for (let r = 0; r < 4; r++) {
-  g.insertAdjacentHTML('beforeend',
-    `<figure>${renderScene({ ...a, camera: { ...a.camera, rotation: r } }, { width: 320, height: 240 }).svg}` +
-    `<figcaption>${['Sud-Est', 'Sud-Ouest', 'Nord-Ouest', 'Nord-Est'][r]}</figcaption></figure>`);
+for (const yaw of [0, 90, 180, 270]) {
+  shot(viewpointLabel(yaw), { camera: { ...a.camera, yaw } });
+}
+// Free orbit: the angles the four quarter turns cannot reach.
+for (const [yaw, pitch] of [[28, DEFAULT_PITCH], [63, 22], [118, 52], [206, 14]]) {
+  shot(`${yaw}° · hauteur ${Math.round(pitch)}°`, { camera: { ...a.camera, yaw, pitch } });
 }
 </script></body></html>

@@ -1,53 +1,140 @@
 /**
  * Isometric camera: projection, rotation and painter's-algorithm depth.
  *
- * Both supported projections satisfy `kz === 2 * ky`, which makes the view
- * direction exactly (1, 1, 1) in world space. The consequence is worth stating
- * plainly because the whole renderer leans on it: the depth of a point along
- * the view axis is simply `x + y + z`, so faces can be depth-sorted exactly,
- * at any rotation, without a z-buffer.
+ * The camera orbits freely — any yaw, any pitch — and the depth sort stays
+ * exact. That is worth spelling out, because it is not obvious and the whole
+ * renderer leans on it.
+ *
+ * A point's depth is its coordinate along the view axis. Solving "which world
+ * direction moves nothing on screen" for the projection below gives that axis
+ * as (1, 1, lambda) in *view* space, with `lambda = 2 * ky / kz`. So depth is
+ * `x + y + lambda*z` after rotation — a plain linear form, whatever the angle.
+ *
+ * Sorting faces by that depth is *correct*, not merely plausible, because the
+ * geometry is axis-aligned boxes: two disjoint boxes always have a separating
+ * plane perpendicular to a world axis, and the view axis has a non-zero
+ * component on that axis, so one box's depths lie entirely beyond the other's.
+ * The exceptions are the four yaws where the camera looks straight down a world
+ * axis; there one component vanishes, but a shift along that axis is then a
+ * pure screen translation, so the boxes it separates cannot occlude each other
+ * anyway. Ties there are harmless, which is why no angle has to be forbidden.
+ *
+ * Pitch is the one real constraint: at 0 the vertical component vanishes and a
+ * chimney would no longer sort above the roof it stands on. Hence PITCH_RANGE.
  */
 
+/**
+ * Horizontal stretch of each named projection.
+ *
+ * A true axonometric fixes the three foreshortenings from the pitch alone;
+ * `stretch` is the deliberate departure from it. The 2:1 dimetric look is the
+ * isometric one widened by 2/sqrt(3), which is exactly what makes its ground
+ * tiles twice as wide as they are tall.
+ */
 export const PROJECTIONS = {
-  // True isometric: the three axes are equally foreshortened (30 degrees).
-  iso30: { kx: Math.cos(Math.PI / 6), ky: 0.5, kz: 1, label: 'Isométrique 30°' },
-  // 2:1 dimetric, the classic pixel-art / game look.
-  dimetric: { kx: 1, ky: 0.5, kz: 1, label: 'Dimétrique 2:1' },
+  iso30: { label: 'Isométrique 30°', stretch: 1 },
+  dimetric: { label: 'Dimétrique 2:1', stretch: 2 / Math.sqrt(3) },
 };
 
 export const DEFAULT_PROJECTION = 'iso30';
 
-/**
- * Compass corner the camera looks FROM at each quarter-turn.
- *
- * Derivation, since an off-by-one here once shipped: a face is visible when
- * its rotated normal has a positive dot with the view axis (1,1,1). At
- * rotation 0 that selects the +y (north) and +x (east) walls, so the camera
- * stands to the north-east. Each turn then walks the viewpoint clockwise
- * around the house. The test suite checks this list against the geometry.
- */
-export const VIEWPOINTS = ['Nord-Est', 'Sud-Est', 'Sud-Ouest', 'Nord-Ouest'];
+/** Elevation of the classic isometric view: atan(1/sqrt(2)), in degrees. */
+export const DEFAULT_PITCH = (Math.atan(1 / Math.SQRT2) * 180) / Math.PI;
 
-/** Rotate a world point by `r` quarter-turns around the vertical axis at (cx, cy). */
-export function rotatePoint(p, r, cx, cy) {
-  const dx = p[0] - cx;
-  const dy = p[1] - cy;
-  switch (((r % 4) + 4) % 4) {
-    case 0: return [cx + dx, cy + dy, p[2]];
-    case 1: return [cx - dy, cy + dx, p[2]];
-    case 2: return [cx - dx, cy - dy, p[2]];
-    default: return [cx + dy, cy - dx, p[2]];
-  }
+/**
+ * How far the camera may be raised or lowered.
+ *
+ * Below the floor the ground plane collapses and heights stop sorting; above
+ * the ceiling the walls do. Neither limit is reachable by accident — the
+ * useful range is roughly 20° to 60°.
+ */
+export const PITCH_RANGE = [8, 80];
+
+export const clampPitch = (deg) =>
+  Math.min(PITCH_RANGE[1], Math.max(PITCH_RANGE[0], Number.isFinite(deg) ? deg : DEFAULT_PITCH));
+
+/** Yaw folded into [0, 360). */
+export const normaliseYaw = (deg) =>
+  (((Number.isFinite(deg) ? deg : 0) % 360) + 360) % 360;
+
+/**
+ * The (kx, ky, kz) of a projection at a given pitch.
+ *
+ * Ratios come from the orthonormal camera basis: with `lambda = sqrt(2)*tan
+ * (pitch)`, they are sqrt(2 + lambda^2) : lambda : 2. Normalised so kz = 1,
+ * the default pitch reproduces sqrt(3)/2 : 1/2 : 1 — the values this file
+ * carried as constants before the pitch became adjustable.
+ */
+export function projectionFor(name, pitch = DEFAULT_PITCH) {
+  const p = PROJECTIONS[name] || PROJECTIONS[DEFAULT_PROJECTION];
+  const lambda = Math.SQRT2 * Math.tan((clampPitch(pitch) * Math.PI) / 180);
+  return {
+    kx: (Math.sqrt(2 + lambda * lambda) / 2) * p.stretch,
+    ky: lambda / 2,
+    kz: 1,
+    lambda,
+    label: p.label,
+  };
 }
 
-/** Rotate a direction (normal) by `r` quarter-turns. Translation-free. */
-export function rotateDir(n, r) {
-  switch (((r % 4) + 4) % 4) {
-    case 0: return [n[0], n[1], n[2]];
-    case 1: return [-n[1], n[0], n[2]];
-    case 2: return [-n[0], -n[1], n[2]];
-    default: return [n[1], -n[0], n[2]];
-  }
+/** The sixteen-point rose, so a free yaw still names its viewpoint. */
+const ROSE = [
+  'Nord', 'Nord-Nord-Est', 'Nord-Est', 'Est-Nord-Est',
+  'Est', 'Est-Sud-Est', 'Sud-Est', 'Sud-Sud-Est',
+  'Sud', 'Sud-Sud-Ouest', 'Sud-Ouest', 'Ouest-Sud-Ouest',
+  'Ouest', 'Ouest-Nord-Ouest', 'Nord-Ouest', 'Nord-Nord-Ouest',
+];
+
+/**
+ * Compass corner the camera looks FROM at a given yaw.
+ *
+ * Derivation, since an off-by-one here once shipped: a face is visible when its
+ * rotated normal has a positive dot with the view axis. At yaw 0 that selects
+ * the +y (north) and +x (east) walls, so the camera stands to the north-east —
+ * bearing 45°. Each degree of yaw then walks the viewpoint clockwise around the
+ * house. The test suite checks this against the geometry.
+ */
+export function viewpointLabel(yaw) {
+  return ROSE[Math.round(normaliseYaw(45 + yaw) / 22.5) % 16];
+}
+
+/** The four quarter-turn viewpoints, in order. */
+export const VIEWPOINTS = [0, 90, 180, 270].map(viewpointLabel);
+
+/**
+ * Cosine and sine of a yaw, exact on the quarter turns.
+ *
+ * `Math.cos(Math.PI / 2)` is 6e-17 rather than 0, and that residue leaks into
+ * every coordinate. The four default views are the ones that have to stay
+ * pixel-identical from one release to the next, so they take the exact path.
+ */
+function turn(yaw) {
+  const q = yaw / 90;
+  if (Number.isInteger(q)) return [[1, 0], [0, 1], [-1, 0], [0, -1]][((q % 4) + 4) % 4];
+  const a = (yaw * Math.PI) / 180;
+  return [Math.cos(a), Math.sin(a)];
+}
+
+/** Rotate a world point by `yaw` degrees around the vertical axis at (cx, cy). */
+export function rotatePoint(p, yaw, cx, cy) {
+  const [c, s] = turn(yaw);
+  const dx = p[0] - cx;
+  const dy = p[1] - cy;
+  return [cx + dx * c - dy * s, cy + dx * s + dy * c, p[2]];
+}
+
+/** Rotate a direction (normal) by `yaw` degrees. Translation-free. */
+export function rotateDir(n, yaw) {
+  const [c, s] = turn(yaw);
+  return [n[0] * c - n[1] * s, n[0] * s + n[1] * c, n[2]];
+}
+
+/** Undo `rotatePoint` on a ground coordinate. */
+export function unrotatePoint(x, y, yaw, cx, cy) {
+  const [c, s] = turn(yaw);
+  const dx = x - cx;
+  const dy = y - cy;
+  return [cx + dx * c + dy * s, cy - dx * s + dy * c];
 }
 
 /**
@@ -70,28 +157,34 @@ export function project(p, proj) {
 }
 
 /** Depth along the view axis. Larger means nearer to the camera. */
-export function depthOf(p) {
-  return p[0] + p[1] + p[2];
+export function depthOf(p, lambda = 1) {
+  return p[0] + p[1] + lambda * p[2];
+}
+
+/** Dot of a camera-space normal with the unit view axis: > 0 means visible. */
+export function facingOf(n, lambda = 1) {
+  return (n[0] + n[1] + lambda * n[2]) / Math.sqrt(2 + lambda * lambda);
 }
 
 /**
- * A camera bundles the rotation, the projection and the scale/offset needed to
+ * A camera bundles the orbit, the projection and the scale/offset needed to
  * map world coordinates into the SVG viewBox.
  */
 export class Camera {
-  constructor({ rotation = 0, projection = DEFAULT_PROJECTION, centre = [0, 0] } = {}) {
-    this.rotation = rotation;
+  constructor({ yaw = 0, pitch = DEFAULT_PITCH, projection = DEFAULT_PROJECTION, centre = [0, 0] } = {}) {
+    this.yaw = normaliseYaw(yaw);
+    this.pitch = clampPitch(pitch);
     this.projection = PROJECTIONS[projection] ? projection : DEFAULT_PROJECTION;
+    this.proj = projectionFor(this.projection, this.pitch);
+    this.lambda = this.proj.lambda;
     this.centre = centre;
     this.scale = 32;
     this.offset = [0, 0];
   }
 
-  get proj() { return PROJECTIONS[this.projection]; }
-
   /** World point -> rotated world point. */
   toView(p) {
-    return rotatePoint(p, this.rotation, this.centre[0], this.centre[1]);
+    return rotatePoint(p, this.yaw, this.centre[0], this.centre[1]);
   }
 
   /** World point -> SVG coordinates. */
@@ -103,7 +196,7 @@ export class Camera {
 
   /** World point -> painter's depth (already rotated). */
   depth(p) {
-    return depthOf(this.toView(p));
+    return depthOf(this.toView(p), this.lambda);
   }
 
   /**

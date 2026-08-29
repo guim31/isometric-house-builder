@@ -44,7 +44,7 @@ tout moment, et *Page blanche* reste disponible.
 
 ## Ce que l'outil sait faire
 
-![Les quatre types de toiture et les quatre orientations](assets/gallery.png)
+![Les quatre types de toiture, les quatre faces et quelques angles libres](assets/gallery.png)
 
 | | |
 |---|---|
@@ -59,7 +59,34 @@ tout moment, et *Page blanche* reste disponible.
 | **Matières** | Tuiles, **tuiles canal panachées**, ardoises, bac acier sur le toit ; briques, bardage, pierre, colombages sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
-| **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, copie directe dans le presse-papier |
+| **Caméra** | **Orbite libre** : on fait tourner la maison à la souris, sur 360° et de la vue rasante à la quasi-verticale — les quatre faces restent à un clic |
+| **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, les bords s'estompent en fondu, et chaque cadrage se garde comme **vue nommée** |
+| **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, toutes les vues enregistrées en lot, copie directe dans le presse-papier |
+
+## Cadrer sur une zone
+
+![Une vue d'ensemble, la même cadrée sur le portail, et la même avec le fondu](assets/focus.png)
+
+Un widget qui pilote **un seul** appareil ne gagne rien à montrer toute la
+propriété : le portail y fait quelques pixels. L'outil *Zone de cadrage* trace
+un rectangle sur le plan ; l'export s'y recadre, et ce qui tombe en dehors est
+**retiré** plutôt que simplement mis hors champ.
+
+Cette distinction n'est pas cosmétique : en isométrie, la distance au sol n'est
+pas la distance à l'écran. Un abri au fond du jardin se projette *vers le haut*,
+en plein dans un cadre serré sur le portail — resserrer la caméra le rapproche
+au lieu de l'écarter. D'où le retrait pur et simple.
+
+Le retrait porte sur des éléments entiers, jamais sur des morceaux : une haie
+qui entre dans le cadre y reste tout entière, parce qu'une demi-haie finissant
+en l'air est un défaut pire qu'une haie qui sort de l'image. Le **fondu des
+bords** adoucit ensuite la coupe. Il s'applique à l'image composée, non à chaque
+face : estomper les faces une par une rendrait la maison transparente à
+elle-même, et on lirait le mur du fond au travers du mur de devant.
+
+Chaque cadrage se garde comme **vue nommée** — un portail, une piscine, une vue
+d'ensemble — et le bouton *Vues enregistrées* de la fenêtre d'export les
+régénère toutes en une passe quand la maison change.
 
 ## Prise en main
 
@@ -86,7 +113,13 @@ tout moment, et *Page blanche* reste disponible.
 6. **Aménagez les abords** avec les outils *Extérieur*. Muret, clôture et haie
    se **tracent au glisser**, leur longueur s'affichant pendant le tracé ; un
    portail posé près d'un muret s'y aligne et l'ouvre automatiquement.
-7. **Exportez.** Le fond transparent est celui à préférer : l'image se pose alors
+7. **Choisissez votre angle** en glissant directement dans le rendu, comme on
+   manipule un modèle 3D : horizontalement pour tourner, verticalement pour
+   monter ou descendre la caméra. Les boutons `↺` `↻` ramènent aux quatre
+   faces, et le panneau *Vue* donne les mêmes réglages au degré près.
+8. **Cadrez si besoin** avec l'outil *Zone de cadrage*, puis enregistrez la vue
+   pour la retrouver et la réexporter plus tard.
+9. **Exportez.** Le fond transparent est celui à préférer : l'image se pose alors
    sur n'importe quelle couleur de tableau de bord.
 
 À savoir : la vue par défaut regarde les façades **nord et est**. Si vos
@@ -94,9 +127,10 @@ ouvertures semblent absentes, elles sont probablement sur les deux façades
 opposées — tournez la vue avec `[` et `]`.
 
 Raccourcis : `Ctrl+Z` / `Ctrl+Maj+Z` annuler et rétablir, `Ctrl+D` dupliquer la
-sélection, `[` et `]` tourner, `Suppr` supprimer, `Échap` désélectionner. La
-molette zoome autour du curseur, le pincement à deux doigts fonctionne sur
-écran tactile, et `Maj` + glisser déplace la vue — quel que soit l'outil actif.
+sélection, `[` et `]` tourner d'un quart de tour, `Suppr` supprimer, `Échap`
+désélectionner. Dans le rendu, **glisser fait pivoter** la maison ; la molette
+zoome autour du curseur, le pincement à deux doigts fonctionne sur écran
+tactile, et `Maj` + glisser déplace la vue — quel que soit l'outil actif.
 Dans le plan, une ouverture sélectionnée **coulisse le long des murs** quand on
 la fait glisser ; les éléments d'extérieur se posent aussi d'un clic
 directement sur le rendu. Une boussole dans chaque vue rappelle où est le nord.
@@ -129,7 +163,9 @@ qu'en 2560, puisqu'elle sera rééchantillonnée à l'arrivée. Le préréglage
 
 Rien n'empêche par ailleurs d'utiliser une simple carte **Image**, ou un tout
 autre logiciel : la sortie reste du PNG et du SVG ordinaires. Le SVG est du
-vectoriel plat, sans filtre ni dégradé, éditable dans n'importe quel éditeur.
+vectoriel plat, sans filtre ni police, éditable dans n'importe quel éditeur —
+le seul dégradé est le masque du fondu des bords, et il n'apparaît que si vous
+l'avez demandé.
 
 ## Développement
 
@@ -155,9 +191,20 @@ La suite de tests s'exécute dans le navigateur — ouvrez
 Trois décisions portent tout le reste, et valent d'être connues avant de
 modifier le moteur :
 
-- **La profondeur isométrique vaut exactement `x + y + z`.** Les deux projections
-  sont paramétrées pour que l'axe de vue soit `(1, 1, 1)`. Les faces peuvent donc
-  être triées exactement, à n'importe quelle rotation, sans tampon de profondeur.
+- **La profondeur vaut exactement `x + y + λ·z`, et c'est ce qui rend l'orbite
+  libre possible.** En résolvant « quelle direction du monde ne déplace rien à
+  l'écran » pour la projection, on trouve l'axe de vue `(1, 1, λ)`, avec
+  `λ = 2·ky/kz` — une forme linéaire, quel que soit l'angle. Trier les faces
+  dessus est *exact*, et pas seulement plausible, parce que la géométrie est
+  faite de boîtes alignées sur les axes : deux volumes disjoints ont toujours un
+  plan séparateur perpendiculaire à un axe du monde, et l'axe de vue a une
+  composante non nulle sur cet axe. Les seules exceptions sont les quatre lacets
+  où la caméra regarde droit dans un axe ; la composante s'y annule, mais un
+  décalage le long de cet axe devient alors une simple translation à l'écran,
+  donc les volumes qu'il sépare ne peuvent de toute façon pas se masquer. C'est
+  pourquoi aucun angle n'a besoin d'être interdit — sauf en hauteur, où une
+  caméra à l'horizontale annulerait la composante verticale et cesserait de
+  ranger une cheminée au-dessus de son toit.
 - **La toiture est l'enveloppe supérieure d'un toit élémentaire par rectangle.**
   L'emprise est décomposée en rectangles maximaux — qui ont le droit de se
   chevaucher — et le toit est le maximum de leurs surfaces. C'est ce qui produit
@@ -221,7 +268,8 @@ modifier le moteur :
 
 | Fichier | Rôle |
 |---|---|
-| `src/core/iso.js` | Projection, rotation, profondeur, cadrage |
+| `src/core/iso.js` | Projection, orbite, profondeur, ajustement de la caméra |
+| `src/core/focus.js` | Zone de cadrage : ce qui est montré, ce qui est retiré |
 | `src/core/grid.js` | Emprise, murs extérieurs, décomposition en rectangles |
 | `src/core/roof.js` | Champ de hauteur et maillage de la toiture |
 | `src/core/mesh.js` | Fusion des faces coplanaires, trous, composantes |

@@ -10,6 +10,7 @@
 
 import { boundaryEdges, parseKey } from '../core/grid.js';
 import { cellSet, wallTop, cellSizeOf } from '../core/model.js';
+import { unrotatePoint } from '../core/iso.js';
 
 
 function quadPath(camera, pts) {
@@ -130,12 +131,5 @@ export function screenToGround(camera, sx, sy) {
   const b = y / proj.ky;      // = vx + vy
   const vx = (b - a) / 2, vy = (a + b) / 2;
   // Undo the camera rotation.
-  const [cx, cy] = camera.centre;
-  const dx = vx - cx, dy = vy - cy;
-  switch (((camera.rotation % 4) + 4) % 4) {
-    case 0: return [cx + dx, cy + dy];
-    case 1: return [cx + dy, cy - dx];
-    case 2: return [cx - dx, cy - dy];
-    default: return [cx - dy, cy + dx];
-  }
+  return unrotatePoint(vx, vy, camera.yaw, camera.centre[0], camera.centre[1]);
 }

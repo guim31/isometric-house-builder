@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Cadrage — visuel du dépôt</title><style>
+body{margin:0;background:#fff;font:13px system-ui}
+#row{width:1280px;display:flex}
+figure{margin:0}figcaption{text-align:center;color:#5a6b7d;padding:2px 0 10px}
+</style></head><body><div id="row"></div>
+<script type="module">
+import { PRESETS } from '../src/data/presets.js';
+import { normalise } from '../src/core/model.js';
+import { renderScene } from '../src/render/svg.js';
+
+// Same plot as dev/orbit.html: a house at one end, a walled frontage at the
+// other. The whole-property view is the one that makes the gate unreadable.
+const base = normalise({ ...PRESETS.find((p) => p.id === 'provence').model });
+const model = normalise({
+  ...base,
+  props: [
+    { kind: 'muret', x: 10, y: 12, w: 16, d: 0.24, h: 1.5 },
+    { kind: 'gate', x: 14, y: 12, w: 1.1, d: 0.16, h: 1.5, style: 'swing' },
+    { kind: 'gate', x: 19, y: 12, w: 3.6, d: 0.16, h: 1.5, style: 'slide' },
+    { kind: 'terrace', x: 2, y: 16, w: 11, d: 8, material: 'paving' },
+    { kind: 'pool', x: 4, y: 18, w: 7, d: 4 },
+    { kind: 'tree', x: 6, y: 34, r: 2 },
+    { kind: 'hedge', x: 0, y: 38, w: 26, d: 0.6, h: 1 },
+  ],
+});
+
+const gate = { enabled: true, x: 16, y: 9, w: 8, d: 3.5, margin: 0.5, hide: true, vignette: 0.35 };
+const shots = [
+  ['Vue d’ensemble — le portail fait quelques pixels', {}],
+  ['Cadré sur le portail', { focus: { ...gate, vignette: 0 } }],
+  ['Cadré, avec fondu des bords', { focus: gate }],
+];
+document.getElementById('row').innerHTML = shots.map(([label, patch]) =>
+  `<figure>${renderScene({ ...model, ...patch }, { width: 426, height: 300 }).svg}` +
+  `<figcaption>${label}</figcaption></figure>`).join('');
+</script></body></html>
