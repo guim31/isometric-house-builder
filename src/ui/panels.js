@@ -277,12 +277,15 @@ export class Inspector {
       field('Ombre portée', toggle(m.style.shadow, (v) => this.setIn('style', { shadow: v }))),
       field('Croisillons des fenêtres', toggle(m.style.windowBars !== false,
         (v) => this.setIn('style', { windowBars: v }))),
+      field('Vue de nuit', toggle(m.style.night, (v) => this.setIn('style', { night: v })),
+        'ciel étoilé, teintes de lune, fenêtres allumées — le fond ne peut alors plus être transparent'),
       field('Fond', select(m.style.background, [
         ['transparent', 'Transparent (recommandé)'],
         ['#ffffff', 'Blanc'],
         ['#f4f6f8', 'Gris clair'],
         ['#0f172a', 'Sombre'],
-      ], (v) => this.setIn('style', { background: v })), 'appliqué à l’export seulement'),
+      ], (v) => this.setIn('style', { background: v })),
+        m.style.night ? 'sans effet : la vue de nuit dessine son propre ciel' : 'appliqué à l’export seulement'),
     );
     return s;
   }

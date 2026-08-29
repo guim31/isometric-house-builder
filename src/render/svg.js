@@ -13,7 +13,7 @@
 import { mergeCoplanar } from '../core/mesh.js';
 import { Camera, rotateDir, facingOf } from '../core/iso.js';
 import { buildMesh } from '../core/scene.js';
-import { faceColour, materialColour, darken } from '../core/palette.js';
+import { faceColour, materialColour, darken, nightColour, NIGHT } from '../core/palette.js';
 import { cellSet } from '../core/model.js';
 import { focusModel, focusPoints } from '../core/focus.js';
 import { bounds } from '../core/grid.js';
@@ -273,6 +273,66 @@ function pathData(face, camera) {
 }
 
 /**
+ * The night sky: gradient, stars, moon.
+ *
+ * Drawn in screen space and behind everything, because that is what a sky is —
+ * it does not pan with the house, and it is not part of the depth sort.
+ *
+ * A night view cannot keep a transparent background: the sky *is* the effect.
+ * That is the one place where this mode overrides the export setting, and it
+ * seemed better than producing a transparent picture of a dark house and
+ * calling it night.
+ *
+ * The stars come from a hash of their own index rather than from a random
+ * draw, for the same reason the roof tiles do: the export has to match the
+ * preview, and re-exporting tomorrow has to give the same image.
+ */
+function nightSky(width, height, defs, prefix) {
+  const id = `${prefix}-sky`;
+  defs.push(
+    `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">` +
+    `<stop offset="0" stop-color="${NIGHT.sky[0]}"/>` +
+    `<stop offset="1" stop-color="${NIGHT.sky[1]}"/></linearGradient>`,
+  );
+  const out = [`<rect width="${width}" height="${height}" fill="url(#${id})"/>`];
+
+  // Scattered over the whole frame, not only the upper part: the ground and
+  // the house cover the rest, which is exactly how a sky behaves.
+  const n = Math.min(220, Math.round((width * height) / 2600));
+  const hash = (i, k) => {
+    const v = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const stars = [];
+  for (let i = 0; i < n; i++) {
+    const r = (0.4 + hash(i, 3) * 1.0).toFixed(2);
+    stars.push(`<circle cx="${(hash(i, 1) * width).toFixed(1)}" `
+      + `cy="${(hash(i, 2) * height).toFixed(1)}" r="${r}" `
+      + `opacity="${(0.25 + hash(i, 4) * 0.6).toFixed(2)}"/>`);
+  }
+  out.push(`<g fill="${NIGHT.star}">${stars.join('')}</g>`);
+
+  // A moon, high and to the left, clear of the compass and of the house — which
+  // the fit centres. Its halo is a radial gradient rather than a blur: a blur
+  // is a filter, and filters are what browsers drop when rasterising an image,
+  // so the halo would have gone missing from the PNG and stayed in the preview.
+  // Concentric discs were the first attempt and read as rings, not as light.
+  const mr = Math.max(9, Math.min(width, height) * 0.032);
+  const mx = width * 0.13, my = height * 0.16;
+  const halo = `${prefix}-halo`;
+  defs.push(
+    `<radialGradient id="${halo}">` +
+    `<stop offset="0.35" stop-color="${NIGHT.moon}" stop-opacity="0.22"/>` +
+    `<stop offset="1" stop-color="${NIGHT.moon}" stop-opacity="0"/></radialGradient>`,
+  );
+  out.push(
+    `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${(mr * 3).toFixed(1)}" fill="url(#${halo})"/>`
+    + `<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${mr.toFixed(1)}" fill="${NIGHT.moon}"/>`,
+  );
+  return out.join('');
+}
+
+/**
  * Render a model.
  *
  * Returns the SVG markup plus the camera actually used, so that interactive
@@ -365,11 +425,16 @@ export function renderScene(input, opts = {}) {
       + `fill="${faceColour(model.ground.material, theme, ov, [0, 0, 1])}"/>`);
   }
   const hair = Math.max(0.5, camera.scale * 0.02);
+  // Night is a grade over whichever palette is in use, applied once here: the
+  // textures take their own shades from `fill`, and the outlines are derived
+  // from it, so both follow without knowing anything about it.
+  const night = !!model.style.night;
+  const graded = (mat, hex) => (night ? nightColour(mat, hex) : hex);
   ordered.forEach((f, i) => {
     const sink = f.group === 'ground' ? floor : out;
-    const fill = f.mat === 'shadow'
+    const fill = graded(f.mat, f.mat === 'shadow'
       ? materialColour(f.mat, theme, ov)
-      : faceColour(f.mat, theme, ov, f.nCam);
+      : faceColour(f.mat, theme, ov, f.nCam));
     // Kept on the face: the colour is the outcome of palette, orientation and
     // any per-building override, and callers should not have to redo that.
     f.fill = fill;
@@ -426,8 +491,9 @@ export function renderScene(input, opts = {}) {
   });
 
   const bg = model.style.background;
-  const bgRect = bg && bg !== 'transparent'
+  let bgRect = bg && bg !== 'transparent'
     ? `<rect width="${width}" height="${height}" fill="${bg}"/>` : '';
+  if (night) bgRect = nightSky(width, height, defs, prefix);
 
   /*
    * The fade applies to the composite, not to each face: fading faces one by

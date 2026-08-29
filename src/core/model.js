@@ -84,7 +84,10 @@ export function emptyModel() {
     camera: { ...DEFAULT_CAMERA },
     focus: { ...DEFAULT_FOCUS },
     views: [],
-    style: { outline: false, outlineWidth: 1.1, background: 'transparent', shadow: false, windowBars: false },
+    style: {
+      outline: false, outlineWidth: 1.1, background: 'transparent',
+      shadow: false, windowBars: false, night: false,
+    },
   };
 }
 

@@ -59,9 +59,36 @@ tout moment, et *Page blanche* reste disponible.
 | **Matières** | Tuiles, **tuiles canal panachées**, ardoises, bac acier sur le toit ; briques, bardage, pierre, colombages sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
+| **Nuit** | Une **vue de nuit** : ciel dégradé et étoilé, lune, teintes de clair de lune — et les fenêtres allumées |
 | **Caméra** | **Orbite libre** : on fait tourner la maison à la souris, sur 360° et de la vue rasante à la quasi-verticale — les quatre faces restent à un clic |
 | **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, ce qui s'éloigne du centre s'estompe, et chaque cadrage se garde comme **vue nommée** |
 | **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, toutes les vues enregistrées en lot, copie directe dans le presse-papier |
+
+## La vue de nuit
+
+![La même maison de jour et deux maisons de nuit](assets/night.png)
+
+Une case à cocher dans *Apparence* fait passer toute l'illustration à la nuit :
+ciel dégradé et semé d'étoiles, lune avec son halo, et l'ensemble des matières
+ramenées à des teintes de clair de lune.
+
+C'est un **traitement appliqué à la palette en cours**, non une palette de
+plus : la maison est la même après la tombée du jour, et dupliquer six palettes
+pour le dire garantirait qu'elles finissent par diverger. Le traitement passe
+par la teinte et la saturation plutôt que par une simple multiplication, parce
+que l'intéressant dans la nuit n'est pas que tout s'assombrit — c'est que tout
+perd sa couleur et prend celle du ciel. Les teintes chaudes en perdent le plus,
+faute de quoi un toit en tuiles reste obstinément orange dans le noir. Le
+terrain descend plus bas encore que les murs : rien n'éclaire une pelouse la
+nuit, alors qu'un mur reçoit ce que la lune et les fenêtres lui donnent.
+
+Les **fenêtres restent allumées**, en jaune chaud. C'est tout l'intérêt d'une
+vue nocturne sur un tableau de bord domotique : elle dit si la maison est
+éveillée.
+
+Une réserve à connaître : la vue de nuit **impose son ciel** et ne peut donc pas
+garder un fond transparent. Une image transparente de maison sombre n'est pas
+une vue de nuit.
 
 ## Cadrer sur une zone
 

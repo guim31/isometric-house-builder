@@ -174,6 +174,59 @@ export const FIXED = {
 };
 
 /**
+ * Night.
+ *
+ * A grade applied to whatever palette is in use, rather than a palette of its
+ * own: the house is the same house after dark, and duplicating six palettes to
+ * say so would guarantee they drift apart.
+ *
+ * The grade goes through HSL because the interesting part of nightfall is not
+ * that things get darker — a plain multiplication does that — but that they
+ * lose their colour and take on the sky's. Lightness is cut, saturation cut
+ * harder, and the result pulled towards a moonlit blue. Warm surfaces are
+ * pulled further than cool ones, which is what keeps a terracotta roof from
+ * staying stubbornly orange in the dark.
+ */
+export const NIGHT = {
+  sky: ['#070b1c', '#1a2748'],   // zenith, then horizon
+  moon: '#f6f2e2',
+  star: '#dfe6f5',
+  // Windows are the point of a night view on a home dashboard: they say
+  // whether the house is awake. Left ungraded and warmed instead.
+  lit: { glass: '#ffd98d', glassDark: '#f0b45e' },
+};
+
+const NIGHT_BLUE = [26, 39, 72];
+
+/**
+ * Ground surfaces go darker still.
+ *
+ * Nothing lights a lawn at night, whereas a wall catches whatever the moon and
+ * the windows give it. Graded like everything else, a lawn came out a pale
+ * slab brighter than the house standing on it — which reads as daylight with
+ * the contrast turned down, not as night.
+ */
+const NIGHT_FLOOR = new Set(['grass', 'grassEdge', 'paving', 'gravel', 'deck', 'shadow']);
+
+export function nightColour(mat, hex) {
+  const kind = mat.includes('#') ? mat.slice(0, mat.indexOf('#')) : mat;
+  if (NIGHT.lit[kind]) return NIGHT.lit[kind];
+  const [r, g, b] = hexToRgb(hex);
+  const [hh, ss, ll] = rgbToHsl(r, g, b);
+  // Warm hues — roughly yellow through red — lose most of their colour: they
+  // are the ones the eye goes on reading as daylight if left alone.
+  const warm = hh < 75 || hh > 325 ? 1 : 0.55;
+  const floor = NIGHT_FLOOR.has(kind) ? 0.62 : 1;
+  const out = hslToRgb(hh, ss * (0.42 - 0.24 * warm), ll * 0.40 * floor);
+  const t = 0.34 + (floor < 1 ? 0.1 : 0);
+  return rgbToHex(
+    out[0] + (NIGHT_BLUE[0] - out[0]) * t,
+    out[1] + (NIGHT_BLUE[1] - out[1]) * t,
+    out[2] + (NIGHT_BLUE[2] - out[2]) * t,
+  );
+}
+
+/**
  * Blend a set of per-orientation colours by the face normal.
  *
  * Some palettes cannot be reproduced by darkening one base colour: their

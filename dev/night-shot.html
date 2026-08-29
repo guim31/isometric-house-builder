@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#fff;font:13px system-ui}
+#row{width:1280px;display:flex}
+figure{margin:0}figcaption{text-align:center;color:#5a6b7d;padding:2px 0 10px}
+</style></head><body><div id="row"></div>
+<script type="module">
+import { PRESETS } from '../src/data/presets.js';
+import { normalise } from '../src/core/model.js';
+import { renderScene } from '../src/render/svg.js';
+// The same three houses as the banner, after dark.
+const shots = [['pavillon', 'Jour'], ['provence', 'Nuit'], ['chalet', 'Nuit']];
+document.getElementById('row').innerHTML = shots.map(([id, when]) => {
+  const m = normalise({ ...PRESETS.find((p) => p.id === id).model });
+  const svg = renderScene({ ...m, style: { ...m.style, night: when === 'Nuit' } },
+    { width: 426, height: 300 }).svg;
+  return `<figure>${svg}<figcaption>${PRESETS.find((p) => p.id === id).name} — ${when.toLowerCase()}</figcaption></figure>`;
+}).join('');
+</script></body></html>

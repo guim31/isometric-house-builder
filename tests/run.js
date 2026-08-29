@@ -23,7 +23,7 @@ import { buildMesh } from '../src/core/scene.js';
 import { renderScene } from '../src/render/svg.js';
 import { hitLayer, screenToGround } from '../src/render/hit.js';
 import { textureSegments, textureTiles, tilePalette, specFor, ROOF_TEXTURES, WALL_TEXTURES } from '../src/render/texture.js';
-import { THEMES, faceColour, materialColour, hexToRgb, rgbToHsl } from '../src/core/palette.js';
+import { THEMES, faceColour, materialColour, hexToRgb, rgbToHsl, nightColour, NIGHT } from '../src/core/palette.js';
 import { PRESETS, getPreset } from '../src/data/presets.js';
 import { Gallery } from '../src/ui/gallery.js';
 import { Store } from '../src/ui/store.js';
@@ -1498,6 +1498,67 @@ await checkAsync('le PNG conserve la transparence du fond', async () => {
   // The top-left corner falls outside the ground plane, so it must stay clear.
   const alpha = ctx.getImageData(1, 1, 1, 1).data[3];
   return alpha === 0 || `alpha du coin : ${alpha}`;
+});
+
+/* ---------------- night ---------------- */
+
+check('la nuit assombrit et désature, sans toucher aux fenêtres', () => {
+  const lum = (hex) => { const [r, g, b] = hexToRgb(hex); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const sat = (hex) => { const [r, g, b] = hexToRgb(hex); return rgbToHsl(r, g, b)[1]; };
+  for (const day of ['#e9c98d', '#c8663c', '#eceff1', '#5fa855']) {
+    const n = nightColour('wall', day);
+    if (lum(n) >= lum(day) * 0.6) return `${day} → ${n} : à peine assombri`;
+    if (sat(n) > sat(day) + 0.02) return `${day} → ${n} : plus saturé qu'en plein jour`;
+  }
+  // A lawn goes darker still: nothing lights it, whereas a wall catches the
+  // moon. Graded alike, the lawn came out brighter than the house on it.
+  if (lum(nightColour('grass', '#9ccb7a')) >= lum(nightColour('wall', '#9ccb7a'))) {
+    return 'le terrain n’est pas plus sombre que les murs';
+  }
+  // Windows are the whole point: they say whether the house is awake.
+  const glass = nightColour('glass', '#bfe3f2');
+  if (glass !== NIGHT.lit.glass) return 'les fenêtres ne sont pas allumées';
+  return lum(glass) > 150 || 'les fenêtres allumées sont trop sombres';
+});
+
+check('la nuit s’applique aussi aux matériaux d’un corps donné', () => {
+  // Per-building materials carry a suffix; the grade has to see through it.
+  return nightColour('wall#b3', '#e9c98d') === nightColour('wall', '#e9c98d')
+    || 'le suffixe de corps échappe au traitement de nuit';
+});
+
+check('le ciel étoilé est identique d’un rendu à l’autre', () => {
+  // Same reason as the roof tiles: the export has to match the preview, and
+  // re-exporting tomorrow has to give the same image.
+  const m = normalise({ ...defaultModel(), style: { ...defaultModel().style, night: true } });
+  const a = renderScene(m, { width: 400, height: 300 }).svg;
+  const b = renderScene(m, { width: 400, height: 300 }).svg;
+  if (a.replace(/id="t\d+/g, '').replace(/#t\d+/g, '') !== b.replace(/id="t\d+/g, '').replace(/#t\d+/g, '')) {
+    return 'deux rendus successifs diffèrent';
+  }
+  return (a.match(/<circle/g) || []).length > 30 || 'aucune étoile';
+});
+
+await checkAsync('une vue de nuit a un ciel, même en fond transparent', async () => {
+  // The one setting this mode overrides, and on purpose: a transparent picture
+  // of a dark house is not a night view. Checked on pixels — the sky is a
+  // gradient, and gradients are the part of SVG worth distrusting on export.
+  const W = 160, H = 120;
+  const base = defaultModel();
+  const m = normalise({ ...base, style: { ...base.style, background: 'transparent', night: true } });
+  const blob = await svgToPng(svgFor(m, { width: W, height: H, ratio: 1 }), W, H);
+  const img = await loadBlob(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const top = ctx.getImageData(W - 4, 2, 1, 1).data;
+  const bottom = ctx.getImageData(W - 4, H - 3, 1, 1).data;
+  if (top[3] !== 255 || bottom[3] !== 255) return `ciel absent (alpha ${top[3]}, ${bottom[3]})`;
+  if (top[2] <= top[0]) return 'le ciel n’est pas bleu';
+  // The gradient runs from zenith to horizon; if it were dropped the two
+  // samples would come out identical.
+  return Math.abs(top[2] - bottom[2]) > 6 || 'le dégradé du ciel n’a pas survécu';
 });
 
 /* ---------------- occlusion ---------------- */
