@@ -1235,10 +1235,11 @@ await checkAsync('le PNG conserve la transparence du fond', async () => {
  */
 let bootError = null;
 
-function loadApp(width, height) {
+function loadAppOnce(width, height, deadline) {
   // The suite's own stores autosave, so the app would see a returning visitor
   // and skip the gallery. Clear that first: this is a first visit.
   clearLocal();
+  bootError = null;
   return new Promise((resolve, reject) => {
     const frame = document.createElement('iframe');
     frame.style.cssText = `width:${width}px;height:${height}px`;
@@ -1250,32 +1251,39 @@ function loadApp(width, height) {
       frame.contentWindow.addEventListener('error', (e) => {
         bootError = `${e.message} (${(e.filename || '').split('/').pop()}:${e.lineno})`;
       });
-    }, { once: true });
-    frame.onload = () => {
-      // Poll for readiness rather than guessing a delay: the app draws on an
-      // animation frame, and the gallery renders ten thumbnails on first run,
-      // so a fixed timeout is a race that fails on a slow machine only.
       const started = Date.now();
       const ready = () => {
         if (bootError) { reject(new Error(`erreur au démarrage : ${bootError}`)); return; }
         const doc = frame.contentDocument;
         const done = doc.querySelector('#inspector .panel') && doc.querySelector('#iso svg');
         if (done) resolve(frame);
-        // Generous on purpose: served from a CDN over a slow link, the first
-        // load of the modules can take several seconds, and a tight deadline
-        // would fail the suite for reasons that have nothing to do with it.
-        else if (Date.now() - started > 15000) reject(new Error('interface non prête après 15 s'));
+        else if (Date.now() - started > deadline) reject(new Error('interface non prête'));
         else setTimeout(ready, 60);
       };
       ready();
-    };
+    }, { once: true });
     // The frame lives at the top of the page and there is only ever one:
     // anywhere below the fold, Chrome throttles its animation frames to
     // nothing and the app inside never draws.
-    const host = document.getElementById('appframe');
-    host.replaceChildren(frame);
-
+    document.getElementById('appframe').replaceChildren(frame);
   });
+}
+
+/**
+ * Load the app, retrying once.
+ *
+ * Served from a cold CDN the first fetch of thirty-odd modules can be slow
+ * enough to blow any reasonable deadline, and that first request is exactly
+ * the one a verification run makes. A genuine fault fails both attempts, so
+ * the retry buys tolerance without hiding anything.
+ */
+async function loadApp(width, height) {
+  try {
+    return await loadAppOnce(width, height, 12000);
+  } catch (first) {
+    if (bootError) throw first; // a real error, not slowness
+    return loadAppOnce(width, height, 20000);
+  }
 }
 
 // Loaded once and shared: a second frame lands lower down the page, where
