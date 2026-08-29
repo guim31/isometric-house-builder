@@ -484,10 +484,33 @@ check('le camaïeu reste discret et proche de la teinte du toit', () => {
 
 check('les tuiles canal sont allongées et assez grandes', () => {
   const t = ROOF_TEXTURES.canal.tile;
-  if (t.along / t.across < 1.7) return `rapport ${(t.along / t.across).toFixed(2)} : pas assez allongée`;
+  if (t.slope / t.width < 1.7) return `rapport ${(t.slope / t.width).toFixed(2)} : pas assez allongée`;
   // Fewer, larger tiles: a roof should not dissolve into speckle.
-  const perM2 = 1 / (t.along * t.across);
+  const perM2 = 1 / (t.slope * t.width);
   return perM2 < 7 || `${perM2.toFixed(1)} tuiles au m², trop nombreuses`;
+});
+
+check('les tuiles canal courent dans le sens de la pente', () => {
+  // A canal tile is a channel from ridge to eaves. Laid the other way the
+  // roof is shingled sideways, which is what this pins down: the long side of
+  // a tile must climb, never follow the eaves line.
+  const face = slopeFace();
+  const tiles = textureTiles(face, ROOF_TEXTURES.canal, 60, '#d98d64');
+  if (!tiles.length) return 'aucune tuile';
+  const t = tiles[Math.floor(tiles.length / 2)];
+  // Edge lengths of the quad, and how much height each one gains.
+  const edge = (p, q) => ({
+    len: Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]),
+    rise: Math.abs(q[2] - p[2]),
+  });
+  const e1 = edge(t.pts[0], t.pts[1]);
+  const e2 = edge(t.pts[1], t.pts[2]);
+  const long = e1.len >= e2.len ? e1 : e2;
+  const short = e1.len >= e2.len ? e2 : e1;
+  if (long.len / short.len < 1.5) return 'la tuile n’est pas franchement allongée';
+  // The long edge climbs; the short one stays level with the eaves.
+  return (long.rise > short.rise + 0.05)
+    || `côté long à ${long.rise.toFixed(3)} m de dénivelé contre ${short.rise.toFixed(3)} : posée en travers`;
 });
 
 check('les tuiles disparaissent quand elles deviennent illisibles', () => {

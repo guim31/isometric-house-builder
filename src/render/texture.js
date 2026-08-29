@@ -19,12 +19,14 @@ export const ROOF_TEXTURES = {
     // as a camaïeu rather than a flat plane. Drawn as filled tiles, unlike the
     // line-only materials — the colour variation IS the material here.
     label: 'Tuiles canal panachées',
-    course: 0.3,
+    // Seams, not courses: what reads on a canal roof is the lines running up
+    // the slope between one channel and the next.
+    seam: 0.3,
     contrast: 0.22,
-    // Long and fairly large: a canal tile reads as an elongated strip, and at
-    // this size a roof carries roughly a third as many as it did — enough for
-    // the camaïeu to show without dissolving into speckle.
-    tile: { along: 0.58, across: 0.3, inset: 0.016 },
+    // A canal tile is a channel carrying water from ridge to eaves, so its
+    // long axis follows the slope, never the eaves line. `slope` is that
+    // length, `width` the span across the slope.
+    tile: { slope: 0.58, width: 0.3, inset: 0.016 },
   },
   slate: { label: 'Ardoises', course: 0.3, joint: 0.34, stagger: true },
   seam: { label: 'Bac acier', seam: 0.55 },
@@ -175,7 +177,7 @@ export function textureSegments(face, spec, scale, minSpacingPx = 3.5) {
 export function textureTiles(face, spec, scale, fill, minPx = 1.7) {
   const t = spec.tile;
   if (!t) return [];
-  if (t.along * scale < minPx || t.across * scale < minPx) return [];
+  if (t.slope * scale < minPx || t.width * scale < minPx) return [];
 
   const n = face.normal;
   const { u, v } = frame(n);
@@ -188,8 +190,10 @@ export function textureTiles(face, spec, scale, fill, minPx = 1.7) {
     if (b < b0) b0 = b;
     if (b > b1) b1 = b;
   }
-  const cols = Math.ceil((a1 - a0) / t.along) + 1;
-  const rows = Math.ceil((b1 - b0) / t.across) + 1;
+  // `u` runs across the slope and `v` up it, so the tile's width sits on u and
+  // its length on v — laid the other way the roof would be shingled sideways.
+  const cols = Math.ceil((a1 - a0) / t.width) + 1;
+  const rows = Math.ceil((b1 - b0) / t.slope) + 1;
   if (cols * rows > 20000) return []; // pathological face; keep it flat
 
   const w = dot(ring[0], n);
@@ -201,16 +205,16 @@ export function textureTiles(face, spec, scale, fill, minPx = 1.7) {
   const palette = tilePalette(fill, spec.spread ?? 1);
   const inset = t.inset ?? 0.01;
   const out = [];
-  for (let ib = Math.floor(b0 / t.across); ib * t.across <= b1; ib++) {
-    for (let ia = Math.floor(a0 / t.along); ia * t.along <= a1; ia++) {
-      const a = ia * t.along, b = ib * t.across;
+  for (let ib = Math.floor(b0 / t.slope); ib * t.slope <= b1; ib++) {
+    for (let ia = Math.floor(a0 / t.width); ia * t.width <= a1; ia++) {
+      const a = ia * t.width, b = ib * t.slope;
       out.push({
         colour: palette[Math.floor(hash2(ia, ib) * palette.length) % palette.length],
         pts: [
           at(a + inset, b + inset),
-          at(a + t.along - inset, b + inset),
-          at(a + t.along - inset, b + t.across - inset),
-          at(a + inset, b + t.across - inset),
+          at(a + t.width - inset, b + inset),
+          at(a + t.width - inset, b + t.slope - inset),
+          at(a + inset, b + t.slope - inset),
         ],
       });
     }
