@@ -19,11 +19,12 @@ export const ROOF_TEXTURES = {
     // as a camaïeu rather than a flat plane. Drawn as filled tiles, unlike the
     // line-only materials — the colour variation IS the material here.
     label: 'Tuiles canal panachées',
-    course: 0.21,
-    contrast: 0.26,
-    // Wider than tall: a canal tile reads as a short strip within a fine
-    // course, not as a square. Square tiles turn the roof into brickwork.
-    tile: { along: 0.31, across: 0.21, inset: 0.011 },
+    course: 0.3,
+    contrast: 0.22,
+    // Long and fairly large: a canal tile reads as an elongated strip, and at
+    // this size a roof carries roughly a third as many as it did — enough for
+    // the camaïeu to show without dissolving into speckle.
+    tile: { along: 0.58, across: 0.3, inset: 0.016 },
   },
   slate: { label: 'Ardoises', course: 0.3, joint: 0.34, stagger: true },
   seam: { label: 'Bac acier', seam: 0.55 },
@@ -36,13 +37,13 @@ export const ROOF_TEXTURES = {
  * the proportions.
  */
 const CANAL_MIX = [
-  [9, 0, 1.00, 1.00],   // terre cuite, the ground note
-  [4, -3, 1.06, 0.945], // rouge profond
-  [3, 11, 0.84, 1.075], // paille
-  [2, -7, 0.78, 1.055], // rosé
-  [2, 5, 0.95, 1.03],   // ocre
-  [1, 16, 0.80, 1.11],  // paille claire
-  [1, -4, 1.10, 0.90],  // tuile vieillie
+  [11, 0, 1.00, 1.00],  // terre cuite, the ground note — kept true to the
+  [4, -2, 1.02, 0.965], // rouge profond    chosen roof colour, so only the
+  [3, 7, 0.80, 1.045],  // paille           variants are muted and the roof
+  [2, -4, 0.80, 1.03],  // rosé             still reads as the colour picked
+  [2, 3, 0.92, 1.02],   // ocre
+  [1, 9, 0.74, 1.065],  // paille claire
+  [1, -2, 1.05, 0.945], // tuile vieillie
 ];
 
 /**
@@ -58,9 +59,9 @@ export function tilePalette(fill, spread = 1) {
   for (const [weight, dh, ms, ml] of CANAL_MIX) {
     for (let i = 0; i < weight; i++) {
       const t = weight > 1 ? (i / (weight - 1) - 0.5) * 2 : 0;
-      const h = h0 + (dh + t * 2.5) * spread;
-      const sat = Math.max(0, Math.min(1, s0 * (ms + t * 0.04 * spread)));
-      const lum = Math.max(0, Math.min(1, l0 * (ml + t * 0.022 * spread)));
+      const h = h0 + (dh + t * 1.8) * spread;
+      const sat = Math.max(0, Math.min(1, s0 * (ms + t * 0.03 * spread)));
+      const lum = Math.max(0, Math.min(1, l0 * (ml + t * 0.014 * spread)));
       out.push(rgbToHex(...hslToRgb(h, sat, lum)));
     }
   }

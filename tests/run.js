@@ -463,21 +463,31 @@ check('le panachage est déterministe', () => {
     === strip(renderScene(m, { width: 500, height: 380 }).svg) || 'deux rendus divergent';
 });
 
-check('le camaïeu reste dans la famille de la teinte du toit', () => {
-  // Shades must vary, but a tile straying far in hue would read as a defect
-  // rather than as a fired-clay variation.
+check('le camaïeu reste discret et proche de la teinte du toit', () => {
+  // Shades must vary, but a tile straying far would read as a defect rather
+  // than as a fired-clay variation. The bounds are deliberately tight: the
+  // first version of this material was judged too vivid.
   const fill = '#d98d64';
-  const [h0, , l0] = rgbToHsl(...hexToRgb(fill));
+  const [h0, s0, l0] = rgbToHsl(...hexToRgb(fill));
   const shades = tilePalette(fill);
   if (shades.length < 12) return `${shades.length} nuances`;
   if (new Set(shades).size < 12) return 'nuances dupliquées';
   for (const c of shades) {
-    const [h, , l] = rgbToHsl(...hexToRgb(c));
+    const [h, sat, l] = rgbToHsl(...hexToRgb(c));
     let dh = Math.abs(h - h0); if (dh > 180) dh = 360 - dh;
-    if (dh > 25) return `teinte à ${dh.toFixed(0)}° de la base : ${c}`;
-    if (Math.abs(l - l0) > 0.14) return `clarté trop écartée : ${c}`;
+    if (dh > 12) return `teinte à ${dh.toFixed(0)}° de la base : ${c}`;
+    if (Math.abs(l - l0) > 0.085) return `clarté trop écartée : ${c}`;
+    if (sat > s0 * 1.1) return `nuance plus vive que la base : ${c}`;
   }
   return true;
+});
+
+check('les tuiles canal sont allongées et assez grandes', () => {
+  const t = ROOF_TEXTURES.canal.tile;
+  if (t.along / t.across < 1.7) return `rapport ${(t.along / t.across).toFixed(2)} : pas assez allongée`;
+  // Fewer, larger tiles: a roof should not dissolve into speckle.
+  const perM2 = 1 / (t.along * t.across);
+  return perM2 < 7 || `${perM2.toFixed(1)} tuiles au m², trop nombreuses`;
 });
 
 check('les tuiles disparaissent quand elles deviennent illisibles', () => {
