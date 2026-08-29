@@ -1415,6 +1415,62 @@ check('pivoter ne reconstruit pas le maillage', () => {
   return vp.cache.built !== built || 'le maillage n’a pas suivi la modification';
 });
 
+check('un panneau replié le reste après une modification du modèle', () => {
+  // The inspector is rebuilt from scratch on every change. If the fold state
+  // lived in the DOM it would spring open under the hand at the first drag of
+  // a slider, which is why it is held on the inspector instead.
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  document.getElementById('stage').appendChild(div);
+  const insp = new Inspector(div, s);
+  insp.render();
+  const first = div.querySelector('details.panel');
+  if (!first) return 'aucun panneau repliable';
+  if (!first.open) return 'le premier panneau devrait s’ouvrir par défaut';
+  first.open = false;
+  first.dispatchEvent(new Event('toggle'));
+  s.update((m) => ({ ...m, name: 'Autre' }));
+  insp.render();
+  const again = div.querySelector('details.panel');
+  if (again.open) return 'le panneau s’est rouvert tout seul';
+  // And the other way round: unfolding something closed by default must stick.
+  const shut = [...div.querySelectorAll('details.panel')].find((d) => !d.open && d !== again);
+  if (!shut) return 'tous les panneaux sont ouverts';
+  const title = shut.querySelector('.panel-name').textContent;
+  shut.open = true;
+  shut.dispatchEvent(new Event('toggle'));
+  s.update((m) => ({ ...m, name: 'Encore' }));
+  insp.render();
+  const back = [...div.querySelectorAll('details.panel')]
+    .find((d) => d.querySelector('.panel-name').textContent === title);
+  return back?.open || `« ${title} » s’est refermé`;
+});
+
+check('un panneau replié dit ce qu’il contient', () => {
+  // A closed section that shows only its title forces everything open to be
+  // read, which defeats the folding.
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  document.getElementById('stage').appendChild(div);
+  new Inspector(div, s).render();
+  const shut = [...div.querySelectorAll('details.panel')].filter((d) => !d.open);
+  if (!shut.length) return 'aucun panneau replié par défaut';
+  const mute = shut.filter((d) => !d.querySelector('.panel-badge')?.textContent.trim());
+  return mute.length === 0
+    || `${mute.length} panneau(x) replié(s) sans indication : `
+      + mute.map((d) => d.querySelector('.panel-name').textContent).join(', ');
+});
+
+check('les réglages sont rangés en familles', () => {
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  document.getElementById('stage').appendChild(div);
+  new Inspector(div, s).render();
+  const groups = [...div.querySelectorAll('.panel-group')].map((g) => g.textContent);
+  const want = ['Sélection', 'Bâtiment', 'Projet', 'Vue et export'];
+  return want.every((w) => groups.includes(w)) || `familles trouvées : ${groups.join(', ')}`;
+});
+
 check('un curseur en cours de réglage survit au rafraîchissement', () => {
   const s = new Store(defaultModel());
   const div = document.createElement('div');
@@ -1990,6 +2046,15 @@ await checkAsync('la page s’amorce avec ses outils et un rendu visible', async
   const frame = await app();
   const doc = frame.contentDocument;
   if (doc.querySelectorAll('.tool').length < 10) return 'palette d’outils incomplète';
+  // Twenty-three tools in one column ran off the bottom of the panel; the
+  // families fold, and enough of them start folded for the column to fit.
+  const groups = [...doc.querySelectorAll('details.tool-group')];
+  if (groups.length < 4) return `${groups.length} familles d’outils repliables`;
+  if (!groups.some((g) => !g.open)) return 'aucune famille repliée au démarrage';
+  const tools = doc.getElementById('tools');
+  if (tools.scrollHeight > tools.clientHeight + 2) {
+    return `la palette déborde de ${tools.scrollHeight - tools.clientHeight} px`;
+  }
   const svg = doc.querySelector('#iso svg');
   if (svg.querySelectorAll('path').length < 20) return 'rendu isométrique vide';
   // The drawing must land inside the panel, not somewhere off-screen below it.

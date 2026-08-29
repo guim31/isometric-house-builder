@@ -30,7 +30,7 @@ const TOOL_GROUPS = [
     ],
   },
   {
-    title: 'Toiture', tools: [
+    title: 'Sur le toit', folded: true, tools: [
       ['solar', 'Panneaux solaires'],
       ['chimney', 'Cheminée'],
       ['velux', 'Fenêtre de toit'],
@@ -52,7 +52,7 @@ const TOOL_GROUPS = [
     ],
   },
   {
-    title: 'Cadrage', tools: [
+    title: 'Cadrage', folded: true, tools: [
       ['frame', 'Zone de cadrage'],
     ],
   },
@@ -89,7 +89,9 @@ const $ = (id) => document.getElementById(id);
 const store = new Store(initialModel());
 const plan = new PlanView($('plan'), store);
 const viewport = new Viewport($('iso'), store);
-const inspector = new Inspector($('inspector'), store);
+const inspector = new Inspector($('inspector'), store, {
+  onExport: () => { status(''); dialog.showModal(); },
+});
 
 let toastTimer = null;
 function toast(message) {
@@ -102,14 +104,31 @@ function toast(message) {
 
 /* ---------- tool palette ---------- */
 
+/**
+ * The tool palette, in collapsible groups.
+ *
+ * Twenty-three tools in one column ran off the bottom of the panel. They all
+ * start open — a first-time reader should see what the tool can do, not a row
+ * of shut drawers — and folding away the families one does not use is what
+ * makes room. Two families start folded — roof furniture and framing are set
+ * once and left alone — which is what makes the column fit without hiding a
+ * family from view: the headings are all still there.
+ * Built once, so <details> keeps its own state from there on.
+ */
 function buildTools() {
   const root = $('tools');
   root.replaceChildren();
+  root.appendChild(Object.assign(document.createElement('p'),
+    { className: 'panel-group', textContent: 'Créer' }));
   for (const group of TOOL_GROUPS) {
-    const box = document.createElement('div');
+    const box = document.createElement('details');
     box.className = 'tool-group';
-    const title = document.createElement('h3');
-    title.textContent = group.title;
+    box.open = !group.folded;
+    const title = document.createElement('summary');
+    title.className = 'panel-title';
+    title.appendChild(Object.assign(document.createElement('span'),
+      { className: 'panel-name', textContent: group.title }));
+    box.appendChild(title);
     const list = document.createElement('div');
     list.className = 'tool-list';
     for (const [id, label] of group.tools) {
@@ -121,7 +140,7 @@ function buildTools() {
       b.addEventListener('click', () => store.setTool(id));
       list.appendChild(b);
     }
-    box.append(title, list);
+    box.appendChild(list);
     root.appendChild(box);
   }
 }

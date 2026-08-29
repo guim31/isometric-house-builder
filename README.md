@@ -140,6 +140,28 @@ Chaque cadrage se garde comme **vue nommée** — un portail, une piscine, une v
 d'ensemble — et le bouton *Vues enregistrées* de la fenêtre d'export les
 régénère toutes en une passe quand la maison change.
 
+## L'interface
+
+![L'interface : outils à gauche, plan et rendu au centre, réglages à droite](assets/screenshot.png)
+
+Trois colonnes, trois rôles, et rien qui les mélange :
+
+- **À gauche, créer.** Les outils qui ajoutent quelque chose au modèle, par
+  familles repliables. Deux d'entre elles — les objets de toit et le cadrage —
+  arrivent repliées : on les règle une fois et on n'y revient pas.
+- **Au centre, dessiner et regarder.** Le plan pour construire, le rendu pour
+  juger et exporter.
+- **À droite, régler.** Quatre familles dans l'ordre où le travail se fait :
+  *Sélection* (ce qu'on vient de cliquer), *Bâtiment* (le corps en cours, sa
+  toiture, ses matières), *Projet* (palette, couleurs, terrain), *Vue et
+  export* (angle de caméra, vues enregistrées, cadrage).
+
+Chaque section se replie, et **dit ce qu'elle contient tant qu'elle est
+fermée** : la palette en cours, l'orientation de la caméra, le nombre de corps.
+Sans cela il faudrait tout ouvrir pour se souvenir de ce qu'il y a dedans, ce
+qui annule l'intérêt de replier. L'état des sections tient pour la durée de la
+session.
+
 ## Prise en main
 
 1. **Partez d'un modèle** proche du vôtre, puis **corrigez l'emprise** : outil

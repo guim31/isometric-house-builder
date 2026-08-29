@@ -16,6 +16,9 @@ const h = (tag, cls, text) => {
   return n;
 };
 
+/** Separator naming a family of sections. */
+const groupTitle = (text) => h('p', 'panel-group', text);
+
 function field(label, control, hint) {
   const row = h('label', 'field');
   row.appendChild(h('span', 'field-label', label));
@@ -84,9 +87,14 @@ const PROP_LABELS = {
 };
 
 export class Inspector {
-  constructor(root, store) {
+  constructor(root, store, { onExport = null } = {}) {
     this.root = root;
     this.store = store;
+    this.onExport = onExport;
+    // Which sections are unfolded. Kept here rather than in the DOM: the panel
+    // is rebuilt on every change to the model, and a <details> rebuilt from
+    // scratch would spring shut under the hand.
+    this.open = new Map();
   }
 
   render() {
@@ -98,18 +106,61 @@ export class Inspector {
     if (active && this.root.contains(active) && (active.type === 'range' || active.type === 'color')) return;
     this.root.replaceChildren();
     const sel = this.store.selected;
-    if (sel) this.root.appendChild(this.selectionSection(sel));
-    this.root.appendChild(this.activeSection());
-    this.root.appendChild(this.buildingSection());
-    this.root.appendChild(this.appearanceSection());
-    this.root.appendChild(this.coloursSection());
-    this.root.appendChild(this.groundSection());
-    this.root.appendChild(this.viewSection());
-    this.root.appendChild(this.focusSection());
+    // Three families, in the order the work goes: what is selected, then the
+    // volume being edited, then the project as a whole, then how it is looked
+    // at and exported. Everything below the first is folded away by default —
+    // there is now far more here than fits on a screen, and a wall of open
+    // panels reads as clutter rather than as capability.
+    this.root.append(
+      groupTitle('Sélection'),
+      sel ? this.selectionSection(sel) : this.emptySelection(),
+      groupTitle('Bâtiment'),
+      this.activeSection(),
+      this.buildingSection(),
+      groupTitle('Projet'),
+      this.appearanceSection(),
+      this.coloursSection(),
+      this.groundSection(),
+      groupTitle('Vue et export'),
+      this.viewSection(),
+      this.focusSection(),
+    );
   }
 
-  section(title) {
-    const s = h('section', 'panel');
+  /** Stands in for the selection panel, so the group is never a bare title. */
+  emptySelection() {
+    return h('p', 'panel-empty',
+      'Cliquez un élément dans le plan ou sur le rendu pour le régler.');
+  }
+
+  /**
+   * A collapsible section. Returns its body, with the <details> itself hanging
+   * off `.panel` so the caller can hand it back.
+   *
+   * `badge` is what the section says about itself while folded: a palette
+   * name, a camera bearing, how many volumes there are. Without it a closed
+   * panel is a title and nothing else, and everything has to be opened to be
+   * read.
+   */
+  section(title, { id = title, open = false, badge = '', accent = false } = {}) {
+    const d = h('details', `panel${accent ? ' panel-selected' : ''}`);
+    d.open = this.open.has(id) ? this.open.get(id) : open;
+    const sum = document.createElement('summary');
+    sum.className = 'panel-title';
+    sum.appendChild(h('span', 'panel-name', title));
+    if (badge) sum.appendChild(h('span', 'panel-badge', badge));
+    d.appendChild(sum);
+    // Attached after the initial state is set, so restoring it fires nothing.
+    d.addEventListener('toggle', () => this.open.set(id, d.open));
+    const body = h('div', 'panel-body');
+    d.appendChild(body);
+    body.panel = d;
+    return body;
+  }
+
+  /** A plain block: the selection is transient, folding it away helps nobody. */
+  block(title) {
+    const s = h('section', 'panel panel-selected panel-block');
     s.appendChild(h('h2', 'panel-title', title));
     return s;
   }
@@ -124,11 +175,14 @@ export class Inspector {
 
   buildingSection() {
     const m = this.store.model;
-    const s = this.section('Terrain et corps de bâtiment');
     const cs = cellSizeOf(m);
     const b = bounds(cellSet(m));
     const dims = b.empty ? '—'
       : `${fmtMetres(b.w * cs)} × ${fmtMetres(b.d * cs)} m`;
+    const n = m.buildings.length;
+    const s = this.section('Tous les corps', {
+      badge: `${n} · ${dims}`,
+    });
     s.append(
       field('Emprise totale', h('span', 'field-static', dims), 'hors débord de toiture'),
       field('Trame', select(String(cs), [['1', '1 m'], ['0.5', '0,50 m']],
@@ -156,19 +210,32 @@ export class Inspector {
     }
     s.appendChild(list);
 
-    const add = h('button', 'subtle', '+ Nouveau corps de bâtiment');
+    const add = h('button', 'subtle', '+ Nouveau corps');
     add.addEventListener('click', () => this.store.addBuilding());
     s.appendChild(add);
-    return s;
+    return s.panel;
   }
 
   /** Settings of the volume currently being edited. */
+  /**
+   * The volume being edited, in three sections rather than one.
+   *
+   *
+   * As one, it ran to a dozen controls and pushed everything else in the panel
+   * below the fold — which is how a tool ends up looking as though it has one
+   * screen of settings and a mystery. Shape, roof and materials are three
+   * different questions, and they are asked at different moments.
+   */
   activeSection() {
     const b = this.store.activeBuilding;
     if (!b) return document.createDocumentFragment();
     const m = this.store.model;
-    const s = this.section(b.name);
-    s.classList.add('panel-selected');
+    const frag = document.createDocumentFragment();
+    const s = this.section('Corps', {
+      id: 'active', open: true, accent: true,
+      badge: `${b.name} · ${b.storeys} niveau${b.storeys > 1 ? 'x' : ''}`,
+    });
+    frag.appendChild(s.panel);
 
     const name = document.createElement('input');
     name.type = 'text';
@@ -191,11 +258,27 @@ export class Inspector {
       })),
     );
 
-    s.appendChild(this.roofFields(b));
+    if (m.buildings.length > 1) {
+      const del = h('button', 'danger', 'Supprimer ce corps');
+      del.addEventListener('click', () => this.store.removeBuilding(b.id));
+      s.appendChild(del);
+    }
+
+    const roof = this.section('Toiture', {
+      id: 'active-roof', open: true, badge: ROOF_LABELS[b.roof.type],
+    });
+    roof.appendChild(this.roofFields(b));
+    frag.appendChild(roof.panel);
 
     // Materials of this volume, defaulting to the model's.
     const tex = b.texture || m.texture;
-    s.append(
+    const own = Object.keys(b.overrides || {}).length || b.texture;
+    const mat = this.section('Matières', {
+      id: 'active-mat',
+      badge: own ? 'réglages propres' : 'comme le projet',
+    });
+    frag.appendChild(mat.panel);
+    mat.append(
       field('Matière du toit', select(tex.roof,
         Object.entries(ROOF_TEXTURES).map(([k, v]) => [k, v.label]),
         (v) => this.store.patchBuilding({ texture: { ...tex, roof: v } })),
@@ -208,14 +291,14 @@ export class Inspector {
     // Per-volume colours, over the palette. This is what lets one building be
     // timber-clad white while the rest of the model stays as it is.
     const grid = h('div', 'colour-grid');
-    for (const [mat, label] of [['wall', 'Murs'], ['roof', 'Toiture'], ['roofEdge', 'Rive']]) {
+    for (const [key, label] of [['wall', 'Murs'], ['roof', 'Toiture'], ['roofEdge', 'Rive']]) {
       const cell = h('label', 'colour-cell');
       const input = document.createElement('input');
       input.type = 'color';
-      input.value = materialColour(mat, m.theme, { ...m.overrides, ...b.overrides });
+      input.value = materialColour(key, m.theme, { ...m.overrides, ...b.overrides });
       input.addEventListener('input', () => {
         this.store.patchBuilding(
-          { overrides: { ...b.overrides, [mat]: input.value } }, `bcol:${mat}`,
+          { overrides: { ...b.overrides, [key]: input.value } }, `bcol:${key}`,
         );
       });
       cell.append(input, h('span', null, label));
@@ -224,25 +307,20 @@ export class Inspector {
     const group = h('div', 'colour-group');
     group.appendChild(h('span', 'colour-group-title', 'Couleurs de ce corps'));
     group.appendChild(grid);
-    s.appendChild(group);
+    mat.appendChild(group);
 
-    if (Object.keys(b.overrides || {}).length || b.texture) {
+    if (own) {
       const reset = h('button', 'subtle', 'Reprendre les réglages généraux');
       reset.addEventListener('click', () => this.store.patchBuilding({ overrides: {}, texture: null }));
-      s.appendChild(reset);
+      mat.appendChild(reset);
     }
-    if (m.buildings.length > 1) {
-      const del = h('button', 'danger', 'Supprimer ce corps');
-      del.addEventListener('click', () => this.store.removeBuilding(b.id));
-      s.appendChild(del);
-    }
-    return s;
+    return frag;
   }
 
   /** Roof controls for one volume. */
   roofFields(b) {
     const s = h('div', 'roof-fields');
-    s.appendChild(field('Toiture', select(b.roof.type, ROOF_TYPES.map((t) => [t, ROOF_LABELS[t]]),
+    s.appendChild(field('Forme', select(b.roof.type, ROOF_TYPES.map((t) => [t, ROOF_LABELS[t]]),
       (v) => this.store.patchRoof({ type: v }))));
     if (b.roof.type === 'shed') {
       s.appendChild(field('Pente', select(b.roof.shedDir, Object.entries(DIR_LABELS),
@@ -269,7 +347,9 @@ export class Inspector {
 
   appearanceSection() {
     const m = this.store.model;
-    const s = this.section('Apparence');
+    const s = this.section('Apparence', {
+      badge: `${(THEMES[m.theme] || {}).label || m.theme}${m.style.night ? ' · nuit' : ''}`,
+    });
     s.append(
       field('Palette', select(m.theme, Object.entries(THEMES).map(([k, v]) => [k, v.label]),
         (v) => this.applyTheme(v)), 'certaines palettes règlent aussi contours et matières'),
@@ -287,13 +367,19 @@ export class Inspector {
       ], (v) => this.setIn('style', { background: v })),
         m.style.night ? 'sans effet : la vue de nuit dessine son propre ciel' : 'appliqué à l’export seulement'),
     );
-    return s;
+    return s.panel;
   }
 
   /** Textures and per-material colour overrides. */
   coloursSection() {
     const m = this.store.model;
-    const s = this.section('Couleurs et matières');
+    const tweaks = Object.keys(m.overrides).length;
+    const s = this.section('Couleurs et matières', {
+      badge: [
+        ROOF_TEXTURES[m.texture.roof]?.label,
+        tweaks ? `${tweaks} retouche${tweaks > 1 ? 's' : ''}` : '',
+      ].filter(Boolean).join(' · '),
+    });
     s.append(
       field('Matière du toit', select(m.texture.roof,
         Object.entries(ROOF_TEXTURES).map(([k, v]) => [k, v.label]),
@@ -330,12 +416,14 @@ export class Inspector {
     reset.disabled = !count;
     reset.addEventListener('click', () => this.store.update((mm) => ({ ...mm, overrides: {} })));
     s.appendChild(reset);
-    return s;
+    return s.panel;
   }
 
   groundSection() {
     const m = this.store.model;
-    const s = this.section('Terrain');
+    const s = this.section('Terrain', {
+      badge: m.ground.enabled ? GROUND_LABELS[m.ground.material] : 'masqué',
+    });
     s.appendChild(field('Afficher', toggle(m.ground.enabled, (v) => this.setIn('ground', { enabled: v }))));
     if (m.ground.enabled) {
       s.append(
@@ -347,12 +435,17 @@ export class Inspector {
         })),
       );
     }
-    return s;
+    return s.panel;
   }
 
   viewSection() {
     const m = this.store.model;
-    const s = this.section('Vue');
+    const nv = m.views.length;
+    const s = this.section('Vue', {
+      open: true,
+      badge: `${Math.round(m.camera.yaw)}° — ${viewpointLabel(m.camera.yaw)}`
+        + (nv ? ` · ${nv} vue${nv > 1 ? 's' : ''}` : ''),
+    });
     const deg = (v) => `${Math.round(v)}°`;
     s.append(
       // Free orbit, in numbers as well as by dragging: a saved view is worth
@@ -415,7 +508,7 @@ export class Inspector {
       });
     });
     s.appendChild(save);
-    return s;
+    return s.panel;
   }
 
   /**
@@ -429,7 +522,9 @@ export class Inspector {
   focusSection() {
     const m = this.store.model;
     const f = m.focus;
-    const s = this.section('Cadrage de l’export');
+    const s = this.section('Cadrage de l’export', {
+      badge: f.enabled ? `${fmtMetres(f.w)} × ${fmtMetres(f.d)} m` : 'désactivé',
+    });
     s.append(field('Cadrer sur une zone', toggle(f.enabled, (v) => {
       if (!v) { this.setIn('focus', { enabled: false }); return; }
       // Switching it on frames the house. The zone stored by default sits at
@@ -444,7 +539,8 @@ export class Inspector {
     }), 'l’outil « Zone de cadrage » la dessine directement sur le plan'));
     if (!f.enabled) {
       s.appendChild(h('p', 'field-hint', 'Désactivé : l’export montre tout le modèle.'));
-      return s;
+      s.appendChild(this.exportButton());
+      return s.panel;
     }
 
     const num = (label, k, opts) => field(label, number(f[k], {
@@ -467,15 +563,30 @@ export class Inspector {
       field('Masquer le reste', toggle(f.hide, (v) => this.setIn('focus', { hide: v })),
         'sinon le reste est simplement hors champ — et un objet lointain peut malgré tout se projeter dans l’image'),
     );
-    return s;
+    s.appendChild(this.exportButton());
+    return s.panel;
+  }
+
+  /**
+   * The way out of the panel where the framing is set up.
+   *
+   * The button in the app bar remains, and does the same thing. Having one here
+   * as well is not duplication so much as the answer to "and now what?": the
+   * settings above exist for the export, and leaving them without a way to
+   * reach it makes the reader hunt back up the screen for it.
+   */
+  exportButton() {
+    const b = h('button', 'subtle export-link', 'Exporter une image…');
+    b.type = 'button';
+    b.addEventListener('click', () => this.onExport?.());
+    return b;
   }
 
   selectionSection(item) {
     const type = this.store.selection.type;
     const label = { opening: OPENING_LABELS, roofItem: ROOF_ITEM_LABELS, prop: PROP_LABELS }[type][item.kind]
       || item.kind;
-    const s = this.section(label);
-    s.classList.add('panel-selected');
+    const s = this.block(label);
     const patch = (p, c) => this.store.patchSelected(p, c);
 
     if (type === 'opening') {
