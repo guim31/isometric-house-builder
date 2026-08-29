@@ -8,7 +8,7 @@ import { Viewport } from './ui/viewport.js';
 import { Inspector } from './ui/panels.js';
 import { initialModel, exportProject, importProject, clearLocal, loadLocal, fromShareUrl, toShareUrl } from './io/project.js';
 import { Gallery } from './ui/gallery.js';
-import { defaultModel, emptyModel } from './core/model.js';
+import { defaultModel, emptyModel, cellSet } from './core/model.js';
 import { SIZES, exportPng, exportSvg, exportFourViews, copyPngToClipboard } from './io/export.js';
 import { VIEWPOINTS } from './core/iso.js';
 
@@ -308,7 +308,7 @@ store.setTool('select');
 scheduleRender();
 
 // A first-run project that shows what the tool can do beats an empty grid.
-if (!store.model.cells.length) {
+if (!cellSet(store.model).size) {
   store.update(defaultModel(), { silent: true });
 }
 

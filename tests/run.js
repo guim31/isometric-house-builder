@@ -27,7 +27,7 @@ import { placeRun, placeProp, nearestMuret, LINEAR_KINDS } from '../src/ui/actio
 import { PlanView } from '../src/ui/plan.js';
 import { Viewport } from '../src/ui/viewport.js';
 import { Inspector } from '../src/ui/panels.js';
-import { toShareUrl, fromShareUrl } from '../src/io/project.js';
+import { toShareUrl, fromShareUrl, clearLocal } from '../src/io/project.js';
 import { svgFor, SIZES, svgToPng } from '../src/io/export.js';
 
 const results = document.getElementById('results');
@@ -1233,18 +1233,31 @@ await checkAsync('le PNG conserve la transparence du fond', async () => {
  * the viewport and pushed both drawings below the fold, and every module test
  * still passed.
  */
+let bootError = null;
+
 function loadApp(width, height) {
+  // The suite's own stores autosave, so the app would see a returning visitor
+  // and skip the gallery. Clear that first: this is a first visit.
+  clearLocal();
   return new Promise((resolve, reject) => {
     const frame = document.createElement('iframe');
     frame.style.cssText = `width:${width}px;height:${height}px`;
     frame.src = '../index.html';
     frame.onerror = () => reject(new Error('page non chargée'));
+    // A throw during boot leaves a half-built interface that can still look
+    // ready: catch it outright rather than waiting for the symptom.
+    frame.addEventListener('load', () => {
+      frame.contentWindow.addEventListener('error', (e) => {
+        bootError = `${e.message} (${(e.filename || '').split('/').pop()}:${e.lineno})`;
+      });
+    }, { once: true });
     frame.onload = () => {
       // Poll for readiness rather than guessing a delay: the app draws on an
       // animation frame, and the gallery renders ten thumbnails on first run,
       // so a fixed timeout is a race that fails on a slow machine only.
       const started = Date.now();
       const ready = () => {
+        if (bootError) { reject(new Error(`erreur au démarrage : ${bootError}`)); return; }
         const doc = frame.contentDocument;
         const done = doc.querySelector('#inspector .panel') && doc.querySelector('#iso svg');
         if (done) resolve(frame);
@@ -1283,6 +1296,14 @@ await checkAsync('la page tient dans la fenêtre, sans déborder', async () => {
     if (r.height < 120) return `le panneau « ${id} » est écrasé (${Math.round(r.height)}px)`;
   }
   return true;
+});
+
+await checkAsync('la galerie d’accueil s’ouvre à la première visite', async () => {
+  // The boot sequence opens it, so this also catches a throw on the way there.
+  const frame = await app();
+  const dialog = frame.contentDocument.getElementById('gallery-dialog');
+  if (!dialog) return 'dialogue absent de la page';
+  return dialog.open || 'la galerie ne s’est pas ouverte';
 });
 
 await checkAsync('la page s’amorce avec ses outils et un rendu visible', async () => {
