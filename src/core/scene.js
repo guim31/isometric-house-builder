@@ -112,49 +112,74 @@ function buildRoofItems(mesh, b, roof, items, mat) {
       continue;
     }
 
-    // Everything else lies flat on the slope. The supporting plane is taken
-    // once at the item's centre and the corners are projected onto it: reading
-    // the field corner by corner would fold the panel in half wherever it
-    // happens to straddle a hip or a ridge.
+    // Everything else lies flat on the slope, emitted as a subdivided patch
+    // that follows the roof surface.
+    //
+    // A single planar quad was tried first and is worse: astride a hip or a
+    // ridge it keeps its own plane and tears straight through the roof. Made
+    // of small quads it bends over the crease instead, which at least reads
+    // as a panel following the roof. On a single slope the pieces are coplanar
+    // and merge straight back into one face, so this costs nothing in the
+    // ordinary case.
     const lift = 0.04;
-    const eps = 0.05;
-    const zc = zAt(it.x, it.y);
-    const dzdx = (zAt(it.x + eps, it.y) - zAt(it.x - eps, it.y)) / (2 * eps);
-    const dzdy = (zAt(it.x, it.y + eps) - zAt(it.x, it.y - eps)) / (2 * eps);
-    const plane = (px, py, extra) => [px, py, zc + dzdx * (px - it.x) + dzdy * (py - it.y) + extra];
-    const q = (px, py) => plane(px, py, lift);
+    // Fine enough that the pieces straddling a crease stay small. On a plain
+    // slope they are coplanar and merge back into one face, so the resolution
+    // costs nothing where it is not needed.
+    const SUB = 0.18;
+    const patch = (x0, y0, x1, y1, extra, material, group) => {
+      const nx = Math.max(1, Math.round((x1 - x0) / SUB));
+      const ny = Math.max(1, Math.round((y1 - y0) / SUB));
+      const at = (px, py) => [px, py, zAt(px, py) + extra];
+      for (let iy = 0; iy < ny; iy++) {
+        for (let ix = 0; ix < nx; ix++) {
+          const ax = x0 + ((x1 - x0) * ix) / nx, bx = x0 + ((x1 - x0) * (ix + 1)) / nx;
+          const ay = y0 + ((y1 - y0) * iy) / ny, by = y0 + ((y1 - y0) * (iy + 1)) / ny;
+          mesh.quad(at(ax, ay), at(bx, ay), at(bx, by), at(ax, by), material, group, after);
+        }
+      }
+    };
     if (it.kind === 'solar') {
-      mesh.quad(q(x0, y0), q(x1, y0), q(x1, y1), q(x0, y1), 'solarFrame', 'solarFrame', after);
+      patch(x0, y0, x1, y1, lift, mat('solarFrame'), 'solarFrame');
       const b = 0.07;
-      const p = (px, py) => plane(px, py, lift * 2);
-      mesh.quad(p(x0 + b, y0 + b), p(x1 - b, y0 + b), p(x1 - b, y1 - b), p(x0 + b, y1 - b), 'solar', 'solar', after);
-      const r = (px, py) => plane(px, py, lift * 3);
+      patch(x0 + b, y0 + b, x1 - b, y1 - b, lift * 2, mat('solar'), 'solar');
+      // Cell divisions are dropped when the panel bridges a crease: those
+      // narrow strips cross the fold at a slant and come out as spikes, and a
+      // panel that should not be there anyway is better left plain.
+      const slope = (x, y) => [
+        (zAt(x + 0.05, y) - zAt(x - 0.05, y)) / 0.1,
+        (zAt(x, y + 0.05) - zAt(x, y - 0.05)) / 0.1,
+      ];
+      const g0 = slope(x0 + b, y0 + b);
+      const straddles = [[x1 - b, y0 + b], [x0 + b, y1 - b], [x1 - b, y1 - b]]
+        .some(([x, y]) => {
+          const g = slope(x, y);
+          return Math.abs(g[0] - g0[0]) > 0.05 || Math.abs(g[1] - g0[1]) > 0.05;
+        });
       const cell = 0.85; // roughly one photovoltaic cell across
-      const cols = Math.max(2, Math.round((w - 2 * b) / cell));
-      const rows = Math.max(2, Math.round((d - 2 * b) / cell));
+      const cols = straddles ? 0 : Math.max(2, Math.round((w - 2 * b) / cell));
+      const rows = straddles ? 0 : Math.max(2, Math.round((d - 2 * b) / cell));
       for (let k = 1; k < cols; k++) {
         const x = x0 + b + ((w - 2 * b) * k) / cols;
-        mesh.quad(r(x - 0.02, y0 + b), r(x + 0.02, y0 + b), r(x + 0.02, y1 - b), r(x - 0.02, y1 - b), 'solarCell', 'solarCell', after);
+        patch(x - 0.02, y0 + b, x + 0.02, y1 - b, lift * 3, mat('solarCell'), 'solarCell');
       }
       for (let k = 1; k < rows; k++) {
         const y = y0 + b + ((d - 2 * b) * k) / rows;
-        mesh.quad(r(x0 + b, y - 0.02), r(x1 - b, y - 0.02), r(x1 - b, y + 0.02), r(x0 + b, y + 0.02), 'solarCell', 'solarCell', after);
+        patch(x0 + b, y - 0.02, x1 - b, y + 0.02, lift * 3, mat('solarCell'), 'solarCell');
       }
     } else if (it.kind === 'velux') {
-      mesh.quad(q(x0, y0), q(x1, y0), q(x1, y1), q(x0, y1), 'frame', 'frame', after);
+      patch(x0, y0, x1, y1, lift, mat('frame'), 'frame');
       const b = 0.09;
-      const p = (px, py) => plane(px, py, lift * 2);
-      mesh.quad(p(x0 + b, y0 + b), p(x1 - b, y0 + b), p(x1 - b, y1 - b), p(x0 + b, y1 - b), 'glass', 'glass', after);
+      patch(x0 + b, y0 + b, x1 - b, y1 - b, lift * 2, mat('glass'), 'glass');
     } else if (it.kind === 'dish') {
       const r = Math.max(w, d) / 2;
       const zc = zAt(it.x, it.y) + 0.5;
-      mesh.box([it.x - 0.05, it.y - 0.05, zAt(it.x, it.y)], [it.x + 0.05, it.y + 0.05, zc], 'chimneyCap', 'dish', ['bottom'], after);
+      mesh.box([it.x - 0.05, it.y - 0.05, zAt(it.x, it.y)], [it.x + 0.05, it.y + 0.05, zc], mat('chimneyCap'), 'dish', ['bottom'], after);
       const pts = [];
       for (let k = 0; k < 12; k++) {
         const t = (k / 12) * Math.PI * 2;
         pts.push([it.x + Math.cos(t) * r, it.y + Math.sin(t) * r * 0.6, zc + Math.sin(t) * r * 0.5]);
       }
-      mesh.poly(pts, 'garage', 'dish', after);
+      mesh.poly(pts, mat('garage'), 'dish', after);
     }
   }
 }

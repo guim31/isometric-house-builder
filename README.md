@@ -177,6 +177,17 @@ modifier le moteur :
   plutôt que de tenir une liste d'ouvertures. Poser un portail, le faire
   glisser le long du muret ou le supprimer fait donc ce qu'on attend, sans
   relation à maintenir entre deux objets.
+- **Ce qui est posé sur une surface se range derrière celle qui le recouvre
+  réellement.** Un objet de toiture était rattaché au plan de toit le plus
+  proche, si bien qu'une cheminée près d'un faîtage s'ancrait à un versant
+  pendant que l'autre, dessiné après, la coupait en deux. Le porteur est
+  désormais choisi par recouvrement à l'écran, ce qui donne la bonne réponse
+  aussi bien au faîtage qu'en bas de pente.
+- **Les éléments linéaires sont émis en tronçons.** Une haie ou un muret de
+  vingt mètres fusionné en une seule face n'a qu'un centre, donc qu'une
+  profondeur : le tout passe devant la maison ou derrière, jamais en partie
+  l'un et en partie l'autre. Les tronçons se recouvrent d'un cheveu, faute de
+  quoi l'anticrénelage laisse voir la jointure.
 - **Les aménagements au sol se superposent dans un ordre fixe.** Terrasse,
   margelle et eau sont de grandes faces quasi coplanaires : leur profondeur de
   peintre dépend de leur position au sol, pas des millimètres qui les séparent

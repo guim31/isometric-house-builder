@@ -60,6 +60,21 @@ function orderFaces(faces, camera) {
     byGroupOnly.get(f.group).push(f);
   }
 
+  // Screen-space containment test, used to choose which surface carries a
+  // face. Cheap enough: only anchored faces run it, against a handful of
+  // candidates each.
+  const contains = (face, pt) => {
+    const s2 = face.loops[0].map((p) => camera.toScreen(p));
+    let inside = false;
+    for (let i = 0, j = s2.length - 1; i < s2.length; j = i++) {
+      if ((s2[i][1] > pt[1]) !== (s2[j][1] > pt[1])
+        && pt[0] < ((s2[j][0] - s2[i][0]) * (pt[1] - s2[i][1])) / (s2[j][1] - s2[i][1]) + s2[i][0]) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  };
+
   for (const f of faces) {
     f.sortDepth = f.depth;
     f.carrier = null;
@@ -68,16 +83,31 @@ function orderFaces(faces, camera) {
       ? byGroup.get(`${f.after.mat}|${f.after.group}`)
       : byGroupOnly.get(f.after.group);
     if (!cands || !cands.length) continue;
-    // The carrying surface is the one whose plane passes closest to this face.
-    let best = null, bestDist = Infinity;
+
+    // The carrier is the surface that actually covers this face on screen,
+    // taking the nearest one when several do. Picking merely the closest
+    // plane sliced every chimney standing near a ridge: it anchored to one
+    // slope while the other, drawn later, painted over it.
+    const pt = camera.toScreen(f.centroid);
+    let best = null;
     for (const c of cands) {
       if (c === f) continue;
-      const d = Math.abs(
-        c.normal[0] * (f.centroid[0] - c.centroid[0]) +
-        c.normal[1] * (f.centroid[1] - c.centroid[1]) +
-        c.normal[2] * (f.centroid[2] - c.centroid[2]),
-      );
-      if (d < bestDist) { bestDist = d; best = c; }
+      if (!contains(c, pt)) continue;
+      if (!best || c.depth > best.depth) best = c;
+    }
+    if (!best) {
+      // Nothing covers it — fall back to the nearest plane, which is what an
+      // item lying flat on a surface needs.
+      let bestDist = Infinity;
+      for (const c of cands) {
+        if (c === f) continue;
+        const d = Math.abs(
+          c.normal[0] * (f.centroid[0] - c.centroid[0]) +
+          c.normal[1] * (f.centroid[1] - c.centroid[1]) +
+          c.normal[2] * (f.centroid[2] - c.centroid[2]),
+        );
+        if (d < bestDist) { bestDist = d; best = c; }
+      }
     }
     f.carrier = best;
   }

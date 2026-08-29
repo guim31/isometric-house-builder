@@ -94,12 +94,13 @@ function blob(mesh, cx, cy, z0, r, h, mat, anchor, sides = 12) {
  * A garden wall, in the material of the house so a boundary wall reads as
  * belonging to it, capped with a slightly proud coping.
  */
-function muretRun(mesh, a0, a1, c0, c1, h, horiz) {
+function muretRun(mesh, a0, a1, c0, c1, h, horiz, id) {
   if (a1 - a0 < 0.05) return;
   const [x0, y0, x1, y1] = horiz ? [a0, c0, a1, c1] : [c0, a0, c1, a1];
-  mesh.box([x0, y0, 0], [x1, y1, h - 0.06], 'wall', 'muret', ['bottom']);
+  const tag = `muret:${id}:${a0.toFixed(2)}`;
+  segmentedBox(mesh, [x0, y0, 0], [x1, y1, h - 0.06], 'wall', tag, null);
   const o = 0.035;
-  mesh.box([x0 - o, y0 - o, h - 0.06], [x1 + o, y1 + o, h], 'trim', 'muret', ['bottom']);
+  segmentedBox(mesh, [x0 - o, y0 - o, h - 0.06], [x1 + o, y1 + o, h], 'trim', `${tag}:cap`, null);
 }
 
 /**
@@ -131,6 +132,41 @@ function gate(mesh, a0, a1, c0, c1, h, horiz, slide, id) {
   if (slide) {
     // Ground guide rail, and the tail the leaf slides back onto.
     at(a0 - span * 0.55, a1, c0 + 0.02, c1 - 0.02, 0, 0.05, 'garageLine');
+  }
+}
+
+/**
+ * A long box, emitted in segments.
+ *
+ * A hedge or a garden wall can run twenty metres. Merged into one face it
+ * carries a single centroid, hence a single depth, so the whole run sorts
+ * either in front of the house or behind it — never partly each, which is
+ * exactly what a long run needs. Segments each get their own depth; the faces
+ * they share are skipped so no wall appears inside the run.
+ */
+function segmentedBox(mesh, min, max, mat, group, anchor, target = 2.5) {
+  const horiz = (max[0] - min[0]) >= (max[1] - min[1]);
+  const len = horiz ? max[0] - min[0] : max[1] - min[1];
+  const n = Math.max(1, Math.round(len / target));
+  // Segments overlap by a hair. Two polygons sharing an edge always leave a
+  // seam: each is anti-aliased against the background there, and the two half
+  // coverages do not add up to one. Overlapping puts the nearer segment's
+  // solid fill over the joint instead.
+  const ov = 0.05;
+  for (let k = 0; k < n; k++) {
+    const a = (len * k) / n;
+    const b = (len * (k + 1)) / n + (k < n - 1 ? ov : 0);
+    const lo = horiz ? [min[0] + a, min[1], min[2]] : [min[0], min[1] + a, min[2]];
+    const hi = horiz ? [min[0] + b, max[1], max[2]] : [max[0], min[1] + b, max[2]];
+    const skip = ['bottom'];
+    if (horiz) {
+      if (k > 0) skip.push('x-');
+      if (k < n - 1) skip.push('x+');
+    } else {
+      if (k > 0) skip.push('y-');
+      if (k < n - 1) skip.push('y+');
+    }
+    mesh.box(lo, hi, mat, `${group}:${k}`, skip, anchor);
   }
 }
 
@@ -200,7 +236,8 @@ export function buildProps(mesh, m) {
       }
       case 'hedge': {
         const h = p.h ?? 0.8;
-        mesh.box([p.x, p.y, 0], [p.x + p.w, p.y + p.d, h], 'foliageDark', 'hedge', ['bottom'], anchor);
+        segmentedBox(mesh, [p.x, p.y, 0], [p.x + p.w, p.y + p.d, h],
+          'foliageDark', `hedge:${p.id}`, anchor);
         break;
       }
       case 'fence': {
@@ -217,8 +254,12 @@ export function buildProps(mesh, m) {
         }
         for (const zr of [0.45, 0.8]) {
           const z = h * zr;
-          if (horizontal) mesh.box([p.x, p.y - t / 2, z - 0.06], [p.x + p.w, p.y + t / 2, z + 0.06], 'fence', 'fence', [], anchor);
-          else mesh.box([p.x - t / 2, p.y, z - 0.06], [p.x + t / 2, p.y + p.d, z + 0.06], 'fence', 'fence', [], anchor);
+          const tag = `fence:${p.id}:${zr}`;
+          if (horizontal) {
+            segmentedBox(mesh, [p.x, p.y - t / 2, z - 0.06], [p.x + p.w, p.y + t / 2, z + 0.06], 'fence', tag, anchor);
+          } else {
+            segmentedBox(mesh, [p.x - t / 2, p.y, z - 0.06], [p.x + t / 2, p.y + p.d, z + 0.06], 'fence', tag, anchor);
+          }
         }
         break;
       }
@@ -240,10 +281,10 @@ export function buildProps(mesh, m) {
         cuts.sort((u, v) => u[0] - v[0]);
         let cur = e.a0;
         for (const [s0, s1] of cuts) {
-          muretRun(mesh, cur, Math.max(cur, s0), e.c0, e.c1, h, horiz);
+          muretRun(mesh, cur, Math.max(cur, s0), e.c0, e.c1, h, horiz, p.id);
           cur = Math.max(cur, s1);
         }
-        muretRun(mesh, cur, e.a1, e.c0, e.c1, h, horiz);
+        muretRun(mesh, cur, e.a1, e.c0, e.c1, h, horiz, p.id);
         break;
       }
       case 'gate': {
