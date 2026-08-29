@@ -1348,6 +1348,83 @@ check('un extérieur peut se poser directement sur le rendu', () => {
   return s.model.props.length === before + 1 || 'aucun arbre posé';
 });
 
+/** A viewport in the test stage, with its hit layer drawn. */
+function stageViewport() {
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  div.style.cssText = 'width:440px;height:400px';
+  document.getElementById('stage').appendChild(div);
+  const vp = new Viewport(div, s);
+  s.setTool('select');
+  vp.render();
+  return { s, div, vp };
+}
+
+/** Press, move, release — on `target`, so the pick layer is exercised. */
+function dragOn(target, div, id, dx, dy = 0) {
+  const r = div.getBoundingClientRect();
+  const at = (ox, type) => target.dispatchEvent(new PointerEvent(type, {
+    clientX: r.left + 120 + ox, clientY: r.top + 140 + (ox ? dy : 0),
+    bubbles: true, pointerId: id, isPrimary: true, button: 0,
+  }));
+  at(0, 'pointerdown'); at(dx, 'pointermove'); at(dx, 'pointerup');
+}
+
+check('glisser sur la maison elle-même la fait tourner', () => {
+  // Reported in use: both modes appeared to do the same thing, because both
+  // did nothing. Grabbing the house — the obvious way to turn it — was read
+  // as a selection and stopped there; only the background navigated.
+  const { s, div, vp } = stageViewport();
+  const target = div.querySelector('.hit-layer [data-pick]');
+  if (!target) return 'aucune cible de sélection dans le rendu';
+  const yaw0 = s.model.camera.yaw;
+  dragOn(target, div, 61, 70);
+  if (s.model.camera.yaw === yaw0) return 'la maison n’a pas tourné';
+  // Twice in a row: each press starts from the camera as it stands, and a
+  // gesture that only works once is worse than one that never works.
+  const yaw1 = s.model.camera.yaw;
+  dragOn(target, div, 611, -40);
+  if (s.model.camera.yaw === yaw1) return 'le deuxième glisser n’a rien fait';
+  // And the same grab in the other mode slides the picture instead.
+  vp.setDragMode('pan');
+  const yaw2 = s.model.camera.yaw;
+  const pan0 = vp.pan[0];
+  dragOn(target, div, 62, 70);
+  if (s.model.camera.yaw !== yaw2) return 'le mode déplacement a fait tourner';
+  return vp.pan[0] !== pan0 || 'le mode déplacement n’a rien déplacé';
+});
+
+check('un clic sans mouvement sélectionne toujours', () => {
+  // The other half of the bargain: the press only becomes a gesture once the
+  // pointer has actually travelled.
+  const { s, div } = stageViewport();
+  const target = div.querySelector('.hit-layer [data-pick="prop"]');
+  if (!target) return 'aucun extérieur à sélectionner';
+  const yaw0 = s.model.camera.yaw;
+  dragOn(target, div, 63, 2);
+  if (s.model.camera.yaw !== yaw0) return 'un simple clic a fait tourner la maison';
+  return (s.selection?.type === 'prop' && s.selection.id === target.dataset.id)
+    || `sélection : ${JSON.stringify(s.selection)}`;
+});
+
+check('cliquer un mur dans le rendu choisit son corps', () => {
+  const { s, div } = stageViewport();
+  const target = div.querySelector('.hit-layer [data-pick="wall"]');
+  if (!target) return 'aucun mur dans la couche de sélection';
+  dragOn(target, div, 64, 1);
+  if (s.selection?.type !== 'building') return `sélection : ${JSON.stringify(s.selection)}`;
+  return s.activeBuildingId === target.dataset.building || 'le corps actif n’a pas suivi';
+});
+
+check('un clic dans le vide désélectionne', () => {
+  const { s, div } = stageViewport();
+  const prop = div.querySelector('.hit-layer [data-pick="prop"]');
+  dragOn(prop, div, 65, 1);
+  if (!s.selection) return 'rien n’a été sélectionné au départ';
+  dragOn(div, div, 66, 1);
+  return s.selection === null || `sélection restante : ${JSON.stringify(s.selection)}`;
+});
+
 check('le pavé de navigation tourne, incline et zoome', () => {
   // The gestures already did all of this; what the buttons add is that anyone
   // can find it. They drive the same code, so this checks the code they drive.
@@ -2156,6 +2233,12 @@ await checkAsync('la page s’amorce avec ses outils et un rendu visible', async
   if (padBox.bottom > bodyBox.bottom + 1 || padBox.right > bodyBox.right + 1) {
     return 'le pavé de navigation déborde du rendu';
   }
+  // The arrows do what the mode says they do.
+  const arrow = nav.querySelector('.nav-pad [data-dir="up"]');
+  const orbitTitle = arrow.title;
+  nav.querySelector('.nav-modes button[data-mode="pan"]').click();
+  if (arrow.title === orbitTitle) return 'les flèches ne suivent pas le mode';
+  nav.querySelector('.nav-modes button[data-mode="orbit"]').click();
   const groups = [...doc.querySelectorAll('details.tool-group')];
   if (groups.length < 4) return `${groups.length} familles d’outils repliables`;
   if (!groups.some((g) => !g.open)) return 'aucune famille repliée au démarrage';

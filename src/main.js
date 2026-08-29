@@ -59,7 +59,7 @@ const TOOL_GROUPS = [
 ];
 
 const HINTS = {
-  select: 'Cliquez un élément pour le régler, glissez pour le déplacer — une ouverture coulisse le long des murs. Dans le rendu, le pavé en bas à droite fait tourner, incliner et zoomer ; Alt + glisser incline l’image.',
+  select: 'Cliquez un élément pour le régler, glissez pour le déplacer — une ouverture coulisse le long des murs. Dans le rendu, glisser fait tourner la maison où qu’on la prenne ; le pavé en bas à droite fait de même, et bascule entre pivoter et déplacer.',
   paint: 'Dessinez l’emprise de la maison. Alt efface.',
   rect: 'Glissez pour ajouter un volume rectangulaire. Alt retire.',
   erase: 'Glissez pour retirer des cases.',
@@ -184,6 +184,50 @@ const ICON = {
 
 const YAW_STEP = 15;
 const PITCH_STEP = 6;
+const PAN_STEP = 40;
+
+/*
+ * The arrows do whatever the mode says, which is the point of having a mode:
+ * turn the house around in « pivoter », slide the picture in « déplacer ».
+ */
+const NUDGE = {
+  up: () => (viewport.dragMode === 'pan' ? viewport.panBy(0, -PAN_STEP) : viewport.nudge(0, PITCH_STEP)),
+  down: () => (viewport.dragMode === 'pan' ? viewport.panBy(0, PAN_STEP) : viewport.nudge(0, -PITCH_STEP)),
+  left: () => (viewport.dragMode === 'pan' ? viewport.panBy(-PAN_STEP, 0) : viewport.nudge(-YAW_STEP, 0)),
+  right: () => (viewport.dragMode === 'pan' ? viewport.panBy(PAN_STEP, 0) : viewport.nudge(YAW_STEP, 0)),
+};
+
+const NUDGE_TITLES = {
+  orbit: {
+    up: 'Monter la caméra', down: 'Descendre la caméra',
+    left: 'Tourner vers la gauche', right: 'Tourner vers la droite',
+  },
+  pan: {
+    up: 'Remonter l’image', down: 'Descendre l’image',
+    left: 'Décaler vers la gauche', right: 'Décaler vers la droite',
+  },
+};
+
+/**
+ * Press and hold to keep going.
+ *
+ * Fifteen degrees a click is a coarse way to travel a full turn. Holding runs
+ * the same step on a timer, which makes the pad usable for more than nudging —
+ * dragging is still quicker, and that is fine: the pad is what tells you the
+ * drag exists.
+ */
+function repeatable(button, run) {
+  let timer = null, delay = null;
+  const stop = () => { clearTimeout(delay); clearInterval(timer); timer = delay = null; };
+  button.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    run();
+    delay = setTimeout(() => { timer = setInterval(run, 90); }, 320);
+  });
+  for (const type of ['pointerup', 'pointerleave', 'pointercancel']) {
+    button.addEventListener(type, stop);
+  }
+}
 
 function buildNav() {
   const root = $('view-nav');
@@ -209,19 +253,19 @@ function buildNav() {
     b.innerHTML = icon(glyph);
     b.title = label;
     b.setAttribute('aria-label', label);
-    b.addEventListener('click', onClick);
+    if (onClick) b.addEventListener('click', onClick);
     return b;
   };
 
   const pad = document.createElement('div');
   pad.className = 'nav-pad';
-  pad.append(
-    btn('nav-up', 'arrow', 'Monter la caméra', () => viewport.nudge(0, PITCH_STEP)),
-    btn('nav-left', 'arrow', 'Tourner vers la gauche', () => viewport.nudge(-YAW_STEP, 0)),
-    btn('nav-fit', 'fit', 'Recadrer', () => viewport.resetView()),
-    btn('nav-right', 'arrow', 'Tourner vers la droite', () => viewport.nudge(YAW_STEP, 0)),
-    btn('nav-down', 'arrow', 'Descendre la caméra', () => viewport.nudge(0, -PITCH_STEP)),
-  );
+  for (const dir of ['up', 'left', 'right', 'down']) {
+    const b = btn(`nav-${dir}`, 'arrow', NUDGE_TITLES.orbit[dir], null);
+    b.dataset.dir = dir;
+    repeatable(b, NUDGE[dir]);
+    pad.appendChild(b);
+  }
+  pad.appendChild(btn('nav-fit', 'fit', 'Recadrer', () => viewport.resetView()));
 
   const zoom = document.createElement('div');
   zoom.className = 'nav-zoom';
@@ -237,6 +281,11 @@ function buildNav() {
 function syncNav() {
   for (const b of document.querySelectorAll('.nav-modes button')) {
     b.setAttribute('aria-pressed', String(b.dataset.mode === viewport.dragMode));
+  }
+  const titles = NUDGE_TITLES[viewport.dragMode] || NUDGE_TITLES.orbit;
+  for (const b of document.querySelectorAll('.nav-pad [data-dir]')) {
+    b.title = titles[b.dataset.dir];
+    b.setAttribute('aria-label', titles[b.dataset.dir]);
   }
 }
 viewport.onModeChange = syncNav;

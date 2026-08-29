@@ -153,9 +153,9 @@ Trois colonnes, trois rôles, et rien qui les mélange :
   juger et exporter. Le **pavé de navigation**, en bas à droite du rendu, donne
   un bouton pour chacun des gestes que la souris sait faire : tourner autour de
   la maison, monter ou descendre la caméra, zoomer, recadrer, et choisir ce que
-  fait un simple glisser — pivoter ou déplacer. Les gestes restent plus
-  rapides, mais un geste dont personne ne sait qu'il existe n'est une
-  fonctionnalité pour personne.
+  fait un simple glisser — pivoter ou déplacer, les flèches suivant ce choix.
+  Les gestes restent plus rapides, mais un geste dont personne ne sait qu'il
+  existe n'est une fonctionnalité pour personne.
 - **À droite, régler.** Quatre familles dans l'ordre où le travail se fait :
   *Sélection* (ce qu'on vient de cliquer), *Bâtiment* (le corps en cours, sa
   toiture, ses matières), *Projet* (palette, couleurs, terrain), *Vue et
@@ -209,11 +209,19 @@ Raccourcis : `Ctrl+Z` / `Ctrl+Maj+Z` annuler et rétablir, `Ctrl+D` dupliquer la
 sélection, `[` et `]` tourner d'un quart de tour, `Suppr` supprimer, `Échap`
 désélectionner.
 
-Dans le rendu, **glisser fait pivoter** la maison, `Maj` + glisser la déplace,
-`Alt` + glisser **incline l'image**, la molette zoome autour du curseur et le
-pincement à deux doigts fonctionne sur écran tactile — quel que soit l'outil
-actif. Le bouton *Déplacer* du pavé échange ce que font glisser et `Maj` +
-glisser, pour se passer de modificateur.
+Dans le rendu, **glisser fait pivoter** la maison — où qu'on la prenne, sur le
+fond comme sur le toit. `Maj` + glisser la déplace, `Alt` + glisser **incline
+l'image**, la molette zoome autour du curseur et le pincement à deux doigts
+fonctionne sur écran tactile — quel que soit l'outil actif. Le bouton
+*Déplacer* du pavé échange ce que font glisser et `Maj` + glisser, pour se
+passer de modificateur, et les quatre flèches suivent le mode : elles tournent
+la maison en *Pivoter*, décalent l'image en *Déplacer*. Les maintenir enfoncées
+répète le pas.
+
+Un appui sur le modèle reste ambigu jusqu'à ce que le pointeur bouge ou ne
+bouge pas : au-delà de quelques pixels c'est une navigation, sinon c'est une
+sélection. Sans cela, attraper la maison — le geste évident pour la tourner —
+ne faisait rien du tout.
 
 Sur les trois rotations : les deux premières déplacent la caméra autour de la
 maison, la troisième tourne le dessin fini dans son cadre. Ce sont les seules

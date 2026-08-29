@@ -16,6 +16,8 @@ import { OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, placeOpening, placeProp
 const ORBIT_YAW = 0.4;
 const ORBIT_PITCH = 0.3;
 const ROLL_PER_PX = 0.2;
+/** Pixels of travel before a press stops being a click and becomes a gesture. */
+const DRAG_SLOP = 4;
 
 /**
  * What the built mesh depends on. Everything here is replaced by reference
@@ -27,6 +29,22 @@ const geometryOf = (m) => [
 ];
 
 const sameSig = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+/**
+ * What a click on a pick target selects.
+ *
+ * A wall and a roof both stand for the volume they belong to — clicking either
+ * in the render picks that body, which is what the plan already does when a
+ * footprint is clicked.
+ */
+function pickTarget(pick, data) {
+  if (!pick) return null;
+  if (pick === 'wall' || pick === 'building') {
+    const id = data.building || data.id;
+    return id ? { type: 'building', id } : null;
+  }
+  return { type: pick, id: data.id };
+}
 
 export class Viewport {
   constructor(root, store) {
@@ -155,39 +173,36 @@ export class Viewport {
         return;
       }
 
-      // Alt tilts the picture in its frame — the third rotation, and the one
-      // nobody reaches for by accident.
-      if (ev.altKey && !pick) {
-        this.drag = { mode: 'roll', from: [ev.clientX, ev.clientY], camera: { ...s.model.camera } };
-        this.root.setPointerCapture?.(ev.pointerId);
+      // A tool that acts on a wall acts at once: it is a click, not a gesture.
+      if (pick === 'wall' && OPENING_DEFAULTS[tool]) {
+        this.addOpening(tool, ev.target.dataset.edge, Number(ev.target.dataset.storey), ev);
         return;
       }
-      // The middle button always pans. Shift gives whichever of orbit and pan
-      // the current mode is not, so both are one gesture away either way.
+
+      /*
+       * From here the press is ambiguous, and stays that way until the pointer
+       * either moves or does not.
+       *
+       * It used to be settled immediately: a press on the house selected, a
+       * press on the background navigated. Which meant that grabbing the house
+       * — the obvious thing to do when you want to turn it — did nothing at
+       * all, in either mode. The two modes then felt identical, because both
+       * of them did nothing. Reported in use, and rightly.
+       *
+       * So the press starts a gesture whatever it lands on, and the release
+       * decides: moved, it was navigation; still, it was a selection.
+       */
       const wantPan = ev.button === 1 || ((this.dragMode === 'pan') !== ev.shiftKey);
-      if (wantPan && (ev.button === 1 || ev.shiftKey || !pick)) {
-        this.drag = { mode: 'pan', from: [ev.clientX, ev.clientY], pan: [...this.pan] };
-        this.root.setPointerCapture?.(ev.pointerId);
-        if (!pick) s.select(null);
-        return;
-      }
-      if (!pick) {
-        this.drag = {
-          mode: 'orbit',
-          from: [ev.clientX, ev.clientY],
-          camera: { ...s.model.camera },
-        };
-        this.root.setPointerCapture?.(ev.pointerId);
-        s.select(null);
-        return;
-      }
-      if (pick === 'wall') {
-        if (OPENING_DEFAULTS[tool]) {
-          this.addOpening(tool, ev.target.dataset.edge, Number(ev.target.dataset.storey), ev);
-        }
-        return;
-      }
-      s.select({ type: pick, id: ev.target.dataset.id });
+      const mode = ev.altKey ? 'roll' : (wantPan ? 'pan' : 'orbit');
+      this.drag = {
+        mode,
+        from: [ev.clientX, ev.clientY],
+        pan: [...this.pan],
+        camera: { ...s.model.camera },
+        pick: pickTarget(pick, ev.target.dataset),
+        moved: false,
+      };
+      this.root.setPointerCapture?.(ev.pointerId);
     });
 
     this.root.addEventListener('pointermove', (ev) => {
@@ -196,6 +211,13 @@ export class Viewport {
       if (!this.drag) return;
       const dx = ev.clientX - this.drag.from[0];
       const dy = ev.clientY - this.drag.from[1];
+      // Below the threshold the press is still a click in waiting: a hand that
+      // wobbles by a pixel on the way to selecting a window should select it,
+      // not swing the camera a degree.
+      if (!this.drag.moved) {
+        if (Math.hypot(dx, dy) < DRAG_SLOP) return;
+        this.drag.moved = true;
+      }
       if (this.drag.mode === 'roll') {
         this.store.update((mm) => ({
           ...mm,
@@ -232,7 +254,14 @@ export class Viewport {
         this.pointers.delete(ev.pointerId);
         if (this.pointers.size < 2) this.pinch = null;
       }
-      if (this.drag?.mode === 'orbit' || this.drag?.mode === 'roll') this.store.commit();
+      if (this.drag && !this.drag.moved) {
+        // It was a click after all.
+        const sel = this.drag.pick;
+        if (sel?.type === 'building') this.store.setActiveBuilding(sel.id);
+        this.store.select(sel);
+      } else if (this.drag?.mode === 'orbit' || this.drag?.mode === 'roll') {
+        this.store.commit();
+      }
       this.drag = null;
     };
     this.root.addEventListener('pointerup', end);
@@ -331,7 +360,13 @@ export class Viewport {
         yaw: normaliseYaw(m.camera.yaw + dYaw),
         pitch: clampPitch(m.camera.pitch + dPitch),
       },
-    }));
+    }), { coalesce: 'orbit' });
+  }
+
+  /** Slide the view, as the pad's arrows do in « déplacer » mode. */
+  panBy(dx, dy) {
+    this.pan = [this.pan[0] + dx / this.zoom, this.pan[1] + dy / this.zoom];
+    this.render();
   }
 
   /** Zoom about the middle of the panel, as the buttons do. */
