@@ -219,7 +219,8 @@ export function textureTiles(face, spec, scale, fill, minPx = 1.7) {
 
 /** Which texture setting, if any, applies to a material. */
 export function specFor(mat, texture) {
-  if (mat === 'roof') return ROOF_TEXTURES[texture?.roof] || null;
-  if (mat === 'wall') return WALL_TEXTURES[texture?.wall] || null;
+  const base = mat.includes('#') ? mat.slice(0, mat.indexOf('#')) : mat;
+  if (base === 'roof') return ROOF_TEXTURES[texture?.roof] || null;
+  if (base === 'wall') return WALL_TEXTURES[texture?.wall] || null;
   return null;
 }

@@ -156,6 +156,35 @@ export function decomposeRects(cells) {
   return chosen;
 }
 
+/**
+ * Split a cell set into its connected parts (4-neighbourhood).
+ *
+ * Used when migrating a single painted footprint into separate buildings: a
+ * shed drawn away from the house is already a distinct volume, it simply had
+ * no way of saying so.
+ */
+export function connectedComponents(cells) {
+  const seen = new Set();
+  const parts = [];
+  for (const start of cells) {
+    if (seen.has(start)) continue;
+    const stack = [start];
+    const part = [];
+    seen.add(start);
+    while (stack.length) {
+      const c = stack.pop();
+      part.push(c);
+      const [i, j] = parseKey(c);
+      for (const n of [key(i + 1, j), key(i - 1, j), key(i, j + 1), key(i, j - 1)]) {
+        if (cells.has(n) && !seen.has(n)) { seen.add(n); stack.push(n); }
+      }
+    }
+    parts.push(part.sort());
+  }
+  parts.sort((a, b) => b.length - a.length);
+  return parts;
+}
+
 /** Rectangle of cells, inclusive, as a Set of keys. */
 export function rectCells(i0, j0, i1, j1) {
   const out = new Set();

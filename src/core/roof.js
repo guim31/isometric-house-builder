@@ -89,7 +89,7 @@ export function heightField(rects, opts) {
  * 'roofEdge' for the fascia band around the rim, and 'wall' for gable ends,
  * which is what the vertical part of a gable actually is.
  */
-export function buildRoof(mesh, field, opts, wallTop) {
+export function buildRoof(mesh, field, opts, wallTop, mat = (n) => n) {
   if (!field) return null;
   const fascia = opts.fascia ?? 0.18;
   const { x0, y0, x1, y1 } = field.bbox;
@@ -127,11 +127,11 @@ export function buildRoof(mesh, field, opts, wallTop) {
       const dA = Math.abs((p00[2] + p11[2]) / 2 - centre);
       const dB = Math.abs((p10[2] + p01[2]) / 2 - centre);
       if (dA <= dB) {
-        mesh.tri(p00, p10, p11, 'roof', 'roof');
-        mesh.tri(p00, p11, p01, 'roof', 'roof');
+        mesh.tri(p00, p10, p11, mat('roof'), 'roof');
+        mesh.tri(p00, p11, p01, mat('roof'), 'roof');
       } else {
-        mesh.tri(p00, p10, p01, 'roof', 'roof');
-        mesh.tri(p10, p11, p01, 'roof', 'roof');
+        mesh.tri(p00, p10, p01, mat('roof'), 'roof');
+        mesh.tri(p10, p11, p01, mat('roof'), 'roof');
       }
 
       // Rim: the fascia band only. Anything vertical below it is wall, and
@@ -149,7 +149,7 @@ export function buildRoof(mesh, field, opts, wallTop) {
         mesh.quad(
           [e.a[0], e.a[1], botA], [e.b[0], e.b[1], botB],
           [e.b[0], e.b[1], topB], [e.a[0], e.a[1], topA],
-          'roofEdge', 'roofEdge',
+          mat('roofEdge'), 'roofEdge',
         );
       }
     }

@@ -6,7 +6,7 @@
  * references.
  */
 
-import { normalise, newId } from '../core/model.js';
+import { normalise, newId, makeBuilding } from '../core/model.js';
 import { saveLocal } from '../io/project.js';
 
 const HISTORY_LIMIT = 80;
@@ -21,6 +21,7 @@ export class Store {
     this.listeners = new Set();
     this.saveTimer = null;
     this.lastEditAt = 0;
+    this.activeId = null;
   }
 
   subscribe(fn) {
@@ -100,6 +101,66 @@ export class Store {
     this.tool = tool;
     if (tool !== 'select') this.selection = null;
     this.emit('tool');
+  }
+
+  /**
+   * The building being edited. Painting goes into it, and the inspector shows
+   * its roof. Falls back to the first volume so there is always a target.
+   */
+  get activeBuildingId() {
+    const ids = this.model.buildings.map((b) => b.id);
+    return ids.includes(this.activeId) ? this.activeId : ids[0];
+  }
+
+  get activeBuilding() {
+    return this.model.buildings.find((b) => b.id === this.activeBuildingId) || null;
+  }
+
+  setActiveBuilding(id) {
+    if (this.activeId === id) return;
+    this.activeId = id;
+    this.emit('selection');
+  }
+
+  /** Patch the active building. */
+  patchBuilding(patch, coalesce) {
+    const id = this.activeBuildingId;
+    this.update((m) => ({
+      ...m,
+      buildings: m.buildings.map((b) => (b.id === id ? { ...b, ...patch } : b)),
+    }), { coalesce });
+  }
+
+  /** Patch the active building's roof. */
+  patchRoof(patch, coalesce) {
+    const id = this.activeBuildingId;
+    this.update((m) => ({
+      ...m,
+      buildings: m.buildings.map((b) => (b.id === id ? { ...b, roof: { ...b.roof, ...patch } } : b)),
+    }), { coalesce });
+  }
+
+  /** Add an empty volume and make it the one being painted into. */
+  addBuilding() {
+    const b = makeBuilding({ name: `Bâtiment ${this.model.buildings.length + 1}` });
+    this.update((m) => ({ ...m, buildings: [...m.buildings, b] }));
+    this.activeId = b.id;
+    this.emit('selection');
+    return b.id;
+  }
+
+  /** Remove a volume, along with the openings that lived on its walls. */
+  removeBuilding(id) {
+    if (this.model.buildings.length <= 1) return;
+    const gone = this.model.buildings.find((b) => b.id === id);
+    const cells = new Set(gone ? gone.cells : []);
+    this.update((m) => ({
+      ...m,
+      buildings: m.buildings.filter((b) => b.id !== id),
+      openings: m.openings.filter((o) => !cells.has(o.edge.split(',').slice(0, 2).join(','))),
+    }));
+    this.activeId = null;
+    this.emit('selection');
   }
 
   /** The currently selected item, or null. */

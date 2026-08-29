@@ -10,8 +10,7 @@
 
 import { boundaryEdges, parseKey } from '../core/grid.js';
 import { cellSet, wallTop, cellSizeOf } from '../core/model.js';
-import { heightField } from '../core/roof.js';
-import { decomposeRects } from '../core/grid.js';
+
 
 function quadPath(camera, pts) {
   return pts.map((p, i) => {
@@ -32,38 +31,43 @@ const depthOf = (camera, pts) =>
  */
 export function hitLayer(model, camera, built = null) {
   const cs = cellSizeOf(model);
-  const cells = cellSet(model);
-  const edges = built?.edges ?? boundaryEdges(cells);
-  const field = built ? (built.roof?.field ?? null) : (() => {
-    const rects = decomposeRects(cells).map((r) => ({
-      x0: r.x0 * cs, y0: r.y0 * cs, x1: r.x1 * cs, y1: r.y1 * cs,
-    }));
-    return rects.length ? heightField(rects, model.roof) : null;
-  })();
-  const top = wallTop(model);
   const targets = [];
-
   const add = (pts, attrs) => targets.push({ d: quadPath(camera, pts), attrs, depth: depthOf(camera, pts) });
 
-  // Wall segments, one per exterior edge and storey.
-  for (const e of edges) {
-    const a = [e.a[0] * cs, e.a[1] * cs];
-    const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
-    const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
-    const p = (s, z) => [a[0] + u[0] * s, a[1] + u[1] * s, z];
-    for (let st = 0; st < model.storeys; st++) {
-      const z0 = model.plinth + st * model.storeyHeight;
-      const z1 = z0 + model.storeyHeight;
-      add([p(0, z0), p(len, z0), p(len, z1), p(0, z1)],
-        { 'data-pick': 'wall', 'data-edge': e.id, 'data-storey': String(st) });
+  // Wall segments, one per exterior edge and storey — per building, since
+  // heights and roofs now differ from one volume to the next.
+  const allEdges = [];
+  for (const b of model.buildings) {
+    const cells = new Set(b.cells);
+    if (!cells.size) continue;
+    const part = built?.parts?.find((p) => p.building.id === b.id);
+    const edges = part ? part.edges : boundaryEdges(cells);
+    const top = wallTop(b);
+    for (const e of edges) {
+      allEdges.push(e);
+      const a = [e.a[0] * cs, e.a[1] * cs];
+      const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
+      const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
+      const p = (s, z) => [a[0] + u[0] * s, a[1] + u[1] * s, z];
+      for (let st = 0; st < b.storeys; st++) {
+        const z0 = b.plinth + st * b.storeyHeight;
+        const z1 = z0 + b.storeyHeight;
+        add([p(0, z0), p(len, z0), p(len, z1), p(0, z1)],
+          { 'data-pick': 'wall', 'data-edge': e.id, 'data-storey': String(st), 'data-building': b.id });
+      }
+      // A roof face too, so a volume can be picked by its roof — often the
+      // only part of a small shed the eye can reach.
+      add([p(0, top), p(len, top), p(len, top + 0.02), p(0, top + 0.02)],
+        { 'data-pick': 'building', 'data-id': b.id });
     }
   }
 
   // Openings sit slightly proud of their wall so they win the hit test.
-  const edgeById = new Map(edges.map((e) => [e.id, e]));
+  const edgeById = new Map(allEdges.map((e) => [e.id, e]));
   for (const op of model.openings) {
     const e = edgeById.get(op.edge);
-    if (!e) continue;
+    const b = model.buildings.find((bd) => bd.cells.includes(op.edge.split(',').slice(0, 2).join(',')));
+    if (!e || !b) continue;
     const a = [e.a[0] * cs, e.a[1] * cs];
     const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
     const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
@@ -71,13 +75,19 @@ export function hitLayer(model, camera, built = null) {
     const p = (s, z) => [a[0] + u[0] * s + e.n[0] * o, a[1] + u[1] * s + e.n[1] * o, z];
     const w = op.width ?? 1.2, h = op.height ?? 1.25;
     const c = op.offset ?? 0.5, sill = op.sill ?? 0.95;
-    const zb = model.plinth + (op.storey || 0) * model.storeyHeight + sill;
+    const zb = b.plinth + (op.storey || 0) * b.storeyHeight + sill;
     add([p(c - w / 2, zb), p(c + w / 2, zb), p(c + w / 2, zb + h), p(c - w / 2, zb + h)],
       { 'data-pick': 'opening', 'data-id': op.id });
   }
 
-  // Roof items, flat on the slope.
+  // Roof items, flat on the slope of whichever volume carries them.
   for (const it of model.roofItems) {
+    const cellKey = `${Math.floor(it.x / cs)},${Math.floor(it.y / cs)}`;
+    const b = model.buildings.find((bd) => bd.cells.includes(cellKey));
+    if (!b) continue;
+    const part = built?.parts?.find((p) => p.building.id === b.id);
+    const field = part ? part.field : null;
+    const top = wallTop(b);
     const w = it.w ?? 2, d = it.d ?? 1.5;
     const z = (x, y) => top + (field ? Math.max(0, field.h(x, y)) : 0) + (it.h ?? 0.2);
     const x0 = it.x - w / 2, x1 = it.x + w / 2, y0 = it.y - d / 2, y1 = it.y + d / 2;
@@ -93,7 +103,9 @@ export function hitLayer(model, camera, built = null) {
     const d = centred ? (p.r ? p.r * 2 : p.d ?? 2) : p.d ?? 2;
     const x0 = centred ? p.x - w / 2 : p.x;
     const y0 = centred ? p.y - d / 2 : p.y;
-    const z = p.kind === 'tree' ? (p.r ?? 1.4) * 1.6 : p.kind === 'bush' ? (p.r ?? 1.1) * 0.5 : p.kind === 'car' ? 0.7 : 0.06;
+    const z = p.kind === 'tree' ? (p.r ?? 1.4) * 1.6
+      : p.kind === 'bush' ? (p.r ?? 1.1) * 0.5
+        : p.kind === 'car' ? 0.7 : p.kind === 'muret' || p.kind === 'gate' ? (p.h ?? 1.5) : 0.06;
     add([[x0, y0, z], [x0 + w, y0, z], [x0 + w, y0 + d, z], [x0, y0 + d, z]],
       { 'data-pick': 'prop', 'data-id': p.id });
   }

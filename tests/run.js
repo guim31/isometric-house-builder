@@ -7,7 +7,14 @@ import { Mesh, mergeCoplanar } from '../src/core/mesh.js';
 import { decomposeRects, boundaryEdges, boundaryRuns, rectCells, key } from '../src/core/grid.js';
 import { heightField, snapOverhang, STEP } from '../src/core/roof.js';
 import { Camera, rotatePoint, project, PROJECTIONS, VIEWPOINTS, rotateDir } from '../src/core/iso.js';
-import { defaultModel, emptyModel, normalise, cellSet, wallTop, withCellSize, fmtMetres } from '../src/core/model.js';
+import {
+  defaultModel, emptyModel, normalise, cellSet, wallTop, withCellSize, fmtMetres,
+  makeBuilding, buildingOfEdge,
+} from '../src/core/model.js';
+
+/** First (or nth) volume of a model — most tests only ever have one. */
+const B = (m, i = 0) => m.buildings[i];
+const cellsOf = (m, i = 0) => m.buildings[i].cells;
 import { buildMesh } from '../src/core/scene.js';
 import { renderScene } from '../src/render/svg.js';
 import { hitLayer, screenToGround } from '../src/render/hit.js';
@@ -195,8 +202,8 @@ check('en trame 0,50 m, un mur de 10 cases mesure 5 m', () => {
   if (!near(maxX, 5, 1e-6) || !near(maxY, 3, 1e-6)) return `emprise ${maxX} × ${maxY} m`;
   // Depth 3 m at 45° → the ridge rises 1.5 m above the eaves. If cells were
   // still read as metres, the rise would be 3 m.
-  return near(built.roof.apex, wallTop(m) + 1.5, 1e-6)
-    || `faîtage à ${(built.roof.apex - wallTop(m)).toFixed(2)} m au-dessus de l'égout`;
+  return near(built.roof.apex, wallTop(B(m)) + 1.5, 1e-6)
+    || `faîtage à ${(built.roof.apex - wallTop(B(m))).toFixed(2)} m au-dessus de l'égout`;
 });
 
 check('le pinceau vise la bonne case en trame fine', () => {
@@ -206,7 +213,7 @@ check('le pinceau vise la bonne case en trame fine', () => {
   s.setTool('paint');
   view.svg.dispatchEvent(pointer(view, 7.3, 7.2, 'pointerdown'));
   view.svg.dispatchEvent(pointer(view, 7.3, 7.2, 'pointerup'));
-  return s.model.cells.includes('14,14') || `cases : ${JSON.stringify(s.model.cells)}`;
+  return cellsOf(s.model).includes('14,14') || `cases : ${JSON.stringify(cellsOf(s.model))}`;
 });
 
 check('affiner la trame préserve la maison et ses ouvertures', () => {
@@ -219,7 +226,7 @@ check('affiner la trame préserve la maison et ses ouvertures', () => {
     ],
   });
   const fine = withCellSize(m, 0.5);
-  if (fine.cells.length !== m.cells.length * 4) return `${fine.cells.length} cases`;
+  if (cellsOf(fine).length !== cellsOf(m).length * 4) return `${cellsOf(fine).length} cases`;
   const a = fine.openings.find((o) => o.id === 'a');
   const b = fine.openings.find((o) => o.id === 'b');
   if (a.edge !== '24,20,S') return `fenêtre ré-ancrée sur ${a.edge}`;
@@ -327,14 +334,15 @@ check('un modèle vide ne fait pas planter le rendu', () => {
 
 check('plusieurs étages surélèvent bien la toiture', () => {
   const base = normalise(defaultModel());
-  const tall = normalise({ ...base, storeys: 2 });
-  return wallTop(tall) > wallTop(base) + 2;
+  const tall = normalise({ ...base, buildings: base.buildings.map((b) => ({ ...b, storeys: 2 })) });
+  return wallTop(B(tall)) > wallTop(B(base)) + 2;
 });
 
 check('le pignon monte au-dessus de la ligne de rive', () => {
-  const m = normalise({ ...defaultModel(), roof: { ...defaultModel().roof, type: 'gable' } });
+  const d = defaultModel();
+  const m = normalise({ ...d, buildings: d.buildings.map((b) => ({ ...b, roof: { ...b.roof, type: 'gable' } })) });
   const { mesh } = buildMesh(m);
-  const top = wallTop(m);
+  const top = wallTop(B(m));
   const highest = mesh.tris
     .filter((t) => t.mat === 'wall')
     .reduce((acc, t) => Math.max(acc, t.a[2], t.b[2], t.c[2]), 0);
@@ -535,7 +543,7 @@ check('chaque ouverture d’un modèle est posée sur un mur qui existe', () => 
 check('chaque objet de toiture d’un modèle repose bien sur le toit', () => {
   for (const p of PRESETS) {
     const m = normalise(p.model);
-    const field = heightField(decomposeRects(cellSet(m)), m.roof);
+    const field = heightField(decomposeRects(cellSet(m)), B(m).roof);
     for (const it of m.roofItems) {
       if (!field.inside(it.x, it.y)) return `${p.id} : ${it.kind} hors toiture en (${it.x}, ${it.y})`;
     }
@@ -557,7 +565,7 @@ check('les modèles couvrent des formes réellement différentes', () => {
   const seen = new Set();
   for (const p of PRESETS) {
     const m = normalise(p.model);
-    seen.add(`${m.roof.type}|${m.storeys}`);
+    seen.add(`${B(m).roof.type}|${B(m).storeys}`);
   }
   return seen.size >= 6 || `seulement ${seen.size} combinaisons toit/étages`;
 });
@@ -573,7 +581,145 @@ check('la galerie construit une vignette par modèle, plus la page blanche', () 
   if (cards.length !== PRESETS.length + 1) return `${cards.length} cartes`;
   if (!dialog.querySelector('.gallery-thumb svg')) return 'vignette sans rendu';
   cards[0].click();
-  return (picked && picked.cells.length > 0) || 'le choix ne renvoie aucun modèle';
+  return (picked && cellsOf(picked).length > 0) || 'le choix ne renvoie aucun modèle';
+});
+
+/* ---------------- separate building volumes ---------------- */
+
+check('un ancien fichier se scinde en corps distincts', () => {
+  // The house and a shed drawn away from it were always two volumes; the old
+  // shape simply had no way of saying so. Opening such a file separates them,
+  // so the shed can be re-roofed without touching the house.
+  const legacy = {
+    cells: [...rectCells(10, 10, 15, 14), ...rectCells(24, 10, 26, 12)],
+    storeys: 2, storeyHeight: 2.5,
+    roof: { type: 'gable', pitch: 40 },
+  };
+  const m = normalise(legacy);
+  if (m.buildings.length !== 2) return `${m.buildings.length} corps`;
+  const [house, shed] = m.buildings;
+  if (house.cells.length <= shed.cells.length) return 'le plus grand volume n’est pas le premier';
+  // Each inherits the old settings, then goes its own way.
+  for (const b of m.buildings) {
+    if (b.roof.type !== 'gable' || b.storeys !== 2 || b.storeyHeight !== 2.5) {
+      return `${b.name} n’a pas hérité des réglages`;
+    }
+  }
+  return house.id !== shed.id || 'identifiants confondus';
+});
+
+check('une emprise d’un seul tenant reste un seul corps', () => {
+  const m = normalise({ cells: [...rectCells(10, 10, 20, 16)] });
+  return m.buildings.length === 1 || `${m.buildings.length} corps`;
+});
+
+check('changer le toit d’un corps ne touche pas l’autre', () => {
+  // The whole point of the request: a flat-roofed shed beside a hipped house.
+  const m = normalise({
+    buildings: [
+      makeBuilding({ id: 'maison', cells: [...rectCells(10, 10, 16, 15)] }),
+      makeBuilding({ id: 'abri', cells: [...rectCells(22, 10, 25, 13)], storeyHeight: 2.2 }),
+    ],
+  });
+  const changed = {
+    ...m,
+    buildings: m.buildings.map((b) => (b.id === 'abri'
+      ? { ...b, roof: { ...b.roof, type: 'flat' } } : b)),
+  };
+  const apexOf = (model, id) => {
+    const part = buildMesh(normalise(model)).parts.find((p) => p.building.id === id);
+    return part.roof.apex - part.top;
+  };
+  if (apexOf(m, 'abri') < 0.5) return 'le toit initial de l’abri n’a pas de pente';
+  if (apexOf(changed, 'abri') > 0.01) return 'le toit de l’abri n’est pas devenu plat';
+  return near(apexOf(m, 'maison'), apexOf(changed, 'maison'), 1e-9)
+    || 'le toit de la maison a bougé avec celui de l’abri';
+});
+
+check('un corps peut avoir ses propres couleurs', () => {
+  const m = normalise({
+    buildings: [
+      makeBuilding({ id: 'maison', cells: [...rectCells(10, 10, 16, 15)] }),
+      makeBuilding({ id: 'abri', cells: [...rectCells(22, 10, 25, 13)], overrides: { wall: '#ffffff' } }),
+    ],
+  });
+  const out = renderScene(m, { width: 600, height: 420 });
+  const mats = new Set(out.faces.map((f) => f.mat));
+  if (!mats.has('wall#abri')) return 'le corps recoloré ne porte pas son propre matériau';
+  if (!mats.has('wall')) return 'l’autre corps a perdu le matériau commun';
+  const shed = out.faces.find((f) => f.mat === 'wall#abri');
+  const house = out.faces.find((f) => f.mat === 'wall');
+  return shed.fill !== house.fill || 'les deux corps rendent la même couleur';
+});
+
+check('un corps peut porter ses propres matières', () => {
+  // A timber shed should not be roofed in the house's canal tiles.
+  const m = normalise({
+    texture: { roof: 'canal', wall: 'none' },
+    buildings: [
+      makeBuilding({ id: 'maison', cells: [...rectCells(10, 10, 18, 16)] }),
+      makeBuilding({
+        id: 'abri', cells: [...rectCells(24, 10, 28, 14)],
+        roof: { type: 'flat', pitch: 5, overhang: 0.25, fascia: 0.12, shedDir: 'S' },
+        texture: { roof: 'none', wall: 'siding' },
+      }),
+    ],
+  });
+  const out = renderScene(m, { width: 900, height: 640 });
+  const tiles = (svgOf) => (svgOf.match(/Z/g) || []).length;
+  // The house is tiled; the shed's own flat material must produce none.
+  const houseRoof = out.faces.filter((f) => f.mat === 'roof');
+  const shedRoof = out.faces.filter((f) => f.mat === 'roof#abri');
+  if (!houseRoof.length) return 'toiture de la maison absente';
+  if (!shedRoof.length) return 'l’abri ne porte pas ses propres matériaux';
+  if (!specFor('roof', m.texture)) return 'la matière du modèle ne se résout plus';
+  // Without a per-building texture the shed would inherit the canal spec.
+  return specFor('roof#abri', m.buildings[1].texture).label === ROOF_TEXTURES.none.label
+    || 'l’abri hérite encore de la matière de la maison';
+});
+
+check('le pinceau ne peint que dans le corps actif', () => {
+  const s = new Store(normalise({
+    buildings: [
+      makeBuilding({ id: 'a', cells: [...rectCells(10, 10, 12, 12)] }),
+      makeBuilding({ id: 'b', cells: [...rectCells(20, 10, 22, 12)] }),
+    ],
+  }));
+  const view = new PlanView(document.getElementById('plan'), s);
+  s.setActiveBuilding('b');
+  s.setTool('paint');
+  view.render();
+  view.svg.dispatchEvent(pointer(view, 23.5, 11.5, 'pointerdown'));
+  view.svg.dispatchEvent(pointer(view, 23.5, 11.5, 'pointerup'));
+  const a = s.model.buildings.find((x) => x.id === 'a');
+  const b = s.model.buildings.find((x) => x.id === 'b');
+  if (!b.cells.includes('23,11')) return 'la case n’a pas été ajoutée au corps actif';
+  return a.cells.length === 9 || 'le corps inactif a été modifié';
+});
+
+check('supprimer un corps emporte ses ouvertures', () => {
+  const s = new Store(normalise({
+    buildings: [
+      makeBuilding({ id: 'a', cells: [...rectCells(10, 10, 14, 13)] }),
+      makeBuilding({ id: 'b', cells: [...rectCells(20, 10, 23, 13)] }),
+    ],
+    openings: [
+      { id: 'oa', edge: '12,10,S', storey: 0, kind: 'window', offset: 0.5, width: 1, height: 1, sill: 1 },
+      { id: 'ob', edge: '21,10,S', storey: 0, kind: 'window', offset: 0.5, width: 1, height: 1, sill: 1 },
+    ],
+  }));
+  if (buildingOfEdge(s.model, '21,10,S').id !== 'b') return 'ouverture rattachée au mauvais corps';
+  s.removeBuilding('b');
+  if (s.model.buildings.length !== 1) return 'corps non supprimé';
+  const ids = s.model.openings.map((o) => o.id);
+  return (ids.includes('oa') && !ids.includes('ob'))
+    || `ouvertures restantes : ${JSON.stringify(ids)}`;
+});
+
+check('le dernier corps ne peut pas être supprimé', () => {
+  const s = new Store(normalise({ cells: [...rectCells(10, 10, 14, 13)] }));
+  s.removeBuilding(s.model.buildings[0].id);
+  return s.model.buildings.length === 1 || 'le modèle s’est retrouvé sans bâtiment';
 });
 
 /* ---------------- garden wall and gates ---------------- */
@@ -821,7 +967,7 @@ check('materialColour renvoie la teinte de référence d’un matériau orienté
 
 check('normalise complète un modèle incomplet', () => {
   const m = normalise({ cells: ['1,1'], storeys: 99 });
-  return m.roof.type === 'hip' && m.storeys === 4 && Array.isArray(m.props) && m.version === 1;
+  return B(m).roof.type === 'hip' && B(m).storeys === 4 && Array.isArray(m.props) && m.version === 1;
 });
 
 check('un lien de partage refait le modèle à l’identique', () => {
@@ -832,7 +978,7 @@ check('un lien de partage refait le modèle à l’identique', () => {
   location.hash = hash;
   const back = fromShareUrl();
   location.hash = saved;
-  return (back && back.cells.length === m.cells.length && back.roof.pitch === m.roof.pitch)
+  return (back && cellsOf(back).length === cellsOf(m).length && B(back).roof.pitch === B(m).roof.pitch)
     || 'modèle non restitué';
 });
 
@@ -851,10 +997,10 @@ check('annuler et rétablir reviennent au bon état', () => {
 
 check('les modifications continues se regroupent en une seule annulation', () => {
   const s = new Store(defaultModel());
-  const n0 = s.model.storeyHeight;
-  for (const v of [2.8, 2.9, 3.0]) s.update((m) => ({ ...m, storeyHeight: v }), { coalesce: 'h' });
+  const n0 = B(s.model).storeyHeight;
+  for (const v of [2.8, 2.9, 3.0]) s.patchBuilding({ storeyHeight: v }, 'h');
   s.undo();
-  return near(s.model.storeyHeight, n0) || `revenu à ${s.model.storeyHeight}`;
+  return near(B(s.model).storeyHeight, n0) || `revenu à ${B(s.model).storeyHeight}`;
 });
 
 check('supprimer la sélection retire l’élément', () => {
@@ -881,11 +1027,11 @@ check('le pinceau ajoute une case là où on clique', () => {
   const view = new PlanView(document.getElementById('plan'), s);
   view.render();
   s.setTool('paint');
-  const before = s.model.cells.length;
+  const before = cellsOf(s.model).length;
   view.svg.dispatchEvent(pointer(view, 20.5, 20.5, 'pointerdown'));
   view.svg.dispatchEvent(pointer(view, 20.5, 20.5, 'pointerup'));
-  return (s.model.cells.length === before + 1 && s.model.cells.includes('20,20'))
-    || `cases : ${JSON.stringify(s.model.cells)}`;
+  return (cellsOf(s.model).length === before + 1 && cellsOf(s.model).includes('20,20'))
+    || `cases : ${JSON.stringify(cellsOf(s.model))}`;
 });
 
 check('l’outil rectangle remplit toute la zone tracée', () => {
@@ -896,7 +1042,7 @@ check('l’outil rectangle remplit toute la zone tracée', () => {
   view.svg.dispatchEvent(pointer(view, 10.2, 10.2, 'pointerdown'));
   view.svg.dispatchEvent(pointer(view, 13.8, 12.8, 'pointermove'));
   view.svg.dispatchEvent(pointer(view, 13.8, 12.8, 'pointerup'));
-  return s.model.cells.length === 4 * 3 || `obtenu ${s.model.cells.length} cases`;
+  return cellsOf(s.model).length === 4 * 3 || `obtenu ${cellsOf(s.model).length} cases`;
 });
 
 check('poser une fenêtre l’accroche au mur le plus proche', () => {

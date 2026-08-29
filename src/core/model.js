@@ -3,7 +3,7 @@
  * save file, the undo stack and the shareable URL all carry.
  */
 
-import { key, rectCells } from './grid.js';
+import { key, rectCells, connectedComponents } from './grid.js';
 import { DEFAULT_PROJECTION } from './iso.js';
 import { THEMES } from './palette.js';
 import { PRESETS } from '../data/presets.js';
@@ -14,16 +14,34 @@ export const GRID = 40; // cells per side; 1 cell = 1 metre
 let seq = 0;
 export const newId = (prefix) => `${prefix}${(seq++).toString(36)}${Math.floor(performance.now() % 1e6).toString(36)}`;
 
-export function emptyModel() {
+/**
+ * One building volume: its own footprint, its own height, its own roof.
+ *
+ * A garden shed is not the house with a smaller footprint — it has a flat roof
+ * and timber walls of its own. Keeping the roof on the model meant every
+ * volume shared one, so adding a shed re-roofed the house.
+ */
+export function makeBuilding(patch = {}) {
   return {
-    version: MODEL_VERSION,
-    name: 'Ma maison',
-    grid: { w: GRID, d: GRID, cellSize: 1 },
+    id: newId('b'),
+    name: 'Corps principal',
     cells: [],
     storeys: 1,
     storeyHeight: 2.7,
     plinth: 0,
     roof: { type: 'hip', pitch: 30, overhang: 0.5, fascia: 0.18, shedDir: 'S' },
+    overrides: {},
+    texture: null, // null = follow the model's materials
+    ...patch,
+  };
+}
+
+export function emptyModel() {
+  return {
+    version: MODEL_VERSION,
+    name: 'Ma maison',
+    grid: { w: GRID, d: GRID, cellSize: 1 },
+    buildings: [makeBuilding()],
     // Defaults to the Gladys Assistant v5 look, which is what this tool is
     // primarily meant to feed. Every other palette is one click away.
     theme: 'horizons',
@@ -59,7 +77,8 @@ export function normalise(input) {
   m.texture = { ...base.texture, ...(input?.texture || {}) };
   m.style = { ...base.style, ...(input?.style || {}) };
   m.overrides = { ...(input?.overrides || {}) };
-  m.cells = Array.isArray(m.cells) ? m.cells.filter((c) => /^-?\d+,-?\d+$/.test(c)) : [];
+  m.buildings = normaliseBuildings(input, m);
+  delete m.cells; delete m.storeys; delete m.storeyHeight; delete m.plinth; delete m.roof;
   for (const list of ['openings', 'roofItems', 'props']) {
     m[list] = Array.isArray(m[list]) ? m[list].filter(Boolean) : [];
     for (const it of m[list]) if (!it.id) it.id = newId(list[0]);
@@ -77,12 +96,78 @@ export function normalise(input) {
     if (!input?.texture && declared.texture) m.texture = { ...m.texture, ...declared.texture };
   }
 
-  m.storeys = Math.max(1, Math.min(4, Math.round(m.storeys) || 1));
   m.version = MODEL_VERSION;
   return m;
 }
 
-export const cellSet = (m) => new Set(m.cells);
+/**
+ * Buildings, migrating the older single-footprint shape.
+ *
+ * A legacy file carried one `cells` set and one roof. Its disconnected parts
+ * become separate buildings straight away — that is what they always were —
+ * so a shed drawn apart from the house can be re-roofed the moment the file
+ * is opened, without any manual re-splitting.
+ */
+function normaliseBuildings(input, m) {
+  const proto = makeBuilding();
+  // Spreading a source that carries explicit `undefined` would overwrite the
+  // defaults with it — a file that simply omits a storey height would then
+  // build a roof at NaN. Only stated keys are taken.
+  const stated = (o) => Object.fromEntries(
+    Object.entries(o || {}).filter(([, v]) => v !== undefined),
+  );
+  const clean = (b, fallbackName) => {
+    const out = { ...proto, ...stated(b) };
+    out.id = b.id || newId('b');
+    out.name = b.name || fallbackName;
+    out.cells = Array.isArray(b.cells) ? b.cells.filter((c) => /^-?\d+,-?\d+$/.test(c)).sort() : [];
+    out.roof = { ...proto.roof, ...(b.roof || {}) };
+    out.overrides = { ...(b.overrides || {}) };
+    out.texture = b.texture ? { ...b.texture } : null;
+    out.storeys = Math.max(1, Math.min(4, Math.round(out.storeys) || 1));
+    return out;
+  };
+
+  // Empty volumes never win over a legacy footprint: a caller that spreads a
+  // blank model and then sets `cells` means the cells, and silently dropping
+  // them would lose the whole house.
+  const declared = Array.isArray(input?.buildings) ? input.buildings : null;
+  const declaredHasCells = declared && declared.some((b) => (b.cells || []).length);
+  const legacyCells = Array.isArray(input?.cells) && input.cells.length;
+  if (declared && declared.length && (declaredHasCells || !legacyCells)) {
+    return declared.map((b, i) => clean(b, i ? `Bâtiment ${i + 1}` : 'Corps principal'));
+  }
+
+  const legacy = clean({
+    cells: input?.cells, storeys: input?.storeys, storeyHeight: input?.storeyHeight,
+    plinth: input?.plinth, roof: input?.roof,
+  }, 'Corps principal');
+  if (!legacy.cells.length) return [makeBuilding()];
+
+  const parts = connectedComponents(new Set(legacy.cells));
+  if (parts.length <= 1) return [legacy];
+  return parts.map((cells, i) => clean(
+    { ...legacy, id: i ? newId('b') : legacy.id, cells },
+    i ? `Bâtiment ${i + 1}` : 'Corps principal',
+  ));
+}
+
+/** Every cell of every building, for framing and for the ground. */
+export function allCells(m) {
+  const out = new Set();
+  for (const b of m.buildings) for (const c of b.cells) out.add(c);
+  return out;
+}
+
+export const buildingCells = (b) => new Set(b.cells);
+
+/** The building a wall edge belongs to, or null. */
+export function buildingOfEdge(m, edgeId) {
+  const cell = edgeId.split(',').slice(0, 2).join(',');
+  return m.buildings.find((b) => b.cells.includes(cell)) || null;
+}
+
+export const cellSet = (m) => (m.buildings ? allCells(m) : new Set(m.cells || []));
 
 /** Metres per grid cell. Everything outside the grid already speaks metres. */
 export const cellSizeOf = (m) => m.grid?.cellSize || 1;
@@ -102,45 +187,58 @@ export function withCellSize(m, size) {
   const old = cellSizeOf(m);
   if (size === old) return m;
   const ratio = old / size;
-  const cells = new Set();
-  const openings = [];
-  if (Number.isInteger(ratio)) {
-    for (const c of m.cells) {
+  const exact = Number.isInteger(ratio);
+
+  const convert = (list) => {
+    const cells = new Set();
+    for (const c of list) {
       const [i, j] = c.split(',').map(Number);
-      for (let dj = 0; dj < ratio; dj++) {
-        for (let di = 0; di < ratio; di++) cells.add(`${i * ratio + di},${j * ratio + dj}`);
+      if (exact) {
+        for (let dj = 0; dj < ratio; dj++) {
+          for (let di = 0; di < ratio; di++) cells.add(`${i * ratio + di},${j * ratio + dj}`);
+        }
+      } else {
+        cells.add(`${Math.floor((i * old) / size)},${Math.floor((j * old) / size)}`);
       }
     }
-    for (const op of m.openings) {
-      const [is, js, side] = op.edge.split(',');
-      const i = Number(is), j = Number(js);
-      const target = {
-        S: [i * ratio, j * ratio],
-        N: [(i + 1) * ratio - 1, (j + 1) * ratio - 1],
-        E: [(i + 1) * ratio - 1, j * ratio],
-        W: [i * ratio, (j + 1) * ratio - 1],
-      }[side];
-      openings.push({ ...op, edge: `${target[0]},${target[1]},${side}` });
+    return [...cells].sort();
+  };
+
+  const reanchor = (op) => {
+    const [is, js, side] = op.edge.split(',');
+    const i = Number(is), j = Number(js);
+    if (!exact) {
+      return { ...op, edge: `${Math.floor((i * old) / size)},${Math.floor((j * old) / size)},${side}` };
     }
-  } else {
-    for (const c of m.cells) {
-      const [i, j] = c.split(',').map(Number);
-      cells.add(`${Math.floor(i * old / size)},${Math.floor(j * old / size)}`);
-    }
-    for (const op of m.openings) {
-      const [is, js, side] = op.edge.split(',');
-      openings.push({ ...op, edge: `${Math.floor(Number(is) * old / size)},${Math.floor(Number(js) * old / size)},${side}` });
-    }
-  }
-  return { ...m, grid: { ...m.grid, cellSize: size }, cells: [...cells].sort(), openings };
+    // The sub-cell holding the same start corner, so the metre offset keeps
+    // naming the same point of the wall.
+    const t = {
+      S: [i * ratio, j * ratio],
+      N: [(i + 1) * ratio - 1, (j + 1) * ratio - 1],
+      E: [(i + 1) * ratio - 1, j * ratio],
+      W: [i * ratio, (j + 1) * ratio - 1],
+    }[side];
+    return { ...op, edge: `${t[0]},${t[1]},${side}` };
+  };
+
+  return {
+    ...m,
+    grid: { ...m.grid, cellSize: size },
+    buildings: m.buildings.map((b) => ({ ...b, cells: convert(b.cells) })),
+    openings: m.openings.map(reanchor),
+  };
 }
 
-export function setCells(m, set) {
-  return { ...m, cells: [...set].sort() };
+/** Replace the cells of one building. */
+export function setBuildingCells(m, id, set) {
+  return {
+    ...m,
+    buildings: m.buildings.map((b) => (b.id === id ? { ...b, cells: [...set].sort() } : b)),
+  };
 }
 
-/** Total height of the walls, plinth included. */
-export const wallTop = (m) => m.plinth + m.storeys * m.storeyHeight;
+/** Total height of the walls, plinth included. Takes a building. */
+export const wallTop = (b) => b.plinth + b.storeys * b.storeyHeight;
 
 export function findById(m, list, id) {
   return (m[list] || []).find((it) => it.id === id) || null;

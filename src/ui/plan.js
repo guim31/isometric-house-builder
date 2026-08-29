@@ -7,7 +7,7 @@
  */
 
 import { key, parseKey, boundaryEdges, boundaryRuns } from '../core/grid.js';
-import { cellSet, cellSizeOf, fmtMetres } from '../core/model.js';
+import { cellSet, cellSizeOf, fmtMetres, buildingCells, setBuildingCells } from '../core/model.js';
 import {
   OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS,
   placeOpening, placeRoofItem, placeProp, placeRun,
@@ -102,6 +102,7 @@ export class PlanView {
     const gCells = g('plan-cells');
     const gEdges = g('plan-edges');
     const gRoof = g('plan-roof');
+    const gDims = g('plan-dims');
     const gOpen = g('plan-openings');
 
     // Grid, spanning the whole panel rather than just the fitted box: an
@@ -156,36 +157,44 @@ export class PlanView {
       gProps.appendChild(shape);
     }
 
-    // Footprint.
-    for (const k of cells) {
-      const [i, j] = parseKey(k);
-      const a = this.toPx(i * cs, (j + 1) * cs);
-      gCells.appendChild(el('rect', {
-        x: a[0], y: a[1], width: map.scale * cs, height: map.scale * cs, class: 'cell',
-      }));
-    }
-
-    // Exterior walls, thicker so they read as the building outline.
-    for (const e of boundaryEdges(cells)) {
-      const a = this.toPx(e.a[0] * cs, e.a[1] * cs);
-      const b = this.toPx(e.b[0] * cs, e.b[1] * cs);
-      const line = el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: 'edge' });
-      line.dataset.edge = e.id;
-      gEdges.appendChild(line);
-    }
-
-    // Dimensions, one per straight wall run — the answer to "how long is this
-    // wall?" without counting cells. Short runs stay unlabelled: the label
-    // would cover more wall than it measures.
-    const gDims = g('plan-dims');
-    for (const run of boundaryRuns(cells)) {
-      const metres = run.cells * cs;
-      if (metres * map.scale < 26) continue;
-      const mid = [((run.a[0] + run.b[0]) / 2) * cs, ((run.a[1] + run.b[1]) / 2) * cs];
-      const p = this.toPx(mid[0] + run.n[0] * 0.9, mid[1] + run.n[1] * 0.9);
-      const t = el('text', { x: p[0], y: p[1], dy: 4 });
-      t.textContent = `${fmtMetres(metres)} m`;
-      gDims.appendChild(t);
+    // Footprint, one layer per volume so the one being edited stands out.
+    const activeId = this.store.activeBuildingId;
+    for (const bd of m.buildings) {
+      const bCells = buildingCells(bd);
+      const active = bd.id === activeId;
+      for (const k of bCells) {
+        const [i, j] = parseKey(k);
+        const a = this.toPx(i * cs, (j + 1) * cs);
+        const r = el('rect', {
+          x: a[0], y: a[1], width: map.scale * cs, height: map.scale * cs,
+          class: active ? 'cell' : 'cell inactive',
+        });
+        gCells.appendChild(r);
+      }
+      for (const e of boundaryEdges(bCells)) {
+        const a = this.toPx(e.a[0] * cs, e.a[1] * cs);
+        const b2 = this.toPx(e.b[0] * cs, e.b[1] * cs);
+        const line = el('line', {
+          x1: a[0], y1: a[1], x2: b2[0], y2: b2[1],
+          class: active ? 'edge' : 'edge inactive',
+        });
+        line.dataset.edge = e.id;
+        line.dataset.building = bd.id;
+        gEdges.appendChild(line);
+      }
+      // Dimensions, one per straight wall run — the answer to "how long is
+      // this wall?" without counting cells. Short runs stay unlabelled: the
+      // label would cover more wall than it measures.
+      if (!active && m.buildings.length > 1) continue;
+      for (const run of boundaryRuns(bCells)) {
+        const metres = run.cells * cs;
+        if (metres * map.scale < 26) continue;
+        const mid = [((run.a[0] + run.b[0]) / 2) * cs, ((run.a[1] + run.b[1]) / 2) * cs];
+        const p = this.toPx(mid[0] + run.n[0] * 0.9, mid[1] + run.n[1] * 0.9);
+        const t = el('text', { x: p[0], y: p[1], dy: 4 });
+        t.textContent = `${fmtMetres(metres)} m`;
+        gDims.appendChild(t);
+      }
     }
 
     // Openings, as marks straddling their wall.
@@ -287,6 +296,11 @@ export class PlanView {
         return;
       }
       if (tool === 'select') {
+        if (ev.target.dataset?.building) {
+          s.setActiveBuilding(ev.target.dataset.building);
+          s.select({ type: 'building', id: ev.target.dataset.building });
+          return;
+        }
         const target = ev.target.dataset?.type ? ev.target : null;
         if (!target) { s.select(null); return; }
         s.select({ type: target.dataset.type, id: target.dataset.id });
@@ -408,12 +422,14 @@ export class PlanView {
     const i = Math.floor(pt[0] / cs), j = Math.floor(pt[1] / cs);
     const k = key(i, j);
     const s = this.store;
-    const cells = cellSet(s.model);
+    const cells = buildingCells(s.activeBuilding || { cells: [] });
     if (erase ? !cells.has(k) : cells.has(k)) { if (!fresh) return; }
     s.update((m) => {
-      const set = cellSet(m);
+      const id = s.activeBuildingId;
+      const b = m.buildings.find((x) => x.id === id);
+      const set = buildingCells(b);
       if (erase) set.delete(k); else set.add(k);
-      return { ...m, cells: [...set].sort() };
+      return setBuildingCells(m, id, set);
     }, { coalesce: 'brush' });
     this.render();
   }
@@ -470,13 +486,15 @@ export class PlanView {
     const y1 = Math.max(Math.floor(a[1] / cs), Math.floor(b[1] / cs));
     const erase = this.drag.erase;
     this.store.update((m) => {
-      const set = cellSet(m);
+      const id = this.store.activeBuildingId;
+      const b = m.buildings.find((x) => x.id === id);
+      const set = buildingCells(b);
       for (let j = y0; j <= y1; j++) {
         for (let i = x0; i <= x1; i++) {
           if (erase) set.delete(key(i, j)); else set.add(key(i, j));
         }
       }
-      return { ...m, cells: [...set].sort() };
+      return setBuildingCells(m, id, set);
     });
   }
 }

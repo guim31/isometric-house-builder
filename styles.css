@@ -288,6 +288,22 @@ button:disabled { opacity: .45; cursor: default; }
   text-align: right;
 }
 
+.building-list { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 4px; }
+.building-row {
+  display: flex; flex-direction: column; gap: 1px;
+  text-align: left; padding: 6px 9px; font-size: 12px;
+}
+.building-row.active { border-color: var(--accent); background: var(--accent-soft); }
+.building-name { font-weight: 600; }
+.building-meta { font-size: 11px; color: var(--ink-soft); }
+.roof-fields { margin-top: 2px; }
+.field input[type="text"] {
+  width: 100%; padding: 5px 8px; border: 1px solid var(--line);
+  border-radius: 7px; background: var(--bg);
+}
+.cell.inactive { fill-opacity: .22; }
+.edge.inactive { stroke: var(--ink-soft); stroke-width: 2; }
+
 .colour-group { margin: 10px 0 4px; }
 .colour-group-title { font-size: 11px; color: var(--ink-soft); }
 .colour-grid {

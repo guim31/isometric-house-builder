@@ -6,7 +6,7 @@
 import { Mesh } from './mesh.js';
 import { boundaryEdges, decomposeRects, bounds, parseKey, SIDES } from './grid.js';
 import { buildRoof, heightField, undersideAt, STEP } from './roof.js';
-import { cellSet, wallTop, cellSizeOf } from './model.js';
+import { cellSet, wallTop, cellSizeOf, buildingCells } from './model.js';
 import { buildProps } from './props.js';
 
 const LIFT = 0.015; // how far detail quads float off the surface they decorate
@@ -34,15 +34,18 @@ function wallRect(mesh, g, s0, s1, z0, z1, mat, lift, after) {
 }
 
 /** Draw one opening (window, door, garage door...) onto its wall. */
-function buildOpening(mesh, op, g, m) {
-  const zBase = m.plinth + (op.storey || 0) * m.storeyHeight;
+function buildOpening(mesh, op, g, b, m) {
+  const zBase = b.plinth + (op.storey || 0) * b.storeyHeight;
   const w = op.width ?? 1.2;
   const h = op.height ?? 1.25;
   const sill = op.sill ?? 0.95;
   const c = op.offset ?? 0.5;
   const s0 = c - w / 2, s1 = c + w / 2;
   const z0 = zBase + sill, z1 = zBase + sill + h;
-  const after = { mat: 'wall', group: 'wall' };
+  // Anchored to this building's own wall material, which may be recoloured.
+  const own = (b.overrides && Object.keys(b.overrides).length) || b.texture;
+  const wallMat = own ? `wall#${b.id}` : 'wall';
+  const after = { mat: wallMat, group: 'wall' };
   // Plain openings read as a broad frame around one clear pane. Some palettes
   // want that flatter treatment; the default keeps the mullions, which make a
   // window legible at small sizes.
@@ -87,14 +90,14 @@ function buildOpening(mesh, op, g, m) {
 }
 
 /** Roof-mounted items: solar arrays, chimneys, roof windows, satellite dishes. */
-function buildRoofItems(mesh, m, roof) {
+function buildRoofItems(mesh, b, roof, items, mat) {
   if (!roof) return;
   const { field } = roof;
-  const top = wallTop(m);
+  const top = wallTop(b);
   const zAt = (x, y) => top + Math.max(0, field.h(x, y));
-  const after = { mat: 'roof', group: 'roof' };
+  const after = { mat: mat('roof'), group: 'roof' };
 
-  for (const it of m.roofItems) {
+  for (const it of items) {
     const w = it.w ?? 2, d = it.d ?? 1.5;
     const x0 = it.x - w / 2, x1 = it.x + w / 2;
     const y0 = it.y - d / 2, y1 = it.y + d / 2;
@@ -156,16 +159,72 @@ function buildRoofItems(mesh, m, roof) {
   }
 }
 
+/**
+ * Emit one building: its plinth, walls, openings, roof and roof items.
+ *
+ * Each volume carries its own roof and height, so this runs once per building
+ * rather than once per model — a shed keeps its flat roof while the house
+ * keeps its hips.
+ */
+function buildOne(mesh, m, b, cs, roofItems) {
+  const cells = buildingCells(b);
+  if (!cells.size) return null;
+  const rects = decomposeRects(cells).map((r) => ({
+    x0: r.x0 * cs, y0: r.y0 * cs, x1: r.x1 * cs, y1: r.y1 * cs,
+  }));
+  const top = wallTop(b);
+  const field = rects.length ? heightField(rects, b.roof) : null;
+  const fascia = b.roof.fascia ?? 0.18;
+  // A building may recolour its materials or choose its own — a timber shed
+  // wants neither the house's render nor its canal tiles. The suffix keeps
+  // those apart without giving every volume a palette of its own; anything it
+  // does not state still resolves to the shared material.
+  const own = (b.overrides && Object.keys(b.overrides).length) || b.texture;
+  const mat = (name) => (own ? `${name}#${b.id}` : name);
+
+  const edges = boundaryEdges(cells);
+  const geoms = new Map();
+  for (const e of edges) {
+    const g = edgeGeometry(e, cs);
+    geoms.set(e.id, g);
+    const p = (s, z, out = 0) => [
+      g.a[0] + g.u[0] * s + g.n[0] * out,
+      g.a[1] + g.u[1] * s + g.n[1] * out,
+      z,
+    ];
+    if (b.plinth > 0) {
+      mesh.quad(p(0, 0), p(g.len, 0), p(g.len, b.plinth), p(0, b.plinth), mat('plinth'), 'plinth');
+    }
+    const zTop = (s) => {
+      const x = g.a[0] + g.u[0] * s;
+      const y = g.a[1] + g.u[1] * s;
+      return Math.max(b.plinth, undersideAt(field, top, fascia, x, y));
+    };
+    const steps = Math.max(1, Math.round(g.len / STEP));
+    for (let k = 0; k < steps; k++) {
+      const s0 = (g.len * k) / steps;
+      const s1 = (g.len * (k + 1)) / steps;
+      const z0 = zTop(s0), z1 = zTop(s1);
+      if (z0 <= b.plinth + 1e-9 && z1 <= b.plinth + 1e-9) continue;
+      mesh.quad(p(s0, b.plinth), p(s1, b.plinth), p(s1, z1), p(s0, z0), mat('wall'), 'wall');
+    }
+  }
+
+  for (const op of m.openings) {
+    const g = geoms.get(op.edge);
+    if (g) buildOpening(mesh, op, g, b, m);
+  }
+
+  const roof = buildRoof(mesh, field, b.roof, top, mat);
+  buildRoofItems(mesh, b, roof, roofItems, mat);
+  return { building: b, edges, geoms, roof, field, top };
+}
+
 /** Build the complete mesh for a model. */
 export function buildMesh(m) {
   const mesh = new Mesh();
   const cs = cellSizeOf(m);
   const cells = cellSet(m);
-  // Roof rectangles cross into metre space here, like the walls do.
-  const rects = decomposeRects(cells).map((r) => ({
-    x0: r.x0 * cs, y0: r.y0 * cs, x1: r.x1 * cs, y1: r.y1 * cs,
-  }));
-  const top = wallTop(m);
   const b = bounds(cells);
 
   // --- Ground -------------------------------------------------------------
@@ -205,63 +264,32 @@ export function buildMesh(m) {
     }
   }
 
-  // --- Props sitting on the ground ---------------------------------------
   buildProps(mesh, m);
 
-  // --- Plinth and walls ---------------------------------------------------
-  // The roof field is needed before the walls, because walls rise to meet the
-  // roof underside. That is what turns a gable end into a plain consequence of
-  // the roof shape rather than a separate piece of geometry to keep in sync.
-  const field = rects.length ? heightField(rects, m.roof) : null;
-  const fascia = m.roof.fascia ?? 0.18;
-
-  const edges = boundaryEdges(cells);
-  const geoms = new Map();
-  for (const e of edges) {
-    const g = edgeGeometry(e, cs);
-    geoms.set(e.id, g);
-    const p = (s, z, out = 0) => [
-      g.a[0] + g.u[0] * s + g.n[0] * out,
-      g.a[1] + g.u[1] * s + g.n[1] * out,
-      z,
-    ];
-    if (m.plinth > 0) {
-      // Flush with the wall, deliberately. A projecting plinth needs a small
-      // horizontal ledge, and on the far side of the house the only thing that
-      // would hide that ledge is the back-facing wall — which is culled. The
-      // ledge then leaks out past the silhouette as a pale sliver.
-      mesh.quad(p(0, 0), p(g.len, 0), p(g.len, m.plinth), p(0, m.plinth), 'plinth', 'plinth');
-    }
-
-    // Follow the roof profile in lattice-sized steps. Every kink in the profile
-    // sits on a lattice line, so this reproduces the gable triangle exactly
-    // rather than approximating it.
-    const zTop = (s) => {
-      const x = g.a[0] + g.u[0] * s;
-      const y = g.a[1] + g.u[1] * s;
-      return Math.max(m.plinth, undersideAt(field, top, fascia, x, y));
-    };
-    const steps = Math.max(1, Math.round(g.len / STEP));
-    for (let k = 0; k < steps; k++) {
-      const s0 = (g.len * k) / steps;
-      const s1 = (g.len * (k + 1)) / steps;
-      const z0 = zTop(s0), z1 = zTop(s1);
-      if (z0 <= m.plinth + 1e-9 && z1 <= m.plinth + 1e-9) continue;
-      mesh.quad(p(s0, m.plinth), p(s1, m.plinth), p(s1, z1), p(s0, z0), 'wall', 'wall');
-    }
+  // Each roof item lands on whichever building's roof actually carries it.
+  const parts = [];
+  const taken = new Set();
+  for (const bd of m.buildings) {
+    const mine = m.roofItems.filter((it) => {
+      if (taken.has(it.id)) return false;
+      const cellKey = `${Math.floor(it.x / cs)},${Math.floor(it.y / cs)}`;
+      if (!bd.cells.includes(cellKey)) return false;
+      taken.add(it.id);
+      return true;
+    });
+    const part = buildOne(mesh, m, bd, cs, mine);
+    if (part) parts.push(part);
   }
 
-  // --- Openings -----------------------------------------------------------
-  for (const op of m.openings) {
-    const g = geoms.get(op.edge);
-    if (g) buildOpening(mesh, op, g, m);
-  }
-
-  // --- Roof ---------------------------------------------------------------
-  const roof = buildRoof(mesh, field, m.roof, top);
-  buildRoofItems(mesh, m, roof);
-
-  return { mesh, rects, roof, bounds: b, edges, geoms, top };
+  const main = parts[0] || null;
+  return {
+    mesh, bounds: b, parts,
+    // Kept for callers that only ever look at the first volume.
+    edges: parts.flatMap((p) => p.edges),
+    geoms: main ? main.geoms : new Map(),
+    roof: main ? main.roof : null,
+    top: main ? main.top : 0,
+  };
 }
 
 export { heightField };

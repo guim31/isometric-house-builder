@@ -48,6 +48,7 @@ tout moment, et *Page blanche* reste disponible.
 
 | | |
 |---|---|
+| **Volumes** | Plusieurs **corps de bâtiment indépendants** — maison, garage, abri de jardin — chacun avec sa toiture, sa hauteur, ses matières et ses couleurs |
 | **Volume** | Emprise dessinée à main levée sur une trame de 1 m ou 0,50 m, jusqu'à 4 niveaux, hauteur d'étage et soubassement réglables |
 | **Cotes** | Longueur affichée sur chaque pan de mur, dimensions en direct pendant le tracé, emprise et surface dans l'inspecteur |
 | **Toiture** | Croupe, deux pans, appentis, toit plat — inclinaison, débord et épaisseur de rive ; les noues entre ailes sont calculées |
@@ -78,10 +79,14 @@ tout moment, et *Page blanche* reste disponible.
    ce qui fait son allure.
 4. **Posez les ouvertures.** Choisissez *Fenêtre*, *Porte* ou *Porte de garage*,
    puis cliquez le long d'un mur — dans le plan, ou directement sur le rendu.
-5. **Aménagez les abords** avec les outils *Extérieur*. Muret, clôture et haie
+5. **Ajoutez d'autres corps** si besoin (bouton *Nouveau corps de bâtiment*) :
+   chacun se dessine et se règle séparément, et cliquer un volume dans le plan
+   le rend actif. C'est ainsi qu'un abri de jardin reçoit un toit plat pendant
+   que la maison garde ses tuiles.
+6. **Aménagez les abords** avec les outils *Extérieur*. Muret, clôture et haie
    se **tracent au glisser**, leur longueur s'affichant pendant le tracé ; un
    portail posé près d'un muret s'y aligne et l'ouvre automatiquement.
-6. **Exportez.** Le fond transparent est celui à préférer : l'image se pose alors
+7. **Exportez.** Le fond transparent est celui à préférer : l'image se pose alors
    sur n'importe quelle couleur de tableau de bord.
 
 À savoir : la vue par défaut regarde les façades **nord et est**. Si vos
@@ -159,6 +164,14 @@ modifier le moteur :
   les noues correctes là où deux ailes se rejoignent. Les murs, eux, montent
   jusqu'à la sous-face du toit : un pignon n'est pas une pièce à part, c'est une
   conséquence.
+- **Un corps de bâtiment porte sa propre toiture.** Un abri de jardin n'est pas
+  la maison en plus petit : il a son toit plat et son bardage. Le modèle porte
+  donc une liste de volumes, chacun avec sa hauteur, sa toiture et, s'il le
+  souhaite, ses matières et ses couleurs — celles-ci se distinguant par un
+  suffixe (`wall#abri`) plutôt que par une palette entière par volume. À
+  l'ouverture d'un ancien fichier, les parties non contiguës de l'emprise
+  deviennent des corps distincts : elles l'étaient déjà, elles n'avaient
+  simplement aucun moyen de le dire.
 - **Un portail n'est pas rattaché à un muret, il le recoupe.** Le muret est
   reconstruit en tronçons de part et d'autre de tout portail qui l'enjambe,
   plutôt que de tenir une liste d'ouvertures. Poser un portail, le faire

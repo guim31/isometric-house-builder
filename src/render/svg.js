@@ -162,7 +162,21 @@ export function renderScene(model, opts = {}) {
 
   const ordered = orderFaces(faces, camera);
   const theme = model.theme;
-  const ov = model.overrides;
+  // Per-building overrides are folded in under their suffixed names, so the
+  // face colour lookup stays a single flat map.
+  let ov = model.overrides;
+  const textures = new Map();
+  for (const b of model.buildings) {
+    if (b.texture) textures.set(b.id, { ...model.texture, ...b.texture });
+    if (!b.overrides || !Object.keys(b.overrides).length) continue;
+    if (ov === model.overrides) ov = { ...model.overrides };
+    for (const [k, v] of Object.entries(b.overrides)) ov[`${k}#${b.id}`] = v;
+  }
+  // A suffixed material names its building, so its own materials win.
+  const textureFor = (mat) => {
+    const cut = mat.indexOf('#');
+    return cut < 0 ? model.texture : (textures.get(mat.slice(cut + 1)) || model.texture);
+  };
   const prefix = `t${renderSeq++}`;
   const out = [];
   const defs = [];
@@ -171,6 +185,9 @@ export function renderScene(model, opts = {}) {
     const fill = f.mat === 'shadow'
       ? materialColour(f.mat, theme, ov)
       : faceColour(f.mat, theme, ov, f.nCam);
+    // Kept on the face: the colour is the outcome of palette, orientation and
+    // any per-building override, and callers should not have to redo that.
+    f.fill = fill;
     const d = pathData(f, camera);
     const parts = [`d="${d}"`, `fill="${fill}"`];
     if (OPACITY[f.mat] != null) parts.push(`opacity="${OPACITY[f.mat]}"`);
@@ -179,7 +196,7 @@ export function renderScene(model, opts = {}) {
     }
     out.push(`<path ${parts.join(' ')}/>`);
 
-    const spec = specFor(f.mat, model.texture);
+    const spec = specFor(f.mat, textureFor(f.mat));
     if (!spec) return;
     // Clipping to the face itself is what lets the generators ignore the face
     // outline entirely and simply rule across its bounding box.

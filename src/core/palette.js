@@ -209,8 +209,11 @@ const luminance = (hex) => {
  */
 export function faceColour(mat, theme, overrides, n) {
   const t = THEMES[theme] || THEMES.terracotta;
-  const spec = t[mat] !== undefined ? t[mat] : FIXED[mat];
-  const override = overrides[mat];
+  // "wall#b3" is the wall material as recoloured by building b3: the palette
+  // still answers for "wall", only the override is per building.
+  const kind = mat.includes('#') ? mat.slice(0, mat.indexOf('#')) : mat;
+  const spec = t[kind] !== undefined ? t[kind] : FIXED[kind];
+  const override = overrides[mat] !== undefined ? overrides[mat] : overrides[kind];
 
   if (spec && typeof spec === 'object') {
     const blended = blendOriented(spec, n);
@@ -224,8 +227,10 @@ export function faceColour(mat, theme, overrides, n) {
 
 export function materialColour(mat, theme, overrides = {}) {
   if (overrides[mat]) return overrides[mat];
+  const base = mat.includes('#') ? mat.slice(0, mat.indexOf('#')) : mat;
+  if (overrides[base]) return overrides[base];
   const t = THEMES[theme] || THEMES.terracotta;
-  const spec = t[mat] !== undefined ? t[mat] : FIXED[mat];
+  const spec = t[base] !== undefined ? t[base] : FIXED[base];
   if (spec && typeof spec === 'object') return spec.base;
   return spec || '#cccccc';
 }

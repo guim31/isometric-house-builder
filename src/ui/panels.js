@@ -5,7 +5,7 @@
 import { THEMES, materialColour } from '../core/palette.js';
 import { PROJECTIONS } from '../core/iso.js';
 import { ROOF_TYPES, STEP } from '../core/roof.js';
-import { withCellSize, cellSizeOf, fmtMetres, cellSet } from '../core/model.js';
+import { withCellSize, cellSizeOf, fmtMetres, cellSet, buildingOfEdge } from '../core/model.js';
 import { bounds } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
 
@@ -99,8 +99,8 @@ export class Inspector {
     this.root.replaceChildren();
     const sel = this.store.selected;
     if (sel) this.root.appendChild(this.selectionSection(sel));
+    this.root.appendChild(this.activeSection());
     this.root.appendChild(this.buildingSection());
-    this.root.appendChild(this.roofSection());
     this.root.appendChild(this.appearanceSection());
     this.root.appendChild(this.coloursSection());
     this.root.appendChild(this.groundSection());
@@ -123,82 +123,147 @@ export class Inspector {
 
   buildingSection() {
     const m = this.store.model;
-    const s = this.section('Bâtiment');
+    const s = this.section('Terrain et corps de bâtiment');
     const cs = cellSizeOf(m);
     const b = bounds(cellSet(m));
     const dims = b.empty ? '—'
-      : `${fmtMetres(b.w * cs)} × ${fmtMetres(b.d * cs)} m — ${fmtMetres(m.cells.length * cs * cs)} m²`;
+      : `${fmtMetres(b.w * cs)} × ${fmtMetres(b.d * cs)} m`;
     s.append(
-      field('Emprise', h('span', 'field-static', dims), 'hors débord de toiture'),
+      field('Emprise totale', h('span', 'field-static', dims), 'hors débord de toiture'),
       field('Trame', select(String(cs), [['1', '1 m'], ['0.5', '0,50 m']],
         (v) => this.store.update((mm) => withCellSize(mm, Number(v)))),
         'le pas de dessin du plan — affiner ne change pas les dimensions de la maison'),
-      field('Étages', slider(m.storeys, {
-        min: 1, max: 4, step: 1,
-        onInput: (v) => this.set({ storeys: v }, 'storeys'),
-      })),
-      field('Hauteur d’étage', slider(m.storeyHeight, {
-        min: 2.2, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
-        onInput: (v) => this.set({ storeyHeight: v }, 'storeyHeight'),
-      })),
-      field('Soubassement', slider(m.plinth, {
-        min: 0, max: 0.8, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
-        onInput: (v) => this.set({ plinth: v }, 'plinth'),
-      })),
     );
+
+    // The list of volumes. Each one owns its roof and its height, so a garden
+    // shed can be flat-roofed and timber-clad while the house keeps its tiles.
+    const list = h('div', 'building-list');
+    for (const bd of m.buildings) {
+      const active = bd.id === this.store.activeBuildingId;
+      const row = h('button', `building-row${active ? ' active' : ''}`);
+      const area = bd.cells.length * cs * cs;
+      row.type = 'button';
+      row.innerHTML = `<span class="building-name"></span><span class="building-meta"></span>`;
+      row.querySelector('.building-name').textContent = bd.name;
+      row.querySelector('.building-meta').textContent =
+        bd.cells.length ? `${fmtMetres(Math.round(area * 10) / 10)} m² — ${ROOF_LABELS[bd.roof.type]}` : 'à dessiner';
+      row.addEventListener('click', () => {
+        this.store.setActiveBuilding(bd.id);
+        this.store.select({ type: 'building', id: bd.id });
+      });
+      list.appendChild(row);
+    }
+    s.appendChild(list);
+
+    const add = h('button', 'subtle', '+ Nouveau corps de bâtiment');
+    add.addEventListener('click', () => this.store.addBuilding());
+    s.appendChild(add);
     return s;
   }
 
-  roofSection() {
+  /** Settings of the volume currently being edited. */
+  activeSection() {
+    const b = this.store.activeBuilding;
+    if (!b) return document.createDocumentFragment();
     const m = this.store.model;
-    const s = this.section('Toiture');
-    s.appendChild(field('Type', select(m.roof.type, ROOF_TYPES.map((t) => [t, ROOF_LABELS[t]]),
-      (v) => this.setIn('roof', { type: v }))));
-    if (m.roof.type === 'shed') {
-      s.appendChild(field('Pente', select(m.roof.shedDir, Object.entries(DIR_LABELS),
-        (v) => this.setIn('roof', { shedDir: v }))));
+    const s = this.section(b.name);
+    s.classList.add('panel-selected');
+
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.value = b.name;
+    name.addEventListener('input', () => this.store.patchBuilding({ name: name.value }, 'bname'));
+    s.appendChild(field('Nom', name));
+
+    s.append(
+      field('Étages', slider(b.storeys, {
+        min: 1, max: 4, step: 1,
+        onInput: (v) => this.store.patchBuilding({ storeys: v }, 'storeys'),
+      })),
+      field('Hauteur d’étage', slider(b.storeyHeight, {
+        min: 2, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+        onInput: (v) => this.store.patchBuilding({ storeyHeight: v }, 'storeyHeight'),
+      })),
+      field('Soubassement', slider(b.plinth, {
+        min: 0, max: 0.8, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+        onInput: (v) => this.store.patchBuilding({ plinth: v }, 'plinth'),
+      })),
+    );
+
+    s.appendChild(this.roofFields(b));
+
+    // Materials of this volume, defaulting to the model's.
+    const tex = b.texture || m.texture;
+    s.append(
+      field('Matière du toit', select(tex.roof,
+        Object.entries(ROOF_TEXTURES).map(([k, v]) => [k, v.label]),
+        (v) => this.store.patchBuilding({ texture: { ...tex, roof: v } })),
+        b.texture ? 'propre à ce corps' : 'reprise des réglages généraux'),
+      field('Matière des murs', select(tex.wall,
+        Object.entries(WALL_TEXTURES).map(([k, v]) => [k, v.label]),
+        (v) => this.store.patchBuilding({ texture: { ...tex, wall: v } }))),
+    );
+
+    // Per-volume colours, over the palette. This is what lets one building be
+    // timber-clad white while the rest of the model stays as it is.
+    const grid = h('div', 'colour-grid');
+    for (const [mat, label] of [['wall', 'Murs'], ['roof', 'Toiture'], ['roofEdge', 'Rive']]) {
+      const cell = h('label', 'colour-cell');
+      const input = document.createElement('input');
+      input.type = 'color';
+      input.value = materialColour(mat, m.theme, { ...m.overrides, ...b.overrides });
+      input.addEventListener('input', () => {
+        this.store.patchBuilding(
+          { overrides: { ...b.overrides, [mat]: input.value } }, `bcol:${mat}`,
+        );
+      });
+      cell.append(input, h('span', null, label));
+      grid.appendChild(cell);
     }
-    if (m.roof.type !== 'flat') {
-      s.appendChild(field('Inclinaison', slider(m.roof.pitch, {
+    const group = h('div', 'colour-group');
+    group.appendChild(h('span', 'colour-group-title', 'Couleurs de ce corps'));
+    group.appendChild(grid);
+    s.appendChild(group);
+
+    if (Object.keys(b.overrides || {}).length || b.texture) {
+      const reset = h('button', 'subtle', 'Reprendre les réglages généraux');
+      reset.addEventListener('click', () => this.store.patchBuilding({ overrides: {}, texture: null }));
+      s.appendChild(reset);
+    }
+    if (m.buildings.length > 1) {
+      const del = h('button', 'danger', 'Supprimer ce corps');
+      del.addEventListener('click', () => this.store.removeBuilding(b.id));
+      s.appendChild(del);
+    }
+    return s;
+  }
+
+  /** Roof controls for one volume. */
+  roofFields(b) {
+    const s = h('div', 'roof-fields');
+    s.appendChild(field('Toiture', select(b.roof.type, ROOF_TYPES.map((t) => [t, ROOF_LABELS[t]]),
+      (v) => this.store.patchRoof({ type: v }))));
+    if (b.roof.type === 'shed') {
+      s.appendChild(field('Pente', select(b.roof.shedDir, Object.entries(DIR_LABELS),
+        (v) => this.store.patchRoof({ shedDir: v }))));
+    }
+    if (b.roof.type !== 'flat') {
+      s.appendChild(field('Inclinaison', slider(b.roof.pitch, {
         min: 5, max: 55, step: 1, format: (v) => `${v}°`,
-        onInput: (v) => this.setIn('roof', { pitch: v }, 'pitch'),
+        onInput: (v) => this.store.patchRoof({ pitch: v }, 'pitch'),
       })));
     }
     s.append(
-      field('Débord', slider(m.roof.overhang, {
+      field('Débord', slider(b.roof.overhang, {
         min: 0, max: 1.25, step: STEP, format: (v) => `${v.toFixed(2)} m`,
-        onInput: (v) => this.setIn('roof', { overhang: v }, 'overhang'),
+        onInput: (v) => this.store.patchRoof({ overhang: v }, 'overhang'),
       }), `par pas de ${STEP} m, pour que la rive reste sur la trame`),
-      field('Épaisseur de rive', slider(m.roof.fascia, {
+      field('Épaisseur de rive', slider(b.roof.fascia, {
         min: 0, max: 0.4, step: 0.02, format: (v) => `${v.toFixed(2)} m`,
-        onInput: (v) => this.setIn('roof', { fascia: v }, 'fascia'),
+        onInput: (v) => this.store.patchRoof({ fascia: v }, 'fascia'),
       })),
     );
     return s;
-  }
-
-  /**
-   * Switch palette, applying whatever style that palette prescribes.
-   *
-   * A palette is not only a set of colours: the Gladys Horizons look depends
-   * just as much on having no outlines and no plinth. Only keys the palette
-   * declares are touched, so the palettes that prescribe nothing leave the
-   * user's settings alone.
-   */
-  applyTheme(name) {
-    const preset = (THEMES[name] || {}).style;
-    this.store.update((m) => {
-      const next = { ...m, theme: name };
-      if (!preset) return next;
-      if (preset.plinth !== undefined) next.plinth = preset.plinth;
-      if (preset.texture) next.texture = { ...m.texture, ...preset.texture };
-      const style = {};
-      if (preset.outline !== undefined) style.outline = preset.outline;
-      if (preset.shadow !== undefined) style.shadow = preset.shadow;
-      if (preset.windowBars !== undefined) style.windowBars = preset.windowBars;
-      if (Object.keys(style).length) next.style = { ...m.style, ...style };
-      return next;
-    });
   }
 
   appearanceSection() {
@@ -300,10 +365,12 @@ export class Inspector {
 
     if (type === 'opening') {
       const m = this.store.model;
+      const host = buildingOfEdge(m, item.edge) || this.store.activeBuilding;
+      const storeys = host ? host.storeys : 1;
       s.appendChild(field('Type', select(item.kind, Object.entries(OPENING_LABELS), (v) => patch({ kind: v }))));
-      if (m.storeys > 1) {
+      if (storeys > 1) {
         s.appendChild(field('Étage', select(String(item.storey || 0),
-          Array.from({ length: m.storeys }, (_, i) => [String(i), i === 0 ? 'Rez-de-chaussée' : `Étage ${i}`]),
+          Array.from({ length: storeys }, (_, i) => [String(i), i === 0 ? 'Rez-de-chaussée' : `Étage ${i}`]),
           (v) => patch({ storey: Number(v) }))));
       }
       s.append(
