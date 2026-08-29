@@ -96,7 +96,7 @@ function buildRoofItems(mesh, b, roof, items, mat) {
   const { field } = roof;
   const top = wallTop(b);
   const zAt = (x, y) => top + Math.max(0, field.h(x, y));
-  const after = { mat: mat('roof'), group: 'roof' };
+  const after = { mat: mat('roof') };
 
   for (const it of items) {
     const w = it.w ?? 2, d = it.d ?? 1.5;
@@ -271,14 +271,11 @@ export function buildMesh(m) {
       const [px0, py0, px1, py1] = propFootprint(p);
       cover(px0 - 1, py0 - 1, px1 + 1, py1 + 1);
     }
-    if (m.focus?.enabled) {
-      // Generously: the camera fits the frame tightly, so a ground plane that
-      // merely reaches the frame shows its own straight edge across the sky.
-      // One frame-width of slack puts that edge safely out of shot.
-      const [fx0, fy0, fx1, fy1] = focusRect(m.focus);
-      const slack = Math.max(fx1 - fx0, fy1 - fy0);
-      cover(fx0 - slack, fy0 - slack, fx1 + slack, fy1 + slack);
-    }
+    // The frame itself, so that a zone holding nothing still has ground under
+    // it. How far the ground must reach to fill the picture is a question for
+    // the renderer, which knows the camera; it backs a framed view with a
+    // plain fill of this same colour.
+    if (m.focus?.enabled) cover(...focusRect(m.focus));
     if (Number.isFinite(x0)) {
       mesh.quad(
         [x0 - g, y0 - g, 0], [x1 + g, y0 - g, 0],

@@ -79,7 +79,11 @@ au lieu de l'écarter. D'où le retrait pur et simple.
 
 Le retrait porte sur des éléments entiers, jamais sur des morceaux : une haie
 qui entre dans le cadre y reste tout entière, parce qu'une demi-haie finissant
-en l'air est un défaut pire qu'une haie qui sort de l'image.
+en l'air est un défaut pire qu'une haie qui sort de l'image. Sous un cadrage, le
+terrain est par ailleurs doublé d'un aplat de sa propre couleur : le sol est
+dimensionné avant que la caméra soit connue, et un cadre serré peut passer
+au-delà de son bord — l'image montre alors un coin de pelouse s'arrêtant net,
+et plus rien derrière.
 
 Le **fondu des lointains** adoucit ensuite la coupe. Il s'applique à l'image
 composée et non à chaque face — estomper les faces une par une rendrait la
@@ -238,6 +242,19 @@ modifier le moteur :
   pendant que l'autre, dessiné après, la coupait en deux. Le porteur est
   désormais choisi par recouvrement à l'écran, ce qui donne la bonne réponse
   aussi bien au faîtage qu'en bas de pente.
+- **Le débord est découpé du reste de la pente.** Une pente de toit est grande
+  et s'incline en s'éloignant : son centre se trouve à plusieurs mètres derrière
+  sa rive, tandis que le mur qu'elle couvre a le sien sur son propre plan. Triés
+  sur leurs centres, le mur l'emportait et se dessinait par-dessus le débord
+  censé le masquer. Cela ne tenait qu'à la hauteur de caméra fixe d'alors, où le
+  supplément d'altitude du toit compensait tout juste ; libérer l'angle l'a mis
+  au jour, et sous 30° environ le mur traversait la rive. Coupé au droit du mur,
+  le débord devient une bande étroite dont le centre est vraiment là où il
+  paraît, et il l'emporte à toute hauteur. Les deux morceaux **se recouvrent**
+  d'une case au lieu de se toucher : deux formes coplanaires partageant une
+  arête ne couvrent chacune que la moitié des pixels qui la longent, et laissent
+  voir au travers — la même couture qu'entre deux tronçons de haie.
+
 - **Les éléments linéaires sont émis en tronçons.** Une haie ou un muret de
   vingt mètres fusionné en une seule face n'a qu'un centre, donc qu'une
   profondeur : le tout passe devant la maison ou derrière, jamais en partie

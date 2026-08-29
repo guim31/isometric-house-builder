@@ -54,12 +54,15 @@ function orderFaces(faces, camera) {
   // resting on it should not have to know which.
   const byGroup = new Map();
   const byGroupOnly = new Map();
+  const byMat = new Map();
   for (const f of faces) {
     const k = `${f.mat}|${f.group}`;
     if (!byGroup.has(k)) byGroup.set(k, []);
     byGroup.get(k).push(f);
     if (!byGroupOnly.has(f.group)) byGroupOnly.set(f.group, []);
     byGroupOnly.get(f.group).push(f);
+    if (!byMat.has(f.mat)) byMat.set(f.mat, []);
+    byMat.get(f.mat).push(f);
   }
 
   // Screen-space containment test, used to choose which surface carries a
@@ -81,9 +84,14 @@ function orderFaces(faces, camera) {
     f.sortDepth = f.depth;
     f.carrier = null;
     if (!f.after) continue;
-    const cands = f.after.mat
-      ? byGroup.get(`${f.after.mat}|${f.after.group}`)
-      : byGroupOnly.get(f.after.group);
+    // Naming a material without a group spans every group carrying it, which
+    // is how a roof item rests on the roof whether it sits over the footprint
+    // or out on the overhang — two groups, one surface.
+    const cands = f.after.group === undefined
+      ? byMat.get(f.after.mat)
+      : (f.after.mat
+        ? byGroup.get(`${f.after.mat}|${f.after.group}`)
+        : byGroupOnly.get(f.after.group));
     if (!cands || !cands.length) continue;
 
     // The carrier is the surface that actually covers this face on screen,
@@ -220,11 +228,27 @@ export function renderScene(input, opts = {}) {
   };
   const prefix = `t${renderSeq++}`;
   const out = [];
-  // The ground is emitted apart because the vignette must not touch it. It is
+  // The ground is emitted apart because the fade must not touch it. It is
   // always first in draw order anyway, being a backdrop rather than a
   // participant in the depth sort.
   const floor = [];
   const defs = [];
+
+  /*
+   * Under a frame, the ground is backed by a plain fill of its own colour.
+   *
+   * The ground quad is sized in the scene, before the camera is known; a tight
+   * frame can therefore run past its edge, and the picture then shows a wedge
+   * of lawn ending in a hard straight line with nothing beyond it. Growing the
+   * quad by guesswork does not settle it — at a low camera the visible ground
+   * stretches away without bound. Painting the frame in the ground's own
+   * colour first does, and costs one rectangle. Only under a frame: in the
+   * ordinary view the edge of the plot is a real edge, worth seeing.
+   */
+  if (framed && model.ground?.enabled) {
+    floor.push(`<rect width="${width}" height="${height}" `
+      + `fill="${faceColour(model.ground.material, theme, ov, [0, 0, 1])}"/>`);
+  }
   const hair = Math.max(0.5, camera.scale * 0.02);
   ordered.forEach((f, i) => {
     const sink = f.group === 'ground' ? floor : out;

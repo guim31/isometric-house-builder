@@ -606,7 +606,11 @@ check('les tuiles sont regroupées par nuance, pas émises une à une', () => {
   const paths = (svg.match(/<path/g) || []).length;
   const tiles = (svg.match(/Z/g) || []).length;
   if (tiles < 500) return `${tiles} tuiles : le panachage ne s'est pas déclenché`;
-  return paths < 400 || `${paths} chemins pour ${tiles} facettes`;
+  // The budget covers the cost of cutting the overhang off each slope: two
+  // faces where there was one means two sets of shade paths, about +50%. Worth
+  // it — the alternative was the wall coming through the eaves — but it is a
+  // real cost, and the point of a budget is to notice the next one.
+  return paths < 500 || `${paths} chemins pour ${tiles} facettes`;
 });
 
 check('seuls les murs et la toiture reçoivent une matière', () => {
@@ -1500,6 +1504,129 @@ await checkAsync('le PNG conserve la transparence du fond', async () => {
   return alpha === 0 || `alpha du coin : ${alpha}`;
 });
 
+/* ---------------- occlusion ---------------- */
+
+/**
+ * Faces drawn over something nearer than themselves.
+ *
+ * For each sampled pixel, work out where the view ray meets the *plane* of
+ * every face covering it. The one that should be visible is the one whose
+ * intersection is nearest; if the renderer drew another last, that is an
+ * occlusion error and not a matter of taste. Reporting it in metres of
+ * overshoot is what separates a real inversion from a tie along a shared edge.
+ */
+function occlusionErrors(model, W, H, step = 3) {
+  const out = renderScene(model, { width: W, height: H });
+  const cam = out.camera, proj = cam.proj, L = cam.lambda;
+  const faces = out.faces.map((f, i) => {
+    const v = cam.toView(f.centroid);
+    const n = f.nCam;
+    return {
+      i, f, n,
+      loops: f.loops.map((l) => l.map((p) => cam.toScreen(p))),
+      d: n[0] * v[0] + n[1] * v[1] + n[2] * v[2],
+    };
+  });
+  const covers = (F, x, y) => {
+    let c = false;
+    for (const l of F.loops) {
+      for (let a = 0, b = l.length - 1; a < l.length; b = a++) {
+        if ((l[a][1] > y) !== (l[b][1] > y)
+          && x < ((l[b][0] - l[a][0]) * (y - l[a][1])) / (l[b][1] - l[a][1]) + l[a][0]) c = !c;
+      }
+    }
+    return c;
+  };
+  const depthAt = (F, x, y) => {
+    const sx = (x - cam.offset[0]) / cam.scale;
+    const sy = (y - cam.offset[1]) / cam.scale;
+    const u = sx / proj.kx;
+    const k = (F.n[0] + F.n[1] + L * F.n[2]) / L;
+    if (Math.abs(k) < 1e-9) return null;
+    const qz = (F.d - (u * (F.n[1] - F.n[0])) / 2 - (sy * (F.n[0] + F.n[1])) / (2 * proj.ky)) / k;
+    return (sy + qz * proj.kz) / proj.ky + L * qz;
+  };
+  const bad = new Map();
+  for (let y = 2; y < H; y += step) {
+    for (let x = 2; x < W; x += step) {
+      let top = null, best = null;
+      for (const F of faces) {
+        if (!covers(F, x, y)) continue;
+        if (!top || F.i > top.i) top = F;
+        const dp = depthAt(F, x, y);
+        if (dp !== null && (!best || dp > best.dp)) best = { F, dp };
+      }
+      if (!top || !best || best.F === top) continue;
+      const dTop = depthAt(top, x, y);
+      if (dTop === null || best.dp - dTop < 0.03) continue;
+      const key = `${best.F.f.group} masqué par ${top.f.group}`;
+      bad.set(key, (bad.get(key) || 0) + 1);
+    }
+  }
+  return bad;
+}
+
+check('un mur ne passe jamais devant le toit qui le couvre', () => {
+  // What the free camera height exposed. A roof slope is large and tilts away,
+  // so its centre sits metres behind its eave, while the wall below has its
+  // centre on its own plane: sorted on centres alone the wall won, and below
+  // about 30° it came through the overhang. Checked at the heights that used
+  // to fail and at those that did not.
+  const m = normalise({ ...PRESETS.find((p) => p.id === 'provence').model });
+  for (const pitch of [12, 18, 22, 26, 30, 35, 45, 60]) {
+    const bad = occlusionErrors({ ...m, camera: { ...m.camera, pitch } }, 400, 300);
+    for (const [k, n] of bad) {
+      if (/^roof.* masqué par wall/.test(k)) return `hauteur ${pitch}° : ${n} px — ${k}`;
+    }
+  }
+  return true;
+});
+
+check('aucun recouvrement grossier, à toutes les hauteurs de caméra', () => {
+  // A budget rather than zero: a handful of pixels still invert along shared
+  // silhouette edges, where a chimney meets its own roof or a shutter meets a
+  // fascia. Those predate the free camera and are a pixel or two wide. The
+  // budget is here to catch the next one that is not.
+  const m = normalise({ ...PRESETS.find((p) => p.id === 'provence').model });
+  let worst = 0, name = '';
+  for (const pitch of [14, 26, 35, 50]) {
+    for (const [k, n] of occlusionErrors({ ...m, camera: { ...m.camera, pitch } }, 400, 300)) {
+      if (n > worst) { worst = n; name = `${k} (hauteur ${pitch}°)`; }
+    }
+  }
+  return worst <= 12 || `${worst} px : ${name}`;
+});
+
+check('le débord et la pente se recouvrent au lieu de se toucher', () => {
+  // Cut cleanly at the wall line, two coplanar pieces sharing an edge each
+  // cover about half the pixels along it and let the background show through —
+  // the hairline that once appeared between hedge segments. One ring of the
+  // footprint is emitted into both groups so that they overlap instead.
+  const b = makeBuilding({
+    cells: [...rectCells(0, 0, 7, 5)],
+    roof: { type: 'hip', pitch: 28, overhang: 1, fascia: 0.2, shedDir: 'S' },
+  });
+  const m = normalise({ ...emptyModel(), buildings: [b] });
+  const tris = buildMesh(m).mesh.tris;
+  const key = (t) => [t.a, t.b, t.c].map((q) => q.map((v) => v.toFixed(3)).join(',')).join('|');
+  const core = new Set(tris.filter((t) => t.group === 'roof').map(key));
+  const eave = tris.filter((t) => t.group === 'roofEave').map(key);
+  if (!eave.length) return 'le débord n’a pas été séparé de la pente';
+  const shared = eave.filter((k) => core.has(k)).length;
+  return shared > 0 || 'les deux morceaux se touchent sans se recouvrir';
+});
+
+check('sans débord, la toiture reste d’un seul tenant', () => {
+  // No overhang, nothing to cut off — and no duplicated triangles to pay for.
+  const b = makeBuilding({
+    cells: [...rectCells(0, 0, 7, 5)],
+    roof: { type: 'hip', pitch: 28, overhang: 0, fascia: 0.2, shedDir: 'S' },
+  });
+  const m = normalise({ ...emptyModel(), buildings: [b] });
+  const tris = buildMesh(m).mesh.tris;
+  return tris.every((t) => t.group !== 'roofEave') || 'un débord inexistant a été découpé';
+});
+
 /* ---------------- framing ---------------- */
 
 check('un ancien fichier retrouve sa vue : rotation 2 devient 180°', () => {
@@ -1602,6 +1729,31 @@ check('une vue enregistrée survit à l’enregistrement du projet', () => {
   if (!v || v.name !== 'Portail') return 'vue perdue';
   if (!v.id) return 'vue sans identifiant';
   return (near(v.camera.yaw, 137) && v.focus.enabled) || 'réglages perdus';
+});
+
+await checkAsync('un export cadré n’a pas de coin vide', async () => {
+  // The ground quad is sized before the camera is known, so a tight frame can
+  // run past its edge and leave a wedge of lawn ending in a hard line with
+  // nothing beyond it. Reported in use, and only visible on real pixels: the
+  // markup looks perfectly well-formed either way.
+  const W = 200, H = 150;
+  const m = normalise({
+    ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 4)] })],
+    ground: { enabled: true, material: 'grass', margin: 0 },
+    focus: { enabled: true, x: 1, y: 1, w: 4, d: 3, margin: 0.5, hide: true, vignette: 0 },
+  });
+  const blob = await svgToPng(svgFor(m, { width: W, height: H, ratio: 1 }), W, H);
+  const img = await loadBlob(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  for (const [x, y] of [[2, 2], [W - 3, 2], [2, H - 3], [W - 3, H - 3], [W >> 1, 2]]) {
+    const a = ctx.getImageData(x, y, 1, 1).data[3];
+    if (a !== 255) return `coin (${x}, ${y}) transparent (alpha ${a})`;
+  }
+  return true;
 });
 
 await checkAsync('le fondu survit à la conversion en PNG, sans toucher au terrain', async () => {
