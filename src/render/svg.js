@@ -288,16 +288,23 @@ function pathData(face, camera) {
  * preview, and re-exporting tomorrow has to give the same image.
  */
 function nightSky(width, height, defs, prefix) {
+  // Three stops, not two. The sky lightens a little towards the horizon and
+  // goes dark again below it: with a single fall from zenith to floor, the
+  // bottom of the picture stayed as starry as the top and the plot read as
+  // floating in space rather than standing on the ground at night.
   const id = `${prefix}-sky`;
   defs.push(
     `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">` +
     `<stop offset="0" stop-color="${NIGHT.sky[0]}"/>` +
-    `<stop offset="1" stop-color="${NIGHT.sky[1]}"/></linearGradient>`,
+    `<stop offset="0.46" stop-color="${NIGHT.sky[1]}"/>` +
+    `<stop offset="1" stop-color="${NIGHT.sky[2]}"/></linearGradient>`,
   );
   const out = [`<rect width="${width}" height="${height}" fill="url(#${id})"/>`];
 
-  // Scattered over the whole frame, not only the upper part: the ground and
-  // the house cover the rest, which is exactly how a sky behaves.
+  // Stars belong overhead. They thin out through the lower half and are gone
+  // by the bottom of the frame — the plot is finite, so there is sky around it
+  // whichever way you look, and a starfield underneath the garden is the one
+  // reading nobody wants.
   const n = Math.min(220, Math.round((width * height) / 2600));
   const hash = (i, k) => {
     const v = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453;
@@ -305,10 +312,13 @@ function nightSky(width, height, defs, prefix) {
   };
   const stars = [];
   for (let i = 0; i < n; i++) {
+    const y = hash(i, 2) * height;
+    const fade = Math.max(0, Math.min(1, (0.88 * height - y) / (0.43 * height)));
+    if (fade < 0.02) continue;
     const r = (0.4 + hash(i, 3) * 1.0).toFixed(2);
     stars.push(`<circle cx="${(hash(i, 1) * width).toFixed(1)}" `
-      + `cy="${(hash(i, 2) * height).toFixed(1)}" r="${r}" `
-      + `opacity="${(0.25 + hash(i, 4) * 0.6).toFixed(2)}"/>`);
+      + `cy="${y.toFixed(1)}" r="${r}" `
+      + `opacity="${((0.25 + hash(i, 4) * 0.6) * fade).toFixed(2)}"/>`);
   }
   out.push(`<g fill="${NIGHT.star}">${stars.join('')}</g>`);
 
@@ -352,6 +362,11 @@ export function renderScene(input, opts = {}) {
   const b = built.bounds.empty ? { i0: 0, j0: 0, i1: 1, j1: 1 } : built.bounds;
   const cs = model.grid?.cellSize || 1;
   const framed = model.focus?.enabled;
+  // Night is a grade over whichever palette is in use, applied once, at the
+  // point the fills are computed: the textures take their shades from `fill`
+  // and the outlines are derived from it, so both follow without knowing.
+  const night = !!model.style.night;
+  const graded = (mat, hex) => (night ? nightColour(mat, hex) : hex);
   const camera = new Camera({
     yaw: model.camera.yaw,
     pitch: model.camera.pitch,
@@ -419,8 +434,14 @@ export function renderScene(input, opts = {}) {
    * stretches away without bound. Painting the frame in the ground's own
    * colour first does, and costs one rectangle. Only under a frame: in the
    * ordinary view the edge of the plot is a real edge, worth seeing.
+   *
+   * And not at night, where the sky already fills the frame. Note what this
+   * says about an axonometric view: an unbounded ground plane projects over
+   * the *whole* image, so a sky can only exist because the plot is finite. A
+   * full-bleed ground and a visible sky are the same setting at two ends —
+   * you cannot have both, and after dark the sky is the one worth having.
    */
-  if (framed && model.ground?.enabled) {
+  if (framed && !night && model.ground?.enabled) {
     floor.push(`<rect width="${width}" height="${height}" `
       + `fill="${faceColour(model.ground.material, theme, ov, [0, 0, 1])}"/>`);
   }
@@ -428,8 +449,6 @@ export function renderScene(input, opts = {}) {
   // Night is a grade over whichever palette is in use, applied once here: the
   // textures take their own shades from `fill`, and the outlines are derived
   // from it, so both follow without knowing anything about it.
-  const night = !!model.style.night;
-  const graded = (mat, hex) => (night ? nightColour(mat, hex) : hex);
   ordered.forEach((f, i) => {
     const sink = f.group === 'ground' ? floor : out;
     const fill = graded(f.mat, f.mat === 'shadow'

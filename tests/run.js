@@ -1539,6 +1539,40 @@ check('le ciel étoilé est identique d’un rendu à l’autre', () => {
   return (a.match(/<circle/g) || []).length > 30 || 'aucune étoile';
 });
 
+check('les étoiles s’arrêtent avant le bas de l’image', () => {
+  // Reported in use: a starfield under the garden reads as a house floating in
+  // space. The plot is finite, so there is sky all round it — but only what is
+  // overhead should be starry.
+  const m = normalise({ ...defaultModel(), style: { ...defaultModel().style, night: true } });
+  const svg = renderScene(m, { width: 400, height: 400 }).svg;
+  let low = 0, high = 0;
+  for (const [, cy] of [...svg.matchAll(/<circle cx="[\d.]+" cy="([\d.]+)" r=/g)].map((x) => x)) {
+    (Number(cy) > 340 ? () => { low++; } : () => { high++; })();
+  }
+  if (!high) return 'aucune étoile';
+  return low === 0 || `${low} étoiles dans le dernier dixième de l’image`;
+});
+
+check('sous cadrage, la nuit garde son ciel', () => {
+  // The daytime frame is backed by a plain fill of the ground colour, to stop
+  // a tight crop showing a wedge of nothing. At night that fill hid the sky
+  // entirely. Worth stating why they cannot both apply: an unbounded ground
+  // plane projects over the whole image in axonometry, so a sky exists only
+  // because the plot is finite.
+  const base = defaultModel();
+  const focus = { enabled: true, x: 12, y: 12, w: 8, d: 6, margin: 1, hide: true, vignette: 0 };
+  const day = renderScene(normalise({ ...base, focus }), { width: 300, height: 220 }).svg;
+  const dark = renderScene(normalise({
+    ...base, focus, style: { ...base.style, night: true },
+  }), { width: 300, height: 220 }).svg;
+  if (!/linearGradient/.test(dark)) return 'pas de ciel sous cadrage';
+  // One full-frame rectangle at night (the sky), two by day (sky-less: the
+  // ground backing plus nothing else).
+  const rects = (svg) => (svg.match(/<rect width="300" height="220"/g) || []).length;
+  if (rects(dark) !== 1) return `${rects(dark)} fonds pleins de nuit`;
+  return rects(day) === 1 || `${rects(day)} fonds pleins de jour`;
+});
+
 await checkAsync('une vue de nuit a un ciel, même en fond transparent', async () => {
   // The one setting this mode overrides, and on purpose: a transparent picture
   // of a dark house is not a night view. Checked on pixels — the sky is a
@@ -1553,12 +1587,16 @@ await checkAsync('une vue de nuit a un ciel, même en fond transparent', async (
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0);
   const top = ctx.getImageData(W - 4, 2, 1, 1).data;
+  const horizon = ctx.getImageData(W - 4, Math.round(H * 0.46), 1, 1).data;
   const bottom = ctx.getImageData(W - 4, H - 3, 1, 1).data;
   if (top[3] !== 255 || bottom[3] !== 255) return `ciel absent (alpha ${top[3]}, ${bottom[3]})`;
   if (top[2] <= top[0]) return 'le ciel n’est pas bleu';
-  // The gradient runs from zenith to horizon; if it were dropped the two
-  // samples would come out identical.
-  return Math.abs(top[2] - bottom[2]) > 6 || 'le dégradé du ciel n’a pas survécu';
+  // Three stops: dark at the zenith, lighter at the horizon, dark again below.
+  // Sampling only the two ends would now compare two near-identical darks and
+  // pass whether or not the gradient survived — which is how the first version
+  // of this check would have missed it.
+  if (horizon[2] <= top[2] + 6) return 'le dégradé du ciel n’a pas survécu';
+  return horizon[2] > bottom[2] + 6 || 'le ciel ne s’assombrit pas sous l’horizon';
 });
 
 /* ---------------- occlusion ---------------- */

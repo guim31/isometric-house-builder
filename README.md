@@ -86,6 +86,19 @@ Les **fenêtres restent allumées**, en jaune chaud. C'est tout l'intérêt d'un
 vue nocturne sur un tableau de bord domotique : elle dit si la maison est
 éveillée.
 
+Les **étoiles s'arrêtent avant le bas de l'image**. En axonométrie, un sol non
+borné se projette sur *toute* l'image : s'il y a un ciel, c'est uniquement parce
+que la parcelle est finie — donc il y en a tout autour d'elle, dessous compris.
+Un champ d'étoiles sous le jardin donne une maison flottant dans l'espace, ce
+que personne ne cherche. Seul ce qui est au-dessus est étoilé, et le dégradé
+s'assombrit à nouveau sous l'horizon.
+
+La même remarque explique un arbitrage : sous cadrage, le jour double le fond
+d'un aplat de la couleur du terrain, pour qu'un recadrage serré ne montre pas un
+coin vide. La nuit, ce même aplat masquait le ciel entièrement. Les deux ne
+peuvent pas coexister — c'est le même réglage à ses deux extrêmes — et après la
+tombée du jour, c'est le ciel qui vaut la peine.
+
 Une réserve à connaître : la vue de nuit **impose son ciel** et ne peut donc pas
 garder un fond transparent. Une image transparente de maison sombre n'est pas
 une vue de nuit.

@@ -188,7 +188,7 @@ export const FIXED = {
  * staying stubbornly orange in the dark.
  */
 export const NIGHT = {
-  sky: ['#070b1c', '#1a2748'],   // zenith, then horizon
+  sky: ['#070b1c', '#1b2a4e', '#080d1e'],   // zenith, horizon, below
   moon: '#f6f2e2',
   star: '#dfe6f5',
   // Windows are the point of a night view on a home dashboard: they say
