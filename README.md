@@ -60,7 +60,7 @@ tout moment, et *Page blanche* reste disponible.
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
 | **Caméra** | **Orbite libre** : on fait tourner la maison à la souris, sur 360° et de la vue rasante à la quasi-verticale — les quatre faces restent à un clic |
-| **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, les bords s'estompent en fondu, et chaque cadrage se garde comme **vue nommée** |
+| **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, ce qui s'éloigne du centre s'estompe, et chaque cadrage se garde comme **vue nommée** |
 | **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, toutes les vues enregistrées en lot, copie directe dans le presse-papier |
 
 ## Cadrer sur une zone
@@ -79,10 +79,18 @@ au lieu de l'écarter. D'où le retrait pur et simple.
 
 Le retrait porte sur des éléments entiers, jamais sur des morceaux : une haie
 qui entre dans le cadre y reste tout entière, parce qu'une demi-haie finissant
-en l'air est un défaut pire qu'une haie qui sort de l'image. Le **fondu des
-bords** adoucit ensuite la coupe. Il s'applique à l'image composée, non à chaque
-face : estomper les faces une par une rendrait la maison transparente à
-elle-même, et on lirait le mur du fond au travers du mur de devant.
+en l'air est un défaut pire qu'une haie qui sort de l'image.
+
+Le **fondu des lointains** adoucit ensuite la coupe. Il s'applique à l'image
+composée et non à chaque face — estomper les faces une par une rendrait la
+maison transparente à elle-même, et on lirait le mur du fond au travers du mur
+de devant. Le terrain, lui, en est exclu, et c'est toute la différence entre un
+effet et une tache : une pelouse couvre l'image d'un bord à l'autre, et
+l'estomper y dessine une ellipse pâle — la seule chose qu'un dégradé radial
+puisse produire sur un aplat. Seul s'estompe ce qui *repose* sur le sol, ce qui
+donne le résultat cherché : les choses lointaines se dissolvent dans la pelouse
+au lieu d'être tranchées par le bord de l'image, et le rendu est le même quel
+que soit le fond sur lequel l'image est posée.
 
 Chaque cadrage se garde comme **vue nommée** — un portail, une piscine, une vue
 d'ensemble — et le bouton *Vues enregistrées* de la fenêtre d'export les

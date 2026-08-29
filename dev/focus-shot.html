@@ -28,7 +28,7 @@ const gate = { enabled: true, x: 16, y: 9, w: 8, d: 3.5, margin: 0.5, hide: true
 const shots = [
   ['Vue d’ensemble — le portail fait quelques pixels', {}],
   ['Cadré sur le portail', { focus: { ...gate, vignette: 0 } }],
-  ['Cadré, avec fondu des bords', { focus: gate }],
+  ['Cadré, avec fondu des lointains', { focus: gate }],
 ];
 document.getElementById('row').innerHTML = shots.map(([label, patch]) =>
   `<figure>${renderScene({ ...model, ...patch }, { width: 426, height: 300 }).svg}` +

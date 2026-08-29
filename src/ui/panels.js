@@ -456,11 +456,11 @@ export class Inspector {
         min: 0, max: 10, step: 0.25, format: (v) => `${fmtMetres(v)} m`,
         onInput: (v) => this.setIn('focus', { margin: v }, 'focus'),
       }), 'air laissé autour de la zone'),
-      field('Fondu des bords', slider(f.vignette, {
+      field('Fondu des lointains', slider(f.vignette, {
         min: 0, max: 0.8, step: 0.02,
         format: (v) => (v < 0.01 ? 'net' : `${Math.round(v * 100)} %`),
         onInput: (v) => this.setIn('focus', { vignette: v }, 'focus'),
-      }), 'estompe le bord de l’image au lieu de le couper'),
+      }), 'estompe ce qui s’éloigne du centre — le terrain n’est pas touché'),
       field('Masquer le reste', toggle(f.hide, (v) => this.setIn('focus', { hide: v })),
         'sinon le reste est simplement hors champ — et un objet lointain peut malgré tout se projeter dans l’image'),
     );

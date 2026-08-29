@@ -220,9 +220,14 @@ export function renderScene(input, opts = {}) {
   };
   const prefix = `t${renderSeq++}`;
   const out = [];
+  // The ground is emitted apart because the vignette must not touch it. It is
+  // always first in draw order anyway, being a backdrop rather than a
+  // participant in the depth sort.
+  const floor = [];
   const defs = [];
   const hair = Math.max(0.5, camera.scale * 0.02);
   ordered.forEach((f, i) => {
+    const sink = f.group === 'ground' ? floor : out;
     const fill = f.mat === 'shadow'
       ? materialColour(f.mat, theme, ov)
       : faceColour(f.mat, theme, ov, f.nCam);
@@ -235,7 +240,7 @@ export function renderScene(input, opts = {}) {
     if (model.style.outline && !NO_OUTLINE.has(f.mat)) {
       parts.push(`stroke="${darken(fill, 0.26)}"`, `stroke-width="${model.style.outlineWidth}"`);
     }
-    out.push(`<path ${parts.join(' ')}/>`);
+    sink.push(`<path ${parts.join(' ')}/>`);
 
     const spec = specFor(f.mat, textureFor(f.mat));
     if (!spec) return;
@@ -278,18 +283,27 @@ export function renderScene(input, opts = {}) {
 
     if (!layers.length) return;
     defs.push(`<clipPath id="${id}"><path d="${d}"/></clipPath>`);
-    out.push(...layers);
+    sink.push(...layers);
   });
 
   const bg = model.style.background;
   const bgRect = bg && bg !== 'transparent'
     ? `<rect width="${width}" height="${height}" fill="${bg}"/>` : '';
 
-  // The vignette fades the whole composite, not each face: fading faces one by
-  // one would make the house transparent to itself — you would read the far
-  // wall through the near one. Masking after compositing has no such problem.
-  // The background stays outside the mask, so an opaque export fades into its
-  // own colour rather than into a hole.
+  /*
+   * The fade applies to the composite, not to each face: fading faces one by
+   * one would make the house transparent to itself — you would read the far
+   * wall through the near one. Masking after compositing has no such problem.
+   *
+   * The ground and the background are left out of it, and that is the whole
+   * difference between an effect and a blemish. A lawn covers the frame edge
+   * to edge; fading it to transparent draws a pale ellipse across it, which is
+   * what a radial gradient over a flat colour can only ever look like. Fading
+   * only what *stands* on the ground gives what was actually wanted: distant
+   * things dissolving into the lawn instead of being sliced by the picture
+   * edge — and it reads the same whatever the image is dropped onto, since it
+   * no longer fades into the backdrop but into the ground.
+   */
   let maskAttr = '';
   const vig = framed ? Math.max(0, Math.min(0.9, model.focus.vignette ?? 0)) : 0;
   if (vig > 0.001) {
@@ -318,6 +332,7 @@ export function renderScene(input, opts = {}) {
     `viewBox="0 0 ${width} ${height}" shape-rendering="geometricPrecision">` +
     (defs.length ? `<defs>${defs.join('')}</defs>` : '') +
     bgRect +
+    (floor.length ? `<g stroke-linejoin="round" stroke-linecap="round">${floor.join('')}</g>` : '') +
     `<g stroke-linejoin="round" stroke-linecap="round"${maskAttr}>${out.join('')}</g>` +
     `</svg>`;
 

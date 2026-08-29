@@ -1604,32 +1604,61 @@ check('une vue enregistrée survit à l’enregistrement du projet', () => {
   return (near(v.camera.yaw, 137) && v.focus.enabled) || 'réglages perdus';
 });
 
-await checkAsync('le fondu des bords survit à la conversion en PNG', async () => {
-  // The one gradient in the output, and the reason it is a mask rather than a
-  // filter: browsers skip filters when rasterising an <img>, which would have
-  // dropped the effect from exactly the PNG it was asked for. Checked on real
-  // pixels, because reading the markup would prove nothing about that.
-  const m = normalise({
-    ...defaultModel(),
-    style: { ...defaultModel().style, background: '#ffffff' },
-    focus: { enabled: true, x: 0, y: 0, w: 40, d: 40, margin: 0, hide: false, vignette: 0.6 },
-  });
+await checkAsync('le fondu survit à la conversion en PNG, sans toucher au terrain', async () => {
+  // Two things at once, both only provable on real pixels. First that the mask
+  // rasterises at all: it is the one gradient in the output, and it is a mask
+  // rather than a filter precisely because browsers skip filters when turning
+  // an <img> into pixels. Second that the ground is left alone — fading a lawn
+  // that covers the frame edge to edge draws a pale ellipse across it, which is
+  // the only thing a radial gradient over a flat colour can look like.
   const W = 240, H = 180;
-  const blob = await svgToPng(svgFor(m, { width: W, height: H, ratio: 1 }), W, H);
-  const img = await loadBlob(blob);
-  const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-  const px = (x, y) => [...ctx.getImageData(x, y, 1, 1).data];
-  // The background is opaque white everywhere; what the mask fades is the
-  // drawing on top of it. So the corner must be *whiter* than the centre.
-  const corner = px(3, 3);
-  const centre = px(W >> 1, H >> 1);
-  const lum = (c) => (c[0] + c[1] + c[2]) / 3;
-  if (corner[3] !== 255) return `le fond n’est plus opaque (alpha ${corner[3]})`;
-  return lum(corner) > lum(centre) + 12
-    || `coin ${Math.round(lum(corner))} vs centre ${Math.round(lum(centre))} — pas de fondu`;
+  const shoot = async (patch) => {
+    const m = normalise({ ...defaultModel(), ...patch });
+    const blob = await svgToPng(svgFor(m, { width: W, height: H, ratio: 1 }), W, H);
+    const img = await loadBlob(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    return ctx.getImageData(0, 0, W, H).data;
+  };
+  const lum = (d, x, y) => {
+    const i = (y * W + x) * 4;
+    return (d[i] + d[i + 1] + d[i + 2]) / 3;
+  };
+  const white = { style: { ...defaultModel().style, background: '#ffffff' } };
+  // Framed on the footprint, so the house reaches the fade. A frame twice the
+  // size of the house leaves it sitting in the untouched middle — which is how
+  // the previous version of this test came to pass without proving anything:
+  // it compared a corner of lawn to a roof and found the lawn lighter.
+  const fb = renderScene(normalise(defaultModel()), { width: W, height: H }).built.bounds;
+  const frame = {
+    enabled: true, hide: false, margin: 0,
+    x: fb.i0, y: fb.j0, w: fb.i1 - fb.i0 + 1, d: fb.j1 - fb.j0 + 1,
+  };
+
+  // Without the ground, the fade has to show: everything left is the house.
+  const bare = { ...white, ground: { ...defaultModel().ground, enabled: false } };
+  const net = await shoot({ ...bare, focus: { ...frame, vignette: 0 } });
+  const doux = await shoot({ ...bare, focus: { ...frame, vignette: 0.7 } });
+  let moved = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) if (lum(doux, x, y) > lum(net, x, y) + 6) moved++;
+  }
+  if (moved < 50) return `seulement ${moved} pixels estompés — le masque n’est pas appliqué`;
+  if (Math.abs(lum(doux, W >> 1, H >> 1) - lum(net, W >> 1, H >> 1)) > 2) {
+    return 'le centre de l’image a bougé';
+  }
+
+  // With the ground back, the corner is lawn and must be untouched.
+  const solA = await shoot({ ...white, focus: { ...frame, vignette: 0 } });
+  const solB = await shoot({ ...white, focus: { ...frame, vignette: 0.7 } });
+  for (const [x, y] of [[3, 3], [W - 4, 3], [3, H - 4], [W - 4, H - 4]]) {
+    if (Math.abs(lum(solA, x, y) - lum(solB, x, y)) > 2) {
+      return `le terrain s’estompe en (${x}, ${y}) — l’ellipse est de retour`;
+    }
+  }
+  return true;
 });
 
 /**
