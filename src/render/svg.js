@@ -39,10 +39,131 @@ const OPACITY = { shadow: 0.13 };
 const LAYER = { ground: 0, shadow: 1, decal0: 2, decal1: 3, decal2: 4 };
 const layerOf = (f) => LAYER[f.group] ?? 5;
 
+/**
+ * The building shell: walls, roof, overhang, fascia.
+ *
+ * These are the faces the centroid order cannot be trusted on. They are large,
+ * they belong to the same solid, and they meet at every edge; a centre is a
+ * poor stand-in for "which of these two is nearer" when both span metres.
+ */
+const SHELL = new Set(['wall', 'roof', 'roofEdge']);
+
+/**
+ * Does `a` lie entirely on the far side of `b`'s plane?
+ *
+ * The exact question the painter's order is trying to answer, and the reason a
+ * plane test settles what centroids only guess at. Distances are taken in world
+ * space: the dot product is unchanged by the camera's rotation, so no
+ * projection is needed. `b.normal` points towards the camera for a visible
+ * face, hence negative distances are behind it.
+ */
+function behindPlane(a, b, eps = 1e-4) {
+  const n = b.normal, c = b.centroid;
+  for (const loop of a.loops) {
+    for (const p of loop) {
+      const d = n[0] * (p[0] - c[0]) + n[1] * (p[1] - c[1]) + n[2] * (p[2] - c[2]);
+      if (d > -eps) return false;
+    }
+  }
+  return true;
+}
+
+/** Screen bounding box, cached on the face. */
+function screenBox(f, camera) {
+  if (f.box) return f.box;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const loop of f.loops) {
+    for (const p of loop) {
+      const s = camera.toScreen(p);
+      if (s[0] < x0) x0 = s[0];
+      if (s[0] > x1) x1 = s[0];
+      if (s[1] < y0) y0 = s[1];
+      if (s[1] > y1) y1 = s[1];
+    }
+  }
+  f.box = [x0, y0, x1, y1];
+  return f.box;
+}
+
+/**
+ * Reorder the shell by pairwise plane tests, keeping everything else in place.
+ *
+ * Sorting on centres held for one camera angle and stopped holding once the
+ * angle was free. Two failures showed why. A roof slope tilts away, so its
+ * centre sits behind its eave and the wall below won: the wall painted over the
+ * overhang that covers it. Cutting the overhang off the slope fixed that on a
+ * hipped roof and not on a gabled one — there the overhang runs on up the rake
+ * to the ridge, and the band's centre lands *behind* the wall it hangs over.
+ * No amount of cutting turns a centre into an answer.
+ *
+ * So the order between two shell faces is decided by asking, not by measuring a
+ * proxy: if every vertex of one lies beyond the other's plane, it is behind it,
+ * whatever their centres say. The test is exact for planar faces, which these
+ * are. Only pairs that overlap on screen are constrained, so faces that cannot
+ * hide each other stay where the depth sort put them; the result is settled by
+ * a topological sort that falls back to that order for anything the plane test
+ * leaves undecided, and for the cycles it cannot rule out.
+ *
+ * Confined to the shell on purpose. Trees, ground and terraces are ordered by
+ * machinery of their own — fixed layers and `after` anchors — and are not
+ * planar solids meeting at their edges, so the same test would decide little
+ * and risk much.
+ */
+function repairShell(all, camera) {
+  const faces = all.filter((f) => SHELL.has(f.group) && f.facing > 1e-6);
+  if (faces.length < 2) return;
+
+  // before[j] = faces that must be drawn before faces[j].
+  const before = faces.map(() => []);
+  const indeg = faces.map(() => 0);
+  const overlap = (p, q) => p[0] <= q[2] && q[0] <= p[2] && p[1] <= q[3] && q[1] <= p[3];
+  for (let a = 0; a < faces.length; a++) {
+    for (let b = a + 1; b < faces.length; b++) {
+      if (!overlap(screenBox(faces[a], camera), screenBox(faces[b], camera))) continue;
+      // Coplanar faces are never separated by each other's plane; leave them.
+      let first = -1;
+      if (behindPlane(faces[a], faces[b])) first = a;
+      else if (behindPlane(faces[b], faces[a])) first = b;
+      if (first < 0) continue;
+      const second = first === a ? b : a;
+      before[second].push(first);
+      indeg[second]++;
+    }
+  }
+
+  // Kahn's algorithm, ties broken by the depth already computed. A cycle —
+  // which the plane test cannot rule out for three faces winding round each
+  // other — is broken by releasing whichever remaining face came first.
+  const order = faces.map((_, i) => i);
+  order.sort((i, j) => faces[i].sortDepth - faces[j].sortDepth || faces[i].seq - faces[j].seq);
+  const out = [];
+  const done = faces.map(() => false);
+  const after = faces.map(() => []);
+  for (let j = 0; j < faces.length; j++) for (const i of before[j]) after[i].push(j);
+  while (out.length < faces.length) {
+    let pick = -1;
+    for (const j of order) { if (!done[j] && indeg[j] === 0) { pick = j; break; } }
+    if (pick < 0) for (const j of order) if (!done[j]) { pick = j; break; }
+    done[pick] = true;
+    out.push(pick);
+    for (const j of after[pick]) if (!done[j] && indeg[j] > 0) indeg[j]--;
+  }
+
+  // Write the order back as depths rather than as positions. Everything else
+  // is placed by depth too — the ground layers, and the `after` anchors that
+  // put a solar panel on its slope — so handing the result back in the same
+  // currency keeps a panel with the roof that carries it instead of leaving it
+  // stranded in the slot its slope has just vacated. The existing depths are
+  // reused, only redistributed, so the shell keeps its place among the trees.
+  const pool = faces.map((f) => f.sortDepth).sort((a, b) => a - b);
+  out.forEach((i, k) => { faces[i].sortDepth = pool[k]; });
+}
+
 /** Resolve `after` anchors and return faces in draw order. */
 function orderFaces(faces, camera) {
   faces.forEach((f, i) => {
     f.seq = i;
+    f.box = null; // screen boxes are per camera, and faces outlive a frame
     f.nCam = rotateDir(f.normal, camera.yaw);
     f.facing = facingOf(f.nCam, camera.lambda);
     f.depth = camera.depth(f.centroid);
@@ -54,15 +175,12 @@ function orderFaces(faces, camera) {
   // resting on it should not have to know which.
   const byGroup = new Map();
   const byGroupOnly = new Map();
-  const byMat = new Map();
   for (const f of faces) {
     const k = `${f.mat}|${f.group}`;
     if (!byGroup.has(k)) byGroup.set(k, []);
     byGroup.get(k).push(f);
     if (!byGroupOnly.has(f.group)) byGroupOnly.set(f.group, []);
     byGroupOnly.get(f.group).push(f);
-    if (!byMat.has(f.mat)) byMat.set(f.mat, []);
-    byMat.get(f.mat).push(f);
   }
 
   // Screen-space containment test, used to choose which surface carries a
@@ -84,14 +202,9 @@ function orderFaces(faces, camera) {
     f.sortDepth = f.depth;
     f.carrier = null;
     if (!f.after) continue;
-    // Naming a material without a group spans every group carrying it, which
-    // is how a roof item rests on the roof whether it sits over the footprint
-    // or out on the overhang — two groups, one surface.
-    const cands = f.after.group === undefined
-      ? byMat.get(f.after.mat)
-      : (f.after.mat
-        ? byGroup.get(`${f.after.mat}|${f.after.group}`)
-        : byGroupOnly.get(f.after.group));
+    const cands = f.after.mat
+      ? byGroup.get(`${f.after.mat}|${f.after.group}`)
+      : byGroupOnly.get(f.after.group);
     if (!cands || !cands.length) continue;
 
     // The carrier is the surface that actually covers this face on screen,
@@ -121,6 +234,8 @@ function orderFaces(faces, camera) {
     }
     f.carrier = best;
   }
+
+  repairShell(faces, camera);
 
   // Propagate along the chain rather than resolving each link once: water
   // rests on its coping, which rests on the terrace. Reading the carrier's raw

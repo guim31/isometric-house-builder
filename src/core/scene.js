@@ -96,7 +96,7 @@ function buildRoofItems(mesh, b, roof, items, mat) {
   const { field } = roof;
   const top = wallTop(b);
   const zAt = (x, y) => top + Math.max(0, field.h(x, y));
-  const after = { mat: mat('roof') };
+  const after = { mat: mat('roof'), group: 'roof' };
 
   for (const it of items) {
     const w = it.w ?? 2, d = it.d ?? 1.5;

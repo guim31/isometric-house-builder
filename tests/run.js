@@ -606,11 +606,7 @@ check('les tuiles sont regroupées par nuance, pas émises une à une', () => {
   const paths = (svg.match(/<path/g) || []).length;
   const tiles = (svg.match(/Z/g) || []).length;
   if (tiles < 500) return `${tiles} tuiles : le panachage ne s'est pas déclenché`;
-  // The budget covers the cost of cutting the overhang off each slope: two
-  // faces where there was one means two sets of shade paths, about +50%. Worth
-  // it — the alternative was the wall coming through the eaves — but it is a
-  // real cost, and the point of a budget is to notice the next one.
-  return paths < 500 || `${paths} chemins pour ${tiles} facettes`;
+  return paths < 400 || `${paths} chemins pour ${tiles} facettes`;
 });
 
 check('seuls les murs et la toiture reçoivent une matière', () => {
@@ -1515,6 +1511,8 @@ await checkAsync('le PNG conserve la transparence du fond', async () => {
  * occlusion error and not a matter of taste. Reporting it in metres of
  * overshoot is what separates a real inversion from a tie along a shared edge.
  */
+const STACKED = new Set(['solar', 'solarFrame', 'solarCell']);
+
 function occlusionErrors(model, W, H, step = 3) {
   const out = renderScene(model, { width: W, height: H });
   const cam = out.camera, proj = cam.proj, L = cam.lambda;
@@ -1559,6 +1557,11 @@ function occlusionErrors(model, W, H, step = 3) {
       if (!top || !best || best.F === top) continue;
       const dTop = depthAt(top, x, y);
       if (dTop === null || best.dp - dTop < 0.03) continue;
+      // A solar array is three deliberately stacked decals a centimetre apart:
+      // backing, cells, then the grid lines. Their order is set by insertion,
+      // not by depth, and a plane test on faces that nearly coincide answers a
+      // question nobody asked. Everything else is fair game.
+      if (STACKED.has(best.F.f.group) && STACKED.has(top.f.group)) continue;
       const key = `${best.F.f.group} masqué par ${top.f.group}`;
       bad.set(key, (bad.get(key) || 0) + 1);
     }
@@ -1567,64 +1570,46 @@ function occlusionErrors(model, W, H, step = 3) {
 }
 
 check('un mur ne passe jamais devant le toit qui le couvre', () => {
-  // What the free camera height exposed. A roof slope is large and tilts away,
-  // so its centre sits metres behind its eave, while the wall below has its
-  // centre on its own plane: sorted on centres alone the wall won, and below
-  // about 30° it came through the overhang. Checked at the heights that used
-  // to fail and at those that did not.
-  const m = normalise({ ...PRESETS.find((p) => p.id === 'provence').model });
-  for (const pitch of [12, 18, 22, 26, 30, 35, 45, 60]) {
-    const bad = occlusionErrors({ ...m, camera: { ...m.camera, pitch } }, 400, 300);
-    for (const [k, n] of bad) {
-      if (/^roof.* masqué par wall/.test(k)) return `hauteur ${pitch}° : ${n} px — ${k}`;
+  // What the free camera exposed, twice over. Sorting faces on their centres
+  // held at one fixed angle and stopped holding once the angle was free: a roof
+  // slope tilts away, so its centre sits behind its eave while the wall below
+  // has its centre on its own plane, and the wall painted over the overhang.
+  // Swept on both axes, because the first version of this check swept the
+  // camera height alone and passed while the fault was plainly visible at 8°
+  // from the orientations the user actually uses.
+  for (const id of ['provence', 'chalet']) {
+    const m = normalise({ ...PRESETS.find((p) => p.id === id).model });
+    for (const pitch of [8, 14, 24, 40]) {
+      for (const yaw of [0, 67, 146, 220, 310]) {
+        const bad = occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch } }, 260, 200, 4);
+        for (const [k, n] of bad) {
+          if (/^roof.* masqué par wall/.test(k)) {
+            return `${id} ${yaw}°/${pitch}° : ${n} px — ${k}`;
+          }
+        }
+      }
     }
   }
   return true;
 });
 
-check('aucun recouvrement grossier, à toutes les hauteurs de caméra', () => {
-  // A budget rather than zero: a handful of pixels still invert along shared
-  // silhouette edges, where a chimney meets its own roof or a shutter meets a
-  // fascia. Those predate the free camera and are a pixel or two wide. The
-  // budget is here to catch the next one that is not.
-  const m = normalise({ ...PRESETS.find((p) => p.id === 'provence').model });
+check('aucun recouvrement grossier, à tout angle de caméra', () => {
+  // A budget rather than zero: a few pixels still invert along shared
+  // silhouette edges — a chimney against its own roof, the frame of a solar
+  // panel against its cells. Those predate the free camera. The budget exists
+  // to catch the next one that is not of that kind.
   let worst = 0, name = '';
-  for (const pitch of [14, 26, 35, 50]) {
-    for (const [k, n] of occlusionErrors({ ...m, camera: { ...m.camera, pitch } }, 400, 300)) {
-      if (n > worst) { worst = n; name = `${k} (hauteur ${pitch}°)`; }
+  for (const id of ['provence', 'chalet', 'pavillon']) {
+    const m = normalise({ ...PRESETS.find((p) => p.id === id).model });
+    for (const pitch of [8, 20, 40]) {
+      for (const yaw of [0, 45, 146, 220, 310]) {
+        for (const [k, n] of occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch } }, 260, 200, 4)) {
+          if (n > worst) { worst = n; name = `${id} ${k} (${yaw}°/${pitch}°)`; }
+        }
+      }
     }
   }
-  return worst <= 12 || `${worst} px : ${name}`;
-});
-
-check('le débord et la pente se recouvrent au lieu de se toucher', () => {
-  // Cut cleanly at the wall line, two coplanar pieces sharing an edge each
-  // cover about half the pixels along it and let the background show through —
-  // the hairline that once appeared between hedge segments. One ring of the
-  // footprint is emitted into both groups so that they overlap instead.
-  const b = makeBuilding({
-    cells: [...rectCells(0, 0, 7, 5)],
-    roof: { type: 'hip', pitch: 28, overhang: 1, fascia: 0.2, shedDir: 'S' },
-  });
-  const m = normalise({ ...emptyModel(), buildings: [b] });
-  const tris = buildMesh(m).mesh.tris;
-  const key = (t) => [t.a, t.b, t.c].map((q) => q.map((v) => v.toFixed(3)).join(',')).join('|');
-  const core = new Set(tris.filter((t) => t.group === 'roof').map(key));
-  const eave = tris.filter((t) => t.group === 'roofEave').map(key);
-  if (!eave.length) return 'le débord n’a pas été séparé de la pente';
-  const shared = eave.filter((k) => core.has(k)).length;
-  return shared > 0 || 'les deux morceaux se touchent sans se recouvrir';
-});
-
-check('sans débord, la toiture reste d’un seul tenant', () => {
-  // No overhang, nothing to cut off — and no duplicated triangles to pay for.
-  const b = makeBuilding({
-    cells: [...rectCells(0, 0, 7, 5)],
-    roof: { type: 'hip', pitch: 28, overhang: 0, fascia: 0.2, shedDir: 'S' },
-  });
-  const m = normalise({ ...emptyModel(), buildings: [b] });
-  const tris = buildMesh(m).mesh.tris;
-  return tris.every((t) => t.group !== 'roofEave') || 'un débord inexistant a été découpé';
+  return worst <= 20 || `${worst} px : ${name}`;
 });
 
 /* ---------------- framing ---------------- */

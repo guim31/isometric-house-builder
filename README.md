@@ -242,18 +242,22 @@ modifier le moteur :
   pendant que l'autre, dessiné après, la coupait en deux. Le porteur est
   désormais choisi par recouvrement à l'écran, ce qui donne la bonne réponse
   aussi bien au faîtage qu'en bas de pente.
-- **Le débord est découpé du reste de la pente.** Une pente de toit est grande
-  et s'incline en s'éloignant : son centre se trouve à plusieurs mètres derrière
-  sa rive, tandis que le mur qu'elle couvre a le sien sur son propre plan. Triés
-  sur leurs centres, le mur l'emportait et se dessinait par-dessus le débord
-  censé le masquer. Cela ne tenait qu'à la hauteur de caméra fixe d'alors, où le
-  supplément d'altitude du toit compensait tout juste ; libérer l'angle l'a mis
-  au jour, et sous 30° environ le mur traversait la rive. Coupé au droit du mur,
-  le débord devient une bande étroite dont le centre est vraiment là où il
-  paraît, et il l'emporte à toute hauteur. Les deux morceaux **se recouvrent**
-  d'une case au lieu de se toucher : deux formes coplanaires partageant une
-  arête ne couvrent chacune que la moitié des pixels qui la longent, et laissent
-  voir au travers — la même couture qu'entre deux tronçons de haie.
+- **La coque est ordonnée par un test de plan, pas par des centres.** Trier les
+  faces sur leur centre tenait tant que la caméra ne bougeait pas ; libérer
+  l'angle l'a démenti. Une pente de toit s'incline en s'éloignant, donc son
+  centre se trouve derrière sa rive, tandis que le mur qu'elle couvre a le sien
+  sur son propre plan : le mur se dessinait par-dessus le débord censé le
+  masquer. Découper le débord réglait le cas d'une croupe et pas celui d'un
+  deux-pans, où le débord remonte le long du rampant jusqu'au faîtage et emporte
+  le centre de la bande *derrière* le mur. Aucun découpage ne transforme un
+  centre en réponse. L'ordre entre deux faces de coque est donc décidé en le
+  demandant : si tous les sommets de l'une sont au-delà du plan de l'autre, elle
+  est derrière, quoi qu'en disent les centres. Le test est exact pour des faces
+  planes, ce qu'elles sont ; seules les paires qui se recouvrent à l'écran sont
+  contraintes, et un tri topologique retombe sur la profondeur pour tout ce que
+  le test laisse indécis. Volontairement limité à murs, toiture et rives : le
+  reste — arbres, sol, terrasses — est rangé par des mécanismes propres, et
+  n'est pas fait de solides plans se rejoignant sur leurs arêtes.
 
 - **Les éléments linéaires sont émis en tronçons.** Une haie ou un muret de
   vingt mètres fusionné en une seule face n'a qu'un centre, donc qu'une
@@ -307,6 +311,16 @@ modifier le moteur :
 | `src/ui/` | Plan, rendu, inspecteur, galerie, historique |
 | `src/ui/actions.js` | Pose des ouvertures, objets de toit et extérieurs, partagée par les deux vues |
 | `src/io/` | Export image, fichiers de projet, lien de partage |
+
+Un point de méthode, puisqu'il a fait ses preuves : les défauts de
+recouvrement se cherchent avec un **détecteur**, pas à l'œil. Pour chaque pixel
+échantillonné, `tests/run.js` résout l'intersection du rayon de vue avec le
+*plan* de chaque face qui le couvre, et signale celles dessinées par-dessus
+quelque chose de plus proche — en mètres de dépassement, ce qui sépare une vraie
+inversion d'une égalité sur une arête commune. Les deux derniers défauts
+trouvés étaient invisibles sur une capture et évidents pour lui. Il balaie les
+orientations *et* les hauteurs de caméra : la première version ne balayait que
+les hauteurs et passait pendant qu'un mur traversait manifestement un débord.
 
 Les contributions sont bienvenues : ouvrez une issue ou une pull request.
 Merci de faire passer `./dev/run-tests.sh` avant de proposer un changement.

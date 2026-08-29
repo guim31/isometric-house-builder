@@ -79,10 +79,7 @@ export function heightField(rects, opts) {
   }
 
   const inside = (x, y) => ex.some((r) => inRect(r, x, y));
-  // Same test on the unexpanded rectangles: true over the footprint proper,
-  // false out on the overhang. The renderer needs to tell the two apart.
-  const core = (x, y) => rects.some((r) => inRect(r, x, y));
-  return { h, inside, core, bbox: { x0: bx0, y0: by0, x1: bx1, y1: by1 }, overhang: o, slope };
+  return { h, inside, bbox: { x0: bx0, y0: by0, x1: bx1, y1: by1 }, overhang: o, slope };
 }
 
 /**
@@ -91,14 +88,6 @@ export function heightField(rects, opts) {
  * `wallTop` is the eaves height. Materials used: 'roof' for the slopes,
  * 'roofEdge' for the fascia band around the rim, and 'wall' for gable ends,
  * which is what the vertical part of a gable actually is.
- *
- * The slopes are emitted in two groups of the same material: 'roof' over the
- * footprint, 'roofEave' out on the overhang. They are coplanar and identical to
- * look at; the split exists so that they sort separately. A whole slope merged
- * into one face has its centre metres back from its eave, and the wall beneath
- * — whose centre lies on its own plane — then sorts in front of the overhang
- * that should hide it. Cut at the wall line, the overhang is a narrow band
- * whose centre really is where it appears, and it wins at any camera height.
  */
 export function buildRoof(mesh, field, opts, wallTop, mat = (n) => n) {
   if (!field) return null;
@@ -120,19 +109,6 @@ export function buildRoof(mesh, field, opts, wallTop, mat = (n) => n) {
     if (a < 0 || b < 0 || a >= nx || b >= ny) return false;
     return field.inside(x0 + (a + 0.5) * STEP, y0 + (b + 0.5) * STEP);
   };
-  const cellCore = (a, b) => {
-    if (a < 0 || b < 0 || a >= nx || b >= ny) return false;
-    return field.core(x0 + (a + 0.5) * STEP, y0 + (b + 0.5) * STEP);
-  };
-  // A cell of the footprint that touches the overhang. Its triangles are
-  // emitted twice, once into each group, so the two pieces overlap by a cell
-  // instead of merely abutting. Two coplanar shapes sharing an edge each cover
-  // about half of the pixels along it, and what shows through the gap is
-  // whatever lies behind the roof — the same hairline that once appeared
-  // between hedge segments. Overlapping costs one ring of duplicated
-  // triangles and removes the seam whichever of the two is drawn last.
-  const cellHem = (a, b) => cellCore(a, b) && [[1, 0], [-1, 0], [0, 1], [0, -1]]
-    .some(([da, db]) => cellInside(a + da, b + db) && !cellCore(a + da, b + db));
 
   let apex = wallTop;
   for (let b = 0; b < ny; b++) {
@@ -150,17 +126,12 @@ export function buildRoof(mesh, field, opts, wallTop, mat = (n) => n) {
       const centre = wallTop + Math.max(0, field.h(px + STEP / 2, py + STEP / 2));
       const dA = Math.abs((p00[2] + p11[2]) / 2 - centre);
       const dB = Math.abs((p10[2] + p01[2]) / 2 - centre);
-      const groups = cellCore(a, b)
-        ? (cellHem(a, b) ? ['roof', 'roofEave'] : ['roof'])
-        : ['roofEave'];
-      for (const grp of groups) {
-        if (dA <= dB) {
-          mesh.tri(p00, p10, p11, mat('roof'), grp);
-          mesh.tri(p00, p11, p01, mat('roof'), grp);
-        } else {
-          mesh.tri(p00, p10, p01, mat('roof'), grp);
-          mesh.tri(p10, p11, p01, mat('roof'), grp);
-        }
+      if (dA <= dB) {
+        mesh.tri(p00, p10, p11, mat('roof'), 'roof');
+        mesh.tri(p00, p11, p01, mat('roof'), 'roof');
+      } else {
+        mesh.tri(p00, p10, p01, mat('roof'), 'roof');
+        mesh.tri(p10, p11, p01, mat('roof'), 'roof');
       }
 
       // Rim: the fascia band only. Anything vertical below it is wall, and
