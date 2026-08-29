@@ -213,15 +213,25 @@ function orderFaces(faces, camera) {
       : byGroupOnly.get(f.after.group);
     if (!cands || !cands.length) continue;
 
-    // The carrier is the surface that actually covers this face on screen,
-    // taking the nearest one when several do. Picking merely the closest
-    // plane sliced every chimney standing near a ridge: it anchored to one
-    // slope while the other, drawn later, painted over it.
+    /*
+     * The carrier is the surface that actually covers this face on screen,
+     * taking the nearest one when several do. Picking merely the closest plane
+     * sliced every chimney standing near a ridge: it anchored to one slope
+     * while the other, drawn later, painted over it.
+     *
+     * But a surface the face lies entirely *behind* is hiding it, not carrying
+     * it — and anchoring to it drew the face in front of the very thing that
+     * should conceal it. That is how solar panels on the far slope of a roof
+     * came to show through the near one. The plane test tells the two apart:
+     * a chimney by a ridge rises above the far slope's plane and so keeps it
+     * as a candidate, while a panel lying flat beyond the ridge does not.
+     */
     const pt = camera.toScreen(f.centroid);
     let best = null;
     for (const c of cands) {
       if (c === f) continue;
       if (!contains(c, pt)) continue;
+      if (behindPlane(f, c)) continue;
       if (!best || c.depth > best.depth) best = c;
     }
     if (!best) {

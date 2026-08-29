@@ -322,11 +322,15 @@ modifier le moteur :
   glisser le long du muret ou le supprimer fait donc ce qu'on attend, sans
   relation à maintenir entre deux objets.
 - **Ce qui est posé sur une surface se range derrière celle qui le recouvre
-  réellement.** Un objet de toiture était rattaché au plan de toit le plus
-  proche, si bien qu'une cheminée près d'un faîtage s'ancrait à un versant
-  pendant que l'autre, dessiné après, la coupait en deux. Le porteur est
-  désormais choisi par recouvrement à l'écran, ce qui donne la bonne réponse
-  aussi bien au faîtage qu'en bas de pente.
+  réellement — mais pas derrière celle qui le cache.** Un objet de toiture était
+  rattaché au plan de toit le plus proche, si bien qu'une cheminée près d'un
+  faîtage s'ancrait à un versant pendant que l'autre, dessiné après, la coupait
+  en deux. Le porteur est donc choisi par recouvrement à l'écran. Mais une
+  surface derrière laquelle l'objet se trouve *entièrement* le masque, elle ne
+  le porte pas : s'y ancrer le dessinait devant ce qui aurait dû le cacher, et
+  c'est ainsi que des panneaux solaires sur le versant opposé se voyaient au
+  travers du toit. Le test de plan distingue les deux — une cheminée dépasse le
+  plan du versant d'en face, un panneau posé à plat au-delà du faîtage non.
 - **La coque est ordonnée par un test de plan, pas par des centres.** Trier les
   faces sur leur centre tenait tant que la caméra ne bougeait pas ; libérer
   l'angle l'a démenti. Une pente de toit s'incline en s'éloignant, donc son

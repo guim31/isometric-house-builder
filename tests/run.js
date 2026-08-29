@@ -1900,6 +1900,37 @@ function occlusionErrors(model, W, H, step = 3) {
   return bad;
 }
 
+check('un panneau solaire ne traverse jamais le toit', () => {
+  // Reported in use: from some angles the panels on the far slope showed
+  // through the near one. An item resting on a surface was anchored to
+  // whichever surface covered it on screen, nearest first — which, for a panel
+  // beyond the ridge, is the slope that ought to hide it.
+  const cells = [...rectCells(0, 0, 15, 8), ...rectCells(0, 9, 8, 12)];
+  const m = normalise({
+    ...emptyModel(),
+    buildings: [makeBuilding({
+      cells,
+      roof: { type: 'hip', pitch: 30, overhang: 0.5, fascia: 0.16, shedDir: 'S' },
+    })],
+    // Near the crease of the L, where two slopes meet — the placement that
+    // put a panel on one slope and a covering surface on the other.
+    roofItems: [
+      { id: 'p1', kind: 'solar', x: 5, y: 6.5, w: 4, d: 2.4 },
+      { id: 'p2', kind: 'solar', x: 9, y: 8.5, w: 4, d: 2.4 },
+      { id: 'p3', kind: 'solar', x: 3, y: 10, w: 3, d: 2 },
+    ],
+  });
+  for (const pitch of [10, 16, 24, 35]) {
+    for (const yaw of [0, 75, 90, 105, 135, 225, 255, 270]) {
+      const bad = occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch } }, 260, 200, 4);
+      for (const [k, n] of bad) {
+        if (/^roof.* masqué par solar/.test(k)) return `${yaw}°/${pitch}° : ${n} px — ${k}`;
+      }
+    }
+  }
+  return true;
+});
+
 check('un mur ne passe jamais devant le toit qui le couvre', () => {
   // What the free camera exposed, twice over. Sorting faces on their centres
   // held at one fixed angle and stopped holding once the angle was free: a roof
