@@ -8,13 +8,14 @@ import { boundaryEdges } from '../core/grid.js';
 import { cellSet, cellSizeOf } from '../core/model.js';
 import { buildMesh } from '../core/scene.js';
 import { mergeCoplanar } from '../core/mesh.js';
-import { rotateDir, project, clampPitch, normaliseYaw } from '../core/iso.js';
+import { rotateDir, project, clampPitch, clampRoll, normaliseYaw } from '../core/iso.js';
 import { focusModel } from '../core/focus.js';
 import { OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, placeOpening, placeProp } from './actions.js';
 
 /** Degrees of orbit per pixel dragged. */
 const ORBIT_YAW = 0.4;
 const ORBIT_PITCH = 0.3;
+const ROLL_PER_PX = 0.2;
 
 /**
  * What the built mesh depends on. Everything here is replaced by reference
@@ -38,6 +39,11 @@ export class Viewport {
     this.pointers = new Map();
     this.lastRender = null;
     this.cache = null;
+    // What a plain drag does. The other one is always available with Shift, so
+    // nothing is lost by choosing — but the choice is what makes the whole
+    // thing usable with a mouse and no modifier keys.
+    this.dragMode = 'orbit';
+    this.onModeChange = null;
     this.bindEvents();
   }
 
@@ -149,11 +155,20 @@ export class Viewport {
         return;
       }
 
-      // Middle button or Shift pans; a plain drag on the background orbits,
-      // which is the gesture anyone who has handled a 3D model already knows.
-      if (ev.button === 1 || ev.shiftKey) {
+      // Alt tilts the picture in its frame — the third rotation, and the one
+      // nobody reaches for by accident.
+      if (ev.altKey && !pick) {
+        this.drag = { mode: 'roll', from: [ev.clientX, ev.clientY], camera: { ...s.model.camera } };
+        this.root.setPointerCapture?.(ev.pointerId);
+        return;
+      }
+      // The middle button always pans. Shift gives whichever of orbit and pan
+      // the current mode is not, so both are one gesture away either way.
+      const wantPan = ev.button === 1 || ((this.dragMode === 'pan') !== ev.shiftKey);
+      if (wantPan && (ev.button === 1 || ev.shiftKey || !pick)) {
         this.drag = { mode: 'pan', from: [ev.clientX, ev.clientY], pan: [...this.pan] };
         this.root.setPointerCapture?.(ev.pointerId);
+        if (!pick) s.select(null);
         return;
       }
       if (!pick) {
@@ -181,6 +196,13 @@ export class Viewport {
       if (!this.drag) return;
       const dx = ev.clientX - this.drag.from[0];
       const dy = ev.clientY - this.drag.from[1];
+      if (this.drag.mode === 'roll') {
+        this.store.update((mm) => ({
+          ...mm,
+          camera: { ...mm.camera, roll: clampRoll(this.drag.camera.roll + dx * ROLL_PER_PX) },
+        }), { coalesce: 'orbit' });
+        return;
+      }
       if (this.drag.mode === 'orbit') {
         // Dragging right turns the house to the right. That is the direction
         // increasing yaw moves it: at yaw 0 the east corner sits on the screen
@@ -210,7 +232,7 @@ export class Viewport {
         this.pointers.delete(ev.pointerId);
         if (this.pointers.size < 2) this.pinch = null;
       }
-      if (this.drag?.mode === 'orbit') this.store.commit();
+      if (this.drag?.mode === 'orbit' || this.drag?.mode === 'roll') this.store.commit();
       this.drag = null;
     };
     this.root.addEventListener('pointerup', end);
@@ -284,6 +306,39 @@ export class Viewport {
     const t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / len2));
     // t is a fraction of the edge; openings store metres along the wall.
     placeOpening(this.store, kind, edgeId, storey || 0, t * cellSizeOf(this.store.model));
+  }
+
+  /** Switch what a plain drag does. */
+  setDragMode(mode) {
+    if (this.dragMode === mode) return;
+    this.dragMode = mode;
+    this.root.classList.toggle('panning', mode === 'pan');
+    this.onModeChange?.(mode);
+  }
+
+  /**
+   * Turn the camera by a fixed step.
+   *
+   * The same movement the drag makes, in a size someone can aim at. Dragging
+   * is quicker once you know it exists, which is exactly the thing a button
+   * on screen tells you.
+   */
+  nudge(dYaw, dPitch) {
+    this.store.update((m) => ({
+      ...m,
+      camera: {
+        ...m.camera,
+        yaw: normaliseYaw(m.camera.yaw + dYaw),
+        pitch: clampPitch(m.camera.pitch + dPitch),
+      },
+    }));
+  }
+
+  /** Zoom about the middle of the panel, as the buttons do. */
+  zoomBy(factor) {
+    const rect = this.root.getBoundingClientRect();
+    this.zoomAbout([rect.width / 2, rect.height / 2], this.zoom * factor, rect);
+    this.render();
   }
 
   resetView() {

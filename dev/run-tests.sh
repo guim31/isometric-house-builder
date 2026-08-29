@@ -17,9 +17,18 @@ sleep 1
 grep -o '<li class="[a-z]*">[^<]*</li>' /tmp/iso-tests-dom.html \
   | sed -e 's|<li class="ok">|PASS  |' -e 's|<li class="ko">|FAIL  |' -e 's|</li>||' \
   | tee /tmp/iso-tests.out
-grep -o '<div id="summary"[^>]*>[^<]*</div>' /tmp/iso-tests-dom.html \
-  | sed -e 's|<[^>]*>||g' -e 's|^|\n|'
+SUMMARY=$(grep -o '<div id="summary"[^>]*>[^<]*</div>' /tmp/iso-tests-dom.html \
+  | sed -e 's|<[^>]*>||g')
+printf '\n%s\n' "$SUMMARY"
 
 if grep -q '^FAIL' /tmp/iso-tests.out; then exit 1; fi
 if ! grep -qE '^PASS' /tmp/iso-tests.out; then echo "aucun test executé"; exit 1; fi
+# The summary starts as an ellipsis and is written when the last test returns.
+# Without this check a run that dies partway — an application that throws on
+# boot leaves the page tests waiting for a frame that never becomes ready —
+# reports a screen of passes, no failures, and a clean exit code.
+if [ -z "$SUMMARY" ] || [ "$SUMMARY" = "…" ]; then
+  echo "la suite ne s'est pas terminée : $(grep -c '^PASS' /tmp/iso-tests.out) tests exécutés"
+  exit 1
+fi
 exit 0

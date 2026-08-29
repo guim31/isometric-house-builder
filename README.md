@@ -60,7 +60,7 @@ tout moment, et *Page blanche* reste disponible.
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
 | **Nuit** | Une **vue de nuit** : ciel dégradé et étoilé, lune, teintes de clair de lune — et les fenêtres allumées |
-| **Caméra** | **Orbite libre** : on fait tourner la maison à la souris, sur 360° et de la vue rasante à la quasi-verticale — les quatre faces restent à un clic |
+| **Caméra** | **Orbite libre** : on fait tourner la maison à la souris, sur 360° et de la vue rasante à la quasi-verticale — plus une inclinaison de l'image ; pavé de navigation à l'écran, et les quatre faces à un clic |
 | **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, ce qui s'éloigne du centre s'estompe, et chaque cadrage se garde comme **vue nommée** |
 | **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, toutes les vues enregistrées en lot, copie directe dans le presse-papier |
 
@@ -150,7 +150,12 @@ Trois colonnes, trois rôles, et rien qui les mélange :
   familles repliables. Deux d'entre elles — les objets de toit et le cadrage —
   arrivent repliées : on les règle une fois et on n'y revient pas.
 - **Au centre, dessiner et regarder.** Le plan pour construire, le rendu pour
-  juger et exporter.
+  juger et exporter. Le **pavé de navigation**, en bas à droite du rendu, donne
+  un bouton pour chacun des gestes que la souris sait faire : tourner autour de
+  la maison, monter ou descendre la caméra, zoomer, recadrer, et choisir ce que
+  fait un simple glisser — pivoter ou déplacer. Les gestes restent plus
+  rapides, mais un geste dont personne ne sait qu'il existe n'est une
+  fonctionnalité pour personne.
 - **À droite, régler.** Quatre familles dans l'ordre où le travail se fait :
   *Sélection* (ce qu'on vient de cliquer), *Bâtiment* (le corps en cours, sa
   toiture, ses matières), *Projet* (palette, couleurs, terrain), *Vue et
@@ -202,9 +207,19 @@ opposées — tournez la vue avec `[` et `]`.
 
 Raccourcis : `Ctrl+Z` / `Ctrl+Maj+Z` annuler et rétablir, `Ctrl+D` dupliquer la
 sélection, `[` et `]` tourner d'un quart de tour, `Suppr` supprimer, `Échap`
-désélectionner. Dans le rendu, **glisser fait pivoter** la maison ; la molette
-zoome autour du curseur, le pincement à deux doigts fonctionne sur écran
-tactile, et `Maj` + glisser déplace la vue — quel que soit l'outil actif.
+désélectionner.
+
+Dans le rendu, **glisser fait pivoter** la maison, `Maj` + glisser la déplace,
+`Alt` + glisser **incline l'image**, la molette zoome autour du curseur et le
+pincement à deux doigts fonctionne sur écran tactile — quel que soit l'outil
+actif. Le bouton *Déplacer* du pavé échange ce que font glisser et `Maj` +
+glisser, pour se passer de modificateur.
+
+Sur les trois rotations : les deux premières déplacent la caméra autour de la
+maison, la troisième tourne le dessin fini dans son cadre. Ce sont les seules
+qu'une projection axonométrique possède, et la dernière n'a aucun effet sur ce
+qui est visible ni sur l'ordre de dessin — elle s'applique après la projection.
+Le ciel, lui, reste horizontal.
 Dans le plan, une ouverture sélectionnée **coulisse le long des murs** quand on
 la fait glisser ; les éléments d'extérieur se posent aussi d'un clic
 directement sur le rendu. Une boussole dans chaque vue rappelle où est le nord.

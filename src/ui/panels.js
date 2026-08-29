@@ -3,7 +3,9 @@
  */
 
 import { THEMES, materialColour } from '../core/palette.js';
-import { PROJECTIONS, PITCH_RANGE, DEFAULT_PITCH, viewpointLabel, normaliseYaw } from '../core/iso.js';
+import {
+  PROJECTIONS, PITCH_RANGE, ROLL_RANGE, DEFAULT_PITCH, viewpointLabel, normaliseYaw,
+} from '../core/iso.js';
 import { ROOF_TYPES, STEP } from '../core/roof.js';
 import { withCellSize, cellSizeOf, fmtMetres, cellSet, buildingOfEdge, DEFAULT_FOCUS, newId } from '../core/model.js';
 import { bounds } from '../core/grid.js';
@@ -459,6 +461,10 @@ export class Inspector {
         min: PITCH_RANGE[0], max: PITCH_RANGE[1], step: 1, format: deg,
         onInput: (v) => this.setIn('camera', { pitch: v }, 'camera'),
       }), 'de rasante à quasi verticale'),
+      field('Inclinaison de l’image', slider(Math.round(m.camera.roll), {
+        min: ROLL_RANGE[0], max: ROLL_RANGE[1], step: 1, format: deg,
+        onInput: (v) => this.setIn('camera', { roll: v }, 'camera'),
+      }), 'fait pivoter le dessin dans son cadre — ou Alt + glisser dans le rendu'),
       field('Projection', select(m.camera.projection,
         Object.entries(PROJECTIONS).map(([k, v]) => [k, v.label]),
         (v) => this.setIn('camera', { projection: v }))),
@@ -466,7 +472,7 @@ export class Inspector {
 
     const reset = h('button', 'subtle', 'Revenir à la vue isométrique');
     reset.addEventListener('click', () => this.setIn('camera', {
-      yaw: Math.round(m.camera.yaw / 90) % 4 * 90, pitch: DEFAULT_PITCH,
+      yaw: Math.round(m.camera.yaw / 90) % 4 * 90, pitch: DEFAULT_PITCH, roll: 0,
     }));
     s.appendChild(reset);
 

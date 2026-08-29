@@ -59,7 +59,7 @@ const TOOL_GROUPS = [
 ];
 
 const HINTS = {
-  select: 'Cliquez un élément pour le régler, glissez pour le déplacer — une ouverture coulisse le long des murs. Dans le rendu, glisser fait pivoter la maison ; Maj + glisser déplace la vue.',
+  select: 'Cliquez un élément pour le régler, glissez pour le déplacer — une ouverture coulisse le long des murs. Dans le rendu, le pavé en bas à droite fait tourner, incliner et zoomer ; Alt + glisser incline l’image.',
   paint: 'Dessinez l’emprise de la maison. Alt efface.',
   rect: 'Glissez pour ajouter un volume rectangulaire. Alt retire.',
   erase: 'Glissez pour retirer des cases.',
@@ -168,6 +168,78 @@ function rotate(delta) {
     return { ...m, camera: { ...m.camera, yaw: normaliseYaw(next * 90) } };
   });
 }
+
+/* ---------- navigation pad ---------- */
+
+/*
+ * Inline SVG rather than a font or an image: nothing to load, and it inherits
+ * the text colour, so it follows the light and dark themes for free.
+ */
+const ICON = {
+  arrow: '<path fill="currentColor" d="M8 3.4 12.8 11.2H3.2z"/>',
+  plus: '<path fill="currentColor" d="M7.1 3.2h1.8v3.9h3.9v1.8H8.9v3.9H7.1V8.9H3.2V7.1h3.9z"/>',
+  minus: '<path fill="currentColor" d="M3.2 7.1h9.6v1.8H3.2z"/>',
+  fit: '<path fill="currentColor" d="M2.4 6.4V2.4h4v1.5H3.9v2.5zm7.2-4h4v4h-1.5V3.9h-2.5zm4 7.2v4h-4v-1.5h2.5v-2.5zm-7.2 4h-4v-4h1.5v2.5h2.5z"/>',
+};
+
+const YAW_STEP = 15;
+const PITCH_STEP = 6;
+
+function buildNav() {
+  const root = $('view-nav');
+  const modes = document.createElement('div');
+  modes.className = 'nav-modes';
+  const modeButtons = [['orbit', 'Pivoter', 'Glisser fait pivoter la maison (Maj : déplacer)'],
+    ['pan', 'Déplacer', 'Glisser déplace la vue (Maj : pivoter)']];
+  for (const [mode, label, title] of modeButtons) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.title = title;
+    b.dataset.mode = mode;
+    b.addEventListener('click', () => viewport.setDragMode(mode));
+    modes.appendChild(b);
+  }
+
+  const icon = (name) => `<svg viewBox="0 0 16 16" aria-hidden="true">${ICON[name]}</svg>`;
+  const btn = (cls, glyph, label, onClick) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `nav-btn ${cls}`;
+    b.innerHTML = icon(glyph);
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', onClick);
+    return b;
+  };
+
+  const pad = document.createElement('div');
+  pad.className = 'nav-pad';
+  pad.append(
+    btn('nav-up', 'arrow', 'Monter la caméra', () => viewport.nudge(0, PITCH_STEP)),
+    btn('nav-left', 'arrow', 'Tourner vers la gauche', () => viewport.nudge(-YAW_STEP, 0)),
+    btn('nav-fit', 'fit', 'Recadrer', () => viewport.resetView()),
+    btn('nav-right', 'arrow', 'Tourner vers la droite', () => viewport.nudge(YAW_STEP, 0)),
+    btn('nav-down', 'arrow', 'Descendre la caméra', () => viewport.nudge(0, -PITCH_STEP)),
+  );
+
+  const zoom = document.createElement('div');
+  zoom.className = 'nav-zoom';
+  zoom.append(
+    btn('nav-out', 'minus', 'Dézoomer', () => viewport.zoomBy(1 / 1.25)),
+    btn('nav-in', 'plus', 'Zoomer', () => viewport.zoomBy(1.25)),
+  );
+
+  root.replaceChildren(modes, pad, zoom);
+  syncNav();
+}
+
+function syncNav() {
+  for (const b of document.querySelectorAll('.nav-modes button')) {
+    b.setAttribute('aria-pressed', String(b.dataset.mode === viewport.dragMode));
+  }
+}
+viewport.onModeChange = syncNav;
 
 $('btn-undo').addEventListener('click', () => store.undo());
 $('btn-redo').addEventListener('click', () => store.redo());
@@ -346,6 +418,7 @@ if (window.ResizeObserver) {
 }
 
 buildTools();
+buildNav();
 nameInput.value = store.model.name;
 store.setTool('select');
 scheduleRender();

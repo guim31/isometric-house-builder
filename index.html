@@ -48,10 +48,14 @@
           <span id="rot-label" class="rot-label">Sud-Est</span>
           <button id="btn-rot-right" title="Tourner à droite ( ] )">↻</button>
           <button id="btn-fit" title="Recadrer">Recadrer</button>
-          <span class="view-hint-inline">glisser&nbsp;: pivoter</span>
         </div>
       </div>
-      <div class="view-body iso" id="iso"></div>
+      <div class="view-body">
+        <div class="iso-canvas" id="iso"></div>
+        <!-- Navigation, on the drawing rather than in a menu: every gesture the
+             mouse can make has a button here that does the same thing. -->
+        <div class="view-nav" id="view-nav" role="group" aria-label="Navigation dans le rendu"></div>
+      </div>
     </div>
   </section>
 

@@ -68,13 +68,19 @@ function behindPlane(a, b, eps = 1e-4) {
   return true;
 }
 
-/** Screen bounding box, cached on the face. */
+/**
+ * Bounding box in projected space, cached on the face.
+ *
+ * Taken before the tilt: a box is not invariant under rotation, so measuring
+ * it in a tilted frame would make the draw order depend on an angle that only
+ * turns the finished picture.
+ */
 function screenBox(f, camera) {
   if (f.box) return f.box;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const loop of f.loops) {
     for (const p of loop) {
-      const s = camera.toScreen(p);
+      const s = camera.projected(p);
       if (s[0] < x0) x0 = s[0];
       if (s[0] > x1) x1 = s[0];
       if (s[1] < y0) y0 = s[1];
@@ -370,6 +376,7 @@ export function renderScene(input, opts = {}) {
   const camera = new Camera({
     yaw: model.camera.yaw,
     pitch: model.camera.pitch,
+    roll: model.camera.roll,
     projection: model.camera.projection,
     // The rotation centre stays the house even when the frame is elsewhere:
     // it only sets which point the yaw turns about, and the fit re-centres

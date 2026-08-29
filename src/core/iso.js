@@ -167,19 +167,61 @@ export function facingOf(n, lambda = 1) {
 }
 
 /**
+ * How far the drawing may be tilted within its frame.
+ *
+ * The third rotation, and worth being plain about what it is: yaw and pitch
+ * move the camera around the house, this one turns the finished picture. In an
+ * axonometric projection those are the only three there are, and this one
+ * changes nothing about which faces are visible or how they sort — it happens
+ * after the projection. The sky stays level, so the effect reads as tilting
+ * the model in the frame rather than as leaning the camera over.
+ */
+export const ROLL_RANGE = [-45, 45];
+
+export const clampRoll = (deg) =>
+  Math.min(ROLL_RANGE[1], Math.max(ROLL_RANGE[0], Number.isFinite(deg) ? deg : 0));
+
+/**
  * A camera bundles the orbit, the projection and the scale/offset needed to
  * map world coordinates into the SVG viewBox.
  */
 export class Camera {
-  constructor({ yaw = 0, pitch = DEFAULT_PITCH, projection = DEFAULT_PROJECTION, centre = [0, 0] } = {}) {
+  constructor({
+    yaw = 0, pitch = DEFAULT_PITCH, roll = 0,
+    projection = DEFAULT_PROJECTION, centre = [0, 0],
+  } = {}) {
     this.yaw = normaliseYaw(yaw);
     this.pitch = clampPitch(pitch);
+    this.roll = clampRoll(roll);
     this.projection = PROJECTIONS[projection] ? projection : DEFAULT_PROJECTION;
     this.proj = projectionFor(this.projection, this.pitch);
     this.lambda = this.proj.lambda;
     this.centre = centre;
     this.scale = 32;
     this.offset = [0, 0];
+    // Exactly the identity at zero, so an untilted view stays byte-identical
+    // to what it was before this existed.
+    const a = (this.roll * Math.PI) / 180;
+    this.rollCos = this.roll === 0 ? 1 : Math.cos(a);
+    this.rollSin = this.roll === 0 ? 0 : Math.sin(a);
+  }
+
+  /** Projected point -> tilted projected point. */
+  tilt(s) {
+    if (this.roll === 0) return s;
+    return [
+      s[0] * this.rollCos - s[1] * this.rollSin,
+      s[0] * this.rollSin + s[1] * this.rollCos,
+    ];
+  }
+
+  /** The inverse, for turning a screen position back into a world one. */
+  untilt(s) {
+    if (this.roll === 0) return s;
+    return [
+      s[0] * this.rollCos + s[1] * this.rollSin,
+      -s[0] * this.rollSin + s[1] * this.rollCos,
+    ];
   }
 
   /** World point -> rotated world point. */
@@ -187,10 +229,21 @@ export class Camera {
     return rotatePoint(p, this.yaw, this.centre[0], this.centre[1]);
   }
 
+  /**
+   * World point -> projected point, before the tilt and before scaling.
+   *
+   * What the sort compares. The tilt is a rigid rotation of the finished
+   * picture, so whether two faces overlap does not depend on it — but an
+   * axis-aligned bounding box does, and comparing boxes in a tilted frame
+   * would let the drawn order change with the tilt.
+   */
+  projected(p) {
+    return project(this.toView(p), this.proj);
+  }
+
   /** World point -> SVG coordinates. */
   toScreen(p) {
-    const v = this.toView(p);
-    const s = project(v, this.proj);
+    const s = this.tilt(project(this.toView(p), this.proj));
     return [s[0] * this.scale + this.offset[0], s[1] * this.scale + this.offset[1]];
   }
 
@@ -207,7 +260,7 @@ export class Camera {
     if (!points.length) return this;
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const p of points) {
-      const s = project(this.toView(p), this.proj);
+      const s = this.tilt(project(this.toView(p), this.proj));
       if (s[0] < minX) minX = s[0];
       if (s[0] > maxX) maxX = s[0];
       if (s[1] < minY) minY = s[1];

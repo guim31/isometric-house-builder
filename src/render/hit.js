@@ -124,8 +124,10 @@ export function hitLayer(model, camera, built = null) {
  */
 export function screenToGround(camera, sx, sy) {
   const proj = camera.proj;
-  const x = (sx - camera.offset[0]) / camera.scale;
-  const y = (sy - camera.offset[1]) / camera.scale;
+  const [x, y] = camera.untilt([
+    (sx - camera.offset[0]) / camera.scale,
+    (sy - camera.offset[1]) / camera.scale,
+  ]);
   // Invert the projection at z = 0.
   const a = x / proj.kx;      // = vy - vx
   const b = y / proj.ky;      // = vx + vy

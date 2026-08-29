@@ -4,7 +4,7 @@
  */
 
 import { key, rectCells, connectedComponents } from './grid.js';
-import { DEFAULT_PROJECTION, DEFAULT_PITCH, clampPitch, normaliseYaw } from './iso.js';
+import { DEFAULT_PROJECTION, DEFAULT_PITCH, clampPitch, clampRoll, normaliseYaw } from './iso.js';
 import { THEMES } from './palette.js';
 import { PRESETS } from '../data/presets.js';
 
@@ -34,7 +34,7 @@ export function propFootprint(p) {
  * gate and the wall it sits in, not the garden it happens to stand at the end
  * of. Distances are metres, `x`/`y` the lower-left corner, as for props.
  */
-export const DEFAULT_CAMERA = { yaw: 0, pitch: DEFAULT_PITCH, projection: DEFAULT_PROJECTION };
+export const DEFAULT_CAMERA = { yaw: 0, pitch: DEFAULT_PITCH, roll: 0, projection: DEFAULT_PROJECTION };
 
 export const DEFAULT_FOCUS = {
   enabled: false,
@@ -204,6 +204,7 @@ function normaliseCamera(input, base) {
   delete c.rotation;
   c.yaw = normaliseYaw(c.yaw);
   c.pitch = clampPitch(c.pitch);
+  c.roll = clampRoll(c.roll);
   return c;
 }
 

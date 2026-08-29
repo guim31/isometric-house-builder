@@ -9,6 +9,7 @@ import { heightField, snapOverhang, STEP } from '../src/core/roof.js';
 import {
   Camera, rotatePoint, project, projectionFor, PROJECTIONS, PITCH_RANGE,
   VIEWPOINTS, viewpointLabel, rotateDir, depthOf, facingOf, DEFAULT_PITCH,
+  normaliseYaw, ROLL_RANGE,
 } from '../src/core/iso.js';
 import { focusModel, focusRect, focusPoints } from '../src/core/focus.js';
 import {
@@ -1347,6 +1348,104 @@ check('un extérieur peut se poser directement sur le rendu', () => {
   return s.model.props.length === before + 1 || 'aucun arbre posé';
 });
 
+check('le pavé de navigation tourne, incline et zoome', () => {
+  // The gestures already did all of this; what the buttons add is that anyone
+  // can find it. They drive the same code, so this checks the code they drive.
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  div.style.cssText = 'width:440px;height:400px';
+  document.getElementById('stage').appendChild(div);
+  const vp = new Viewport(div, s);
+  vp.render();
+  const c0 = { ...s.model.camera };
+  vp.nudge(15, 0);
+  if (s.model.camera.yaw !== normaliseYaw(c0.yaw + 15)) return `lacet ${s.model.camera.yaw}`;
+  vp.nudge(0, 6);
+  if (!near(s.model.camera.pitch, c0.pitch + 6, 1e-9)) return `hauteur ${s.model.camera.pitch}`;
+  const z0 = vp.zoom;
+  vp.zoomBy(1.25);
+  if (!(vp.zoom > z0)) return 'le zoom n’a pas bougé';
+  vp.resetView();
+  return vp.zoom === 1 || 'recadrer n’a pas remis le zoom à 1';
+});
+
+check('le mode « déplacer » échange ce que font glisser et Maj + glisser', () => {
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  div.style.cssText = 'width:440px;height:400px';
+  document.getElementById('stage').appendChild(div);
+  const vp = new Viewport(div, s);
+  s.setTool('select');
+  vp.render();
+  const r = div.getBoundingClientRect();
+  const drag = (id, shift) => {
+    const at = (dx, type) => div.dispatchEvent(new PointerEvent(type, {
+      clientX: r.left + r.width / 2 + dx, clientY: r.top + r.height / 2,
+      bubbles: true, pointerId: id, isPrimary: true, button: 0, shiftKey: shift,
+    }));
+    at(0, 'pointerdown'); at(50, 'pointermove'); at(50, 'pointerup');
+  };
+  vp.setDragMode('pan');
+  const yaw0 = s.model.camera.yaw;
+  const pan0 = vp.pan[0];
+  drag(21, false);
+  if (s.model.camera.yaw !== yaw0) return 'un glisser simple a fait pivoter en mode déplacement';
+  if (vp.pan[0] === pan0) return 'un glisser simple n’a pas déplacé la vue';
+  drag(22, true);
+  if (s.model.camera.yaw === yaw0) return 'Maj + glisser n’a pas fait pivoter';
+  vp.setDragMode('orbit');
+  return true;
+});
+
+check('Alt + glisser incline l’image', () => {
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  div.style.cssText = 'width:440px;height:400px';
+  document.getElementById('stage').appendChild(div);
+  const vp = new Viewport(div, s);
+  s.setTool('select');
+  vp.render();
+  const r = div.getBoundingClientRect();
+  const at = (dx, type) => div.dispatchEvent(new PointerEvent(type, {
+    clientX: r.left + r.width / 2 + dx, clientY: r.top + r.height / 2,
+    bubbles: true, pointerId: 31, isPrimary: true, button: 0, altKey: true,
+  }));
+  const yaw0 = s.model.camera.yaw;
+  at(0, 'pointerdown'); at(60, 'pointermove'); at(60, 'pointerup');
+  if (s.model.camera.roll === 0) return 'l’inclinaison n’a pas bougé';
+  return s.model.camera.yaw === yaw0 || 'incliner a aussi fait pivoter';
+});
+
+check('l’inclinaison tourne le dessin sans toucher au tri des faces', () => {
+  // The third rotation happens after the projection, so it can change where
+  // things land on screen but never which of them is in front.
+  const m = normalise(defaultModel());
+  const flat = renderScene(m, { width: 400, height: 300 });
+  const tilted = renderScene({ ...m, camera: { ...m.camera, roll: 22 } },
+    { width: 400, height: 300 });
+  const order = (o) => o.faces.map((f) => `${f.mat}|${f.group}`).join(',');
+  if (order(flat) !== order(tilted)) return 'l’ordre des faces a changé';
+  if (flat.svg === tilted.svg) return 'le dessin n’a pas tourné';
+  // And zero must be exactly the identity, not merely close to it.
+  const zero = renderScene({ ...m, camera: { ...m.camera, roll: 0 } },
+    { width: 400, height: 300 });
+  return zero.svg.replace(/t\d+/g, 't') === flat.svg.replace(/t\d+/g, 't')
+    || 'une inclinaison nulle modifie le rendu';
+});
+
+check('écran → sol tient compte de l’inclinaison', () => {
+  // Dropping a tree onto a tilted render has to land where it was aimed.
+  for (const roll of [ROLL_RANGE[0], -17, 0, 23, ROLL_RANGE[1]]) {
+    const cam = new Camera({ yaw: 47, pitch: 28, roll, centre: [10, 10] });
+    cam.scale = 24;
+    cam.offset = [300, 200];
+    const p = cam.toScreen([13, 7, 0]);
+    const g = screenToGround(cam, p[0], p[1]);
+    if (!near(g[0], 13, 1e-6) || !near(g[1], 7, 1e-6)) return `inclinaison ${roll}° → ${g}`;
+  }
+  return true;
+});
+
 check('glisser sur le rendu fait pivoter la maison', () => {
   const s = new Store(defaultModel());
   const div = document.createElement('div');
@@ -2048,6 +2147,15 @@ await checkAsync('la page s’amorce avec ses outils et un rendu visible', async
   if (doc.querySelectorAll('.tool').length < 10) return 'palette d’outils incomplète';
   // Twenty-three tools in one column ran off the bottom of the panel; the
   // families fold, and enough of them start folded for the column to fit.
+  // Every gesture the mouse can make has a button on the drawing.
+  const nav = doc.getElementById('view-nav');
+  const navBtns = nav ? nav.querySelectorAll('button').length : 0;
+  if (navBtns < 8) return `pavé de navigation incomplet (${navBtns} boutons)`;
+  const padBox = nav.getBoundingClientRect();
+  const bodyBox = nav.parentElement.getBoundingClientRect();
+  if (padBox.bottom > bodyBox.bottom + 1 || padBox.right > bodyBox.right + 1) {
+    return 'le pavé de navigation déborde du rendu';
+  }
   const groups = [...doc.querySelectorAll('details.tool-group')];
   if (groups.length < 4) return `${groups.length} familles d’outils repliables`;
   if (!groups.some((g) => !g.open)) return 'aucune famille repliée au démarrage';
