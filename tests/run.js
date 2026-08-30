@@ -1792,7 +1792,7 @@ check('sous cadrage, la nuit garde son ciel', () => {
   // plane projects over the whole image in axonometry, so a sky exists only
   // because the plot is finite.
   const base = defaultModel();
-  const focus = { enabled: true, x: 12, y: 12, w: 8, d: 6, margin: 1, hide: true, vignette: 0 };
+  const focus = { enabled: true, x: 12, y: 12, w: 8, d: 6, margin: 1, hide: true };
   const day = renderScene(normalise({ ...base, focus }), { width: 300, height: 220 }).svg;
   const dark = renderScene(normalise({
     ...base, focus, style: { ...base.style, night: true },
@@ -2074,8 +2074,8 @@ check('le dessin est centré dans l’image, cadré ou non', () => {
   };
   const cases = [
     ['sans cadrage', {}],
-    ['cadré serré', { focus: { enabled: true, x: 2, y: 7, w: 6, d: 3, margin: 1, vignette: 0 } }],
-    ['cadré large', { focus: { enabled: true, x: -1, y: -1, w: 12, d: 12, margin: 4, vignette: 0 } }],
+    ['cadré serré', { focus: { enabled: true, x: 2, y: 7, w: 6, d: 3, margin: 1 } }],
+    ['cadré large', { focus: { enabled: true, x: -1, y: -1, w: 12, d: 12, margin: 4 } }],
   ];
   for (const [label, patch] of cases) {
     const [dx, dy] = offset(patch);
@@ -2095,7 +2095,7 @@ check('la marge du cadrage laisse de l’air autour du dessin', () => {
   });
   const width = (margin) => {
     const out = renderScene({
-      ...m, focus: { enabled: true, x: -1, y: -1, w: 12, d: 9, margin, vignette: 0 },
+      ...m, focus: { enabled: true, x: -1, y: -1, w: 12, d: 9, margin },
     }, { width: 600, height: 420 });
     let x0 = Infinity, x1 = -Infinity;
     for (const f of out.faces) {
@@ -2119,7 +2119,7 @@ check('cadrer sur une zone agrandit vraiment ce qu’elle contient', () => {
   });
   const framed = normalise({
     ...base,
-    focus: { enabled: true, x: 0, y: 0, w: 6, d: 5, margin: 1, hide: true, vignette: 0 },
+    focus: { enabled: true, x: 0, y: 0, w: 6, d: 5, margin: 1, hide: true },
   });
   const a = renderScene(base, { width: 400, height: 300 });
   const b = renderScene(framed, { width: 400, height: 300 });
@@ -2164,7 +2164,7 @@ check('la marge du cadrage est de l’air, pas de la pelouse', () => {
     buildings: [makeBuilding({ cells: [...rectCells(0, 0, 4, 3)] })],
     ground: { enabled: true, material: 'grass', margin: 0 },
   };
-  const zone = { enabled: true, x: 20, y: 20, w: 5, d: 4, vignette: 0 };
+  const zone = { enabled: true, x: 20, y: 20, w: 5, d: 4 };
   const span = (margin) => {
     const g = mergeCoplanar(buildMesh(focusModel(normalise({
       ...base, focus: { ...zone, margin },
@@ -2183,14 +2183,14 @@ check('un corps qui effleure la zone n’est pas gardé', () => {
   const b = makeBuilding({ cells: [...rectCells(0, 0, 9, 6)] });
   const grazing = normalise({
     ...emptyModel(), buildings: [b],
-    focus: { enabled: true, x: 9.9, y: 2, w: 6, d: 4, margin: 1, vignette: 0 },
+    focus: { enabled: true, x: 9.9, y: 2, w: 6, d: 4, margin: 1 },
   });
   if (focusModel(grazing).buildings.some((x) => x.cells.length)) {
     return 'le corps effleuré est encore là';
   }
   const standing = normalise({
     ...emptyModel(), buildings: [b],
-    focus: { enabled: true, x: 6, y: 2, w: 6, d: 4, margin: 1, vignette: 0 },
+    focus: { enabled: true, x: 6, y: 2, w: 6, d: 4, margin: 1 },
   });
   return focusModel(standing).buildings.some((x) => x.cells.length)
     || 'un corps réellement dans la zone a été retiré';
@@ -2218,7 +2218,7 @@ check('sous cadrage, le sol suit le cadre et non la parcelle', () => {
   const wide = span(base);
   const framed = span({
     ...base,
-    focus: { enabled: true, x: 18, y: 19, w: 6, d: 3, margin: 1, hide: true, vignette: 0 },
+    focus: { enabled: true, x: 18, y: 19, w: 6, d: 3, margin: 1, hide: true },
   });
   if (!(wide > 60)) return `sans cadrage le sol ne fait que ${wide.toFixed(0)} m`;
   return framed < 12 || `sous cadrage le sol fait encore ${framed.toFixed(0)} m`;
@@ -2235,7 +2235,7 @@ await checkAsync('un export cadré pose la scène sur un tapis, pas sur un aplat
     ...emptyModel(),
     buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 4)] })],
     ground: { enabled: true, material: 'grass', margin: 0 },
-    focus: { enabled: true, x: 1, y: 1, w: 4, d: 3, margin: 0.5, hide: true, vignette: 0 },
+    focus: { enabled: true, x: 1, y: 1, w: 4, d: 3, margin: 0.5, hide: true },
   });
   const blob = await svgToPng(svgFor(m, { width: W, height: H, ratio: 1 }), W, H);
   const img = await loadBlob(blob);
@@ -2250,61 +2250,43 @@ await checkAsync('un export cadré pose la scène sur un tapis, pas sur un aplat
   return alpha(W >> 1, H >> 1) === 255 || 'le centre de l’image est vide';
 });
 
-await checkAsync('le fondu survit à la conversion en PNG, sans toucher au terrain', async () => {
-  // Two things at once, both only provable on real pixels. First that the mask
-  // rasterises at all: it is the one gradient in the output, and it is a mask
-  // rather than a filter precisely because browsers skip filters when turning
-  // an <img> into pixels. Second that the ground is left alone — fading a lawn
-  // that covers the frame edge to edge draws a pale ellipse across it, which is
-  // the only thing a radial gradient over a flat colour can look like.
-  const W = 240, H = 180;
-  const shoot = async (patch) => {
-    const m = normalise({ ...defaultModel(), ...patch });
-    const blob = await svgToPng(svgFor(m, { width: W, height: H, ratio: 1 }), W, H);
-    const img = await loadBlob(blob);
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
-    return ctx.getImageData(0, 0, W, H).data;
-  };
-  const lum = (d, x, y) => {
-    const i = (y * W + x) * 4;
-    return (d[i] + d[i + 1] + d[i + 2]) / 3;
-  };
-  const white = { style: { ...defaultModel().style, background: '#ffffff' } };
-  // Framed on the footprint, so the house reaches the fade. A frame twice the
-  // size of the house leaves it sitting in the untouched middle — which is how
-  // the previous version of this test came to pass without proving anything:
-  // it compared a corner of lawn to a roof and found the lawn lighter.
-  const fb = renderScene(normalise(defaultModel()), { width: W, height: H }).built.bounds;
-  const frame = {
-    enabled: true, hide: false, margin: 0,
-    x: fb.i0, y: fb.j0, w: fb.i1 - fb.i0 + 1, d: fb.j1 - fb.j0 + 1,
-  };
-
-  // Without the ground, the fade has to show: everything left is the house.
-  const bare = { ...white, ground: { ...defaultModel().ground, enabled: false } };
-  const net = await shoot({ ...bare, focus: { ...frame, vignette: 0 } });
-  const doux = await shoot({ ...bare, focus: { ...frame, vignette: 0.7 } });
-  let moved = 0;
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) if (lum(doux, x, y) > lum(net, x, y) + 6) moved++;
-  }
-  if (moved < 50) return `seulement ${moved} pixels estompés — le masque n’est pas appliqué`;
-  if (Math.abs(lum(doux, W >> 1, H >> 1) - lum(net, W >> 1, H >> 1)) > 2) {
-    return 'le centre de l’image a bougé';
-  }
-
-  // With the ground back, the corner is lawn and must be untouched.
-  const solA = await shoot({ ...white, focus: { ...frame, vignette: 0 } });
-  const solB = await shoot({ ...white, focus: { ...frame, vignette: 0.7 } });
-  for (const [x, y] of [[3, 3], [W - 4, 3], [3, H - 4], [W - 4, H - 4]]) {
-    if (Math.abs(lum(solA, x, y) - lum(solB, x, y)) > 2) {
-      return `le terrain s’estompe en (${x}, ${y}) — l’ellipse est de retour`;
+check('rien n’est coupé par le bord de l’image', () => {
+  // Why the fade went. It softened a crop by the picture's own border, and
+  // there is no longer one to soften: the frame removes what falls outside and
+  // cuts what crosses it, then the camera fits what is left, whole. Measured
+  // rather than asserted — every drawn vertex has to land inside the canvas.
+  const base = normalise({
+    ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 9, 6)] })],
+    props: [{ id: 'm', kind: 'muret', x: -6, y: 8, w: 22, d: 0.24, h: 1.5 }],
+    ground: { enabled: true, material: 'grass', margin: 1 },
+  });
+  const W = 400, H = 300;
+  const cases = [
+    ['sans cadrage', {}],
+    ['cadré serré', { focus: { enabled: true, x: 2, y: 7, w: 6, d: 3, margin: 1 } }],
+    ['cadré sur la maison', { focus: { enabled: true, x: 0, y: 0, w: 10, d: 7, margin: 2 } }],
+  ];
+  for (const [label, patch] of cases) {
+    const out = renderScene({ ...base, ...patch }, { width: W, height: H });
+    for (const f of out.faces) {
+      for (const l of f.loops) {
+        for (const p of l) {
+          const [x, y] = out.camera.toScreen(p);
+          if (x < -0.5 || x > W + 0.5 || y < -0.5 || y > H + 0.5) {
+            return `${label} : un point tombe en (${Math.round(x)}, ${Math.round(y)})`;
+          }
+        }
+      }
     }
   }
   return true;
+});
+
+check('un réglage de fondu hérité est simplement oublié', () => {
+  const m = normalise({ ...emptyModel(), focus: { enabled: true, vignette: 0.4, hide: false } });
+  return (m.focus.vignette === undefined && m.focus.hide === undefined)
+    || `réglages hérités conservés : ${JSON.stringify(m.focus)}`;
 });
 
 /**
@@ -2317,9 +2299,20 @@ await checkAsync('le fondu survit à la conversion en PNG, sans toucher au terra
  */
 let bootError = null;
 
-function loadAppOnce(width, height, deadline) {
-  // The suite's own stores autosave, so the app would see a returning visitor
-  // and skip the gallery. Clear that first: this is a first visit.
+/** Longer than the store's autosave debounce, so no save can outlive the wipe. */
+const AUTOSAVE_DEBOUNCE = 500;
+
+async function loadAppOnce(width, height, deadline) {
+  /*
+   * The suite's own stores autosave, so the app would see a returning visitor
+   * and skip the gallery. Clearing once was not enough: a store touched by an
+   * earlier test has a save queued on a timer, and it lands *after* the wipe
+   * and before the frame boots. The gallery test then failed for a reason
+   * having nothing to do with the gallery — and it moved with the number of
+   * tests before it, which is how a latent race passes for a flake.
+   */
+  clearLocal();
+  await new Promise((r) => setTimeout(r, AUTOSAVE_DEBOUNCE));
   clearLocal();
   bootError = null;
   return new Promise((resolve, reject) => {

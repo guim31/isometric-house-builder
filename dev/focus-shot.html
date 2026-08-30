@@ -8,27 +8,33 @@ import { PRESETS } from '../src/data/presets.js';
 import { normalise } from '../src/core/model.js';
 import { renderScene } from '../src/render/svg.js';
 
-// Same plot as dev/orbit.html: a house at one end, a walled frontage at the
-// other. The whole-property view is the one that makes the gate unreadable.
+/*
+ * A plot with two things worth a widget of their own: the sliding gate on the
+ * street side, and the pool behind the house. Kept compact on purpose — the
+ * point of the first panel is that the gate is *there and unusable*, which a
+ * plot so long that the gate is invisible does not make.
+ */
 const base = normalise({ ...PRESETS.find((p) => p.id === 'provence').model });
 const model = normalise({
   ...base,
+  ground: { ...base.ground, margin: 1 },
   props: [
-    { kind: 'muret', x: 10, y: 12, w: 16, d: 0.24, h: 1.5 },
-    { kind: 'gate', x: 14, y: 12, w: 1.1, d: 0.16, h: 1.5, style: 'swing' },
-    { kind: 'gate', x: 19, y: 12, w: 3.6, d: 0.16, h: 1.5, style: 'slide' },
-    { kind: 'terrace', x: 2, y: 16, w: 11, d: 8, material: 'paving' },
-    { kind: 'pool', x: 4, y: 18, w: 7, d: 4 },
-    { kind: 'tree', x: 6, y: 34, r: 2 },
-    { kind: 'hedge', x: 0, y: 38, w: 26, d: 0.6, h: 1 },
+    { kind: 'muret', x: 10, y: 11, w: 17, d: 0.3, h: 1.5 },
+    { kind: 'gate', x: 15, y: 11, w: 1.1, d: 0.2, h: 1.5, style: 'swing' },
+    { kind: 'gate', x: 20, y: 11, w: 3.6, d: 0.2, h: 1.5, style: 'slide' },
+    { kind: 'terrace', x: 11, y: 27, w: 12, d: 7, material: 'paving' },
+    { kind: 'pool', x: 13, y: 28.5, w: 7, d: 4 },
+    { kind: 'tree', x: 26, y: 30, r: 1.8 },
   ],
 });
 
-const gate = { enabled: true, x: 16, y: 9, w: 8, d: 3.5, margin: 0.5, hide: true, vignette: 0.35 };
+// Seen from the south-west, so the walled frontage faces the reader instead of
+// hiding behind the house.
+const camera = { ...model.camera, yaw: 180 };
 const shots = [
-  ['Vue d’ensemble — le portail fait quelques pixels', {}],
-  ['Cadré sur le portail', { focus: { ...gate, vignette: 0 } }],
-  ['Cadré, avec fondu des lointains', { focus: gate }],
+  ['Vue d’ensemble — le portail y fait quelques pixels', { camera }],
+  ['Widget « portail »', { camera, focus: { enabled: true, x: 18, y: 9.5, w: 8, d: 3, margin: 1 } }],
+  ['Widget « piscine »', { camera, focus: { enabled: true, x: 10.5, y: 27.5, w: 13, d: 7, margin: 1 } }],
 ];
 document.getElementById('row').innerHTML = shots.map(([label, patch]) =>
   `<figure>${renderScene({ ...model, ...patch }, { width: 426, height: 300 }).svg}` +

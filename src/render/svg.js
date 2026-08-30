@@ -4,10 +4,9 @@
  * Faces are merged, back-face culled, depth sorted and emitted as flat paths.
  * The output is deliberately plain SVG: no filters, no fonts, so that it
  * rasterises identically in every browser and can be dropped straight into a
- * dashboard. The one gradient is the framing vignette, and it is a mask over
- * the finished drawing rather than a filter — filters are the part of SVG that
- * browsers skip when rasterising an <img>, which would have silently dropped
- * the effect from exactly the PNG it was asked for.
+ * dashboard. The one gradient is the night sky, and there is no filter at all:
+ * filters are the part of SVG that browsers skip when rasterising an <img>,
+ * which would drop the effect from exactly the PNG it was asked for.
  */
 
 import { mergeCoplanar } from '../core/mesh.js';
@@ -527,38 +526,6 @@ export function renderScene(input, opts = {}) {
     ? `<rect width="${width}" height="${height}" fill="${bg}"/>` : '';
   if (night) bgRect = nightSky(width, height, defs, prefix);
 
-  /*
-   * The fade applies to the composite, not to each face: fading faces one by
-   * one would make the house transparent to itself — you would read the far
-   * wall through the near one. Masking after compositing has no such problem.
-   *
-   * The ground and the background are left out of it, and that is the whole
-   * difference between an effect and a blemish. A lawn covers the frame edge
-   * to edge; fading it to transparent draws a pale ellipse across it, which is
-   * what a radial gradient over a flat colour can only ever look like. Fading
-   * only what *stands* on the ground gives what was actually wanted: distant
-   * things dissolving into the lawn instead of being sliced by the picture
-   * edge — and it reads the same whatever the image is dropped onto, since it
-   * no longer fades into the backdrop but into the ground.
-   */
-  let maskAttr = '';
-  const vig = framed ? Math.max(0, Math.min(0.9, model.focus.vignette ?? 0)) : 0;
-  if (vig > 0.001) {
-    const id = `${prefix}-vignette`;
-    defs.push(
-      // r = 0.6, not 0.5: at 0.5 the gradient circle only touches the middle of
-      // each edge, so a mild setting fades the corners and nothing else, which
-      // reads as a mistake rather than an effect.
-      `<radialGradient id="${id}-g" cx="0.5" cy="0.5" r="0.6">` +
-      `<stop offset="${(1 - vig).toFixed(3)}" stop-color="#fff" stop-opacity="1"/>` +
-      `<stop offset="1" stop-color="#fff" stop-opacity="0"/>` +
-      `</radialGradient>` +
-      `<mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="${width}" height="${height}">` +
-      `<rect width="${width}" height="${height}" fill="url(#${id}-g)"/></mask>`,
-    );
-    maskAttr = ` mask="url(#${id})"`;
-  }
-
   // The viewBox stays at the layout size while width/height carry the pixel
   // ratio, so a 4x export re-rasterises the vectors instead of upscaling a
   // bitmap — outlines stay one pixel crisp at any resolution.
@@ -570,7 +537,7 @@ export function renderScene(input, opts = {}) {
     (defs.length ? `<defs>${defs.join('')}</defs>` : '') +
     bgRect +
     (floor.length ? `<g stroke-linejoin="round" stroke-linecap="round">${floor.join('')}</g>` : '') +
-    `<g stroke-linejoin="round" stroke-linecap="round"${maskAttr}>${out.join('')}</g>` +
+    `<g stroke-linejoin="round" stroke-linecap="round">${out.join('')}</g>` +
     `</svg>`;
 
   return { svg, camera, faces: ordered, merged: faces, built, model, width, height };

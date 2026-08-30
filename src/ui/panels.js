@@ -561,11 +561,6 @@ export class Inspector {
         min: 0, max: 10, step: 0.25, format: (v) => `${fmtMetres(v)} m`,
         onInput: (v) => this.setIn('focus', { margin: v }, 'focus'),
       }), 'air laissé autour de la zone, sans étendre le terrain'),
-      field('Fondu des lointains', slider(f.vignette, {
-        min: 0, max: 0.8, step: 0.02,
-        format: (v) => (v < 0.01 ? 'net' : `${Math.round(v * 100)} %`),
-        onInput: (v) => this.setIn('focus', { vignette: v }, 'focus'),
-      }), 'estompe ce qui s’éloigne du centre — le terrain n’est pas touché'),
     );
     s.appendChild(h('p', 'field-hint',
       'Ce qui est hors zone est retiré, et ce qui la traverse y est coupé : '

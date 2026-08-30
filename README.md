@@ -63,7 +63,7 @@ tout moment, et *Page blanche* reste disponible.
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
 | **Nuit** | Une **vue de nuit** : ciel dégradé et étoilé, lune, teintes de clair de lune — et les fenêtres allumées |
 | **Caméra** | **Orbite libre** : on fait tourner la maison à la souris, sur 360° et de la vue rasante à la quasi-verticale — plus une inclinaison de l'image ; pavé de navigation à l'écran, et les quatre faces à un clic |
-| **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, ce qui la traverse est coupé, ce qui s'éloigne du centre s'estompe, et chaque cadrage se garde comme **vue nommée** |
+| **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, ce qui la traverse est coupé, rien n'est tranché par le bord, et chaque cadrage se garde comme **vue nommée** |
 | **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, toutes les vues enregistrées en lot, copie directe dans le presse-papier |
 
 ## La vue de nuit
@@ -107,7 +107,7 @@ une vue de nuit.
 
 ## Cadrer sur une zone
 
-![Une vue d'ensemble, la même cadrée sur le portail, et la même avec le fondu](assets/focus.png)
+![Une vue d'ensemble, puis deux cadrages : le portail, la piscine](assets/focus.png)
 
 Un widget qui pilote **un seul** appareil ne gagne rien à montrer toute la
 propriété : le portail y fait quelques pixels. L'outil *Zone de cadrage* trace
@@ -138,16 +138,12 @@ pelouse vide se projette bien au-dessus de tout ce qui est réellement là, et l
 caméra lui faisait de la place. L'image sortait cinquante pixels sous son
 centre, avec du blanc au-dessus.
 
-Le **fondu des lointains** adoucit ensuite la coupe. Il s'applique à l'image
-composée et non à chaque face — estomper les faces une par une rendrait la
-maison transparente à elle-même, et on lirait le mur du fond au travers du mur
-de devant. Le terrain, lui, en est exclu, et c'est toute la différence entre un
-effet et une tache : une pelouse couvre l'image d'un bord à l'autre, et
-l'estomper y dessine une ellipse pâle — la seule chose qu'un dégradé radial
-puisse produire sur un aplat. Seul s'estompe ce qui *repose* sur le sol, ce qui
-donne le résultat cherché : les choses lointaines se dissolvent dans la pelouse
-au lieu d'être tranchées par le bord de l'image, et le rendu est le même quel
-que soit le fond sur lequel l'image est posée.
+Il n'y a **rien à adoucir au bord de l'image**, parce qu'il ne s'y passe rien :
+la caméra cadre le dessin entier. Un fondu a existé ici, ajouté quand le cadrage
+n'était encore qu'un recadrage et tranchait la maison ; il a été retiré une fois
+mesuré qu'il ne modifiait plus aucun pixel sur une scène plate, et fort peu
+ailleurs. Un réglage qui promet un effet sans le produire vaut moins que son
+absence.
 
 Chaque cadrage se garde comme **vue nommée** — un portail, une piscine, une vue
 d'ensemble — et le bouton *Vues enregistrées* de la fenêtre d'export les
@@ -291,8 +287,7 @@ qu'en 2560, puisqu'elle sera rééchantillonnée à l'arrivée. Le préréglage
 Rien n'empêche par ailleurs d'utiliser une simple carte **Image**, ou un tout
 autre logiciel : la sortie reste du PNG et du SVG ordinaires. Le SVG est du
 vectoriel plat, sans filtre ni police, éditable dans n'importe quel éditeur —
-le seul dégradé est le masque du fondu des bords, et il n'apparaît que si vous
-l'avez demandé.
+le seul dégradé est le ciel de la vue de nuit.
 
 ## Développement
 

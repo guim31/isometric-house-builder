@@ -40,7 +40,6 @@ export const DEFAULT_FOCUS = {
   enabled: false,
   x: 0, y: 0, w: 12, d: 10,
   margin: 1.5,
-  vignette: 0.3,  // 0 = hard edge; otherwise how much of the frame fades out
 };
 
 /**
@@ -215,11 +214,13 @@ function normaliseFocus(input, base) {
   f.w = num(f.w, 0.5, base.w);
   f.d = num(f.d, 0.5, base.d);
   f.margin = num(f.margin, 0, base.margin);
-  f.vignette = Math.min(0.9, num(f.vignette, 0, base.vignette));
   f.x = Number.isFinite(f.x) ? f.x : base.x;
   f.y = Number.isFinite(f.y) ? f.y : base.y;
-  // Older files carry `hide`, which is no longer a choice.
+  // Older files carry `hide` and `vignette`. Neither is a setting any more:
+  // both softened a crop by the picture's own border, and the camera no longer
+  // makes one — it fits what is drawn, whole.
   delete f.hide;
+  delete f.vignette;
   return f;
 }
 
