@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Run the browser test suite headlessly. Needs python3 and Google Chrome.
+# The budget tracks the suite: the occlusion audits sweep dozens of camera
+# angles, and a budget the suite outgrows shows up as an unfinished summary.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PORT="${PORT:-8931}"
@@ -10,7 +12,7 @@ SERVER=$!
 trap 'kill $SERVER 2>/dev/null || true' EXIT
 sleep 1
 
-"$CHROME" --headless --disable-gpu --no-sandbox --virtual-time-budget=15000 \
+"$CHROME" --headless --disable-gpu --no-sandbox --virtual-time-budget=40000 \
   --dump-dom "http://127.0.0.1:$PORT/tests/index.html" 2>/dev/null \
   > /tmp/iso-tests-dom.html
 
