@@ -2396,6 +2396,43 @@ await checkAsync('la galerie d’accueil s’ouvre à la première visite', asyn
   return dialog.open || 'la galerie ne s’est pas ouverte';
 });
 
+await checkAsync('le guide se charge, et l’application y renvoie', async () => {
+  // Meant to be handed to people who have never seen the tool, so a dead link
+  // or a missing illustration is not a detail.
+  const frame = await app();
+  const link = frame.contentDocument.querySelector('a[href="guide.html"]');
+  if (!link) return 'aucun lien vers le guide dans l’application';
+
+  const doc = await new Promise((resolve, reject) => {
+    const f = document.createElement('iframe');
+    f.style.cssText = 'width:900px;height:600px;position:absolute;left:-9999px';
+    f.onload = () => resolve(f.contentDocument);
+    f.onerror = () => reject(new Error('guide illisible'));
+    f.src = '../guide.html';
+    document.getElementById('stage').appendChild(f);
+  });
+  const sections = doc.querySelectorAll('main h2[id]').length;
+  if (sections < 8) return `${sections} sections dans le guide`;
+  // Every entry in the table of contents must land somewhere.
+  for (const a of doc.querySelectorAll('.toc a')) {
+    const id = a.getAttribute('href').slice(1);
+    if (!doc.getElementById(id)) return `le sommaire renvoie à « ${id} », qui n’existe pas`;
+  }
+  // And every illustration must exist: they are all repository assets.
+  const shots = [...doc.querySelectorAll('main img')];
+  if (shots.length < 3) return `${shots.length} illustration(s)`;
+  for (const img of shots) {
+    const ok = await new Promise((res) => {
+      const probe = new Image();
+      probe.onload = () => res(true);
+      probe.onerror = () => res(false);
+      probe.src = img.getAttribute('src').replace(/^assets\//, '../assets/');
+    });
+    if (!ok) return `illustration manquante : ${img.getAttribute('src')}`;
+  }
+  return true;
+});
+
 await checkAsync('la page s’amorce avec ses outils et un rendu visible', async () => {
   const frame = await app();
   const doc = frame.contentDocument;

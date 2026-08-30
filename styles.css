@@ -75,7 +75,7 @@ button:disabled { opacity: .45; cursor: default; }
 .app-bar {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   padding: 9px 14px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
@@ -89,9 +89,9 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .brand-name { white-space: nowrap; }
 .project-name {
-  flex: 1 1 180px;
-  min-width: 120px;
-  max-width: 340px;
+  flex: 1 1 140px;
+  min-width: 110px;
+  max-width: 280px;
   padding: 6px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -177,7 +177,7 @@ button:disabled { opacity: .45; cursor: default; }
 /* ---------- tool palette ---------- */
 
 .tool-group { margin-bottom: 4px; }
-.tool-list { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px; }
+.tool-list { display: flex; flex-direction: column; gap: 2px; padding: 1px 0 3px; }
 /* Dense on purpose: twenty-three tools have to share one column. The touch
    breakpoint below gives them room back. */
 .tool {
@@ -599,3 +599,14 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12px; }
   /* The pad would cover a third of a phone screen; the gestures still work. */
   .view-nav { display: none; }
 }
+
+/* A link that has to sit among buttons without pretending to be one. */
+.app-link {
+  align-self: center;
+  padding: 5px 8px;
+  border-radius: 8px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 13px;
+}
+.app-link:hover { background: var(--bg); color: var(--ink); }

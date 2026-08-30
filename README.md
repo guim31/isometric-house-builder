@@ -5,8 +5,10 @@ PNG ou SVG, prêtes à être posées sur un tableau de bord domotique.
 
 ![Deux maisons modélisées avec l'outil](assets/hero.png)
 
-**[▶ Ouvrir l'application](https://guim31.github.io/isometric-house-builder/)** —
-rien à installer, tout se passe dans le navigateur, aucune donnée n'est envoyée
+**[▶ Ouvrir l'application](https://guim31.github.io/isometric-house-builder/)**
+ · **[📖 Guide de prise en main](https://guim31.github.io/isometric-house-builder/guide.html)**
+
+Rien à installer, tout se passe dans le navigateur, aucune donnée n'est envoyée
 nulle part.
 
 ---

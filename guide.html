@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide — Isometric House Builder</title>
+<meta name="description" content="Prise en main de l'outil : dessiner sa maison en isométrie et en exporter une image pour un tableau de bord domotique.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M4 18 16 11l12 7-12 7z' fill='%23c8663c'/><path d='M4 18v5l12 7v-5z' fill='%23e9c98d'/><path d='M28 18v5l-12 7v-5z' fill='%23c8a76d'/></svg>">
+<style>
+/* Same palette as the application, so the two read as one thing. */
+:root {
+  --bg: #eef1f5; --panel: #ffffff; --ink: #1d2733; --ink-soft: #5a6b7d;
+  --line: #d8e0e8; --accent: #c8663c; --accent-soft: #f6e7e0; --focus: #2f6fb5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10161d; --panel: #18212b; --ink: #e6edf4; --ink-soft: #93a4b5;
+    --line: #2a3744; --accent: #e0794c; --accent-soft: #33231c; --focus: #5fa4e8;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+header {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 20px; background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 650; }
+.mark {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent), #e9c98d);
+}
+header .spacer { flex: 1; }
+.btn {
+  display: inline-block; padding: 7px 14px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink); text-decoration: none; font-size: 14px;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+main { max-width: 860px; margin: 0 auto; padding: 26px 20px 80px; }
+h1 { font-size: 30px; line-height: 1.25; margin: 10px 0 6px; }
+h2 {
+  font-size: 21px; margin: 42px 0 10px; padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+h3 { font-size: 16px; margin: 22px 0 4px; }
+p, ul, ol { margin: 10px 0; }
+li { margin: 5px 0; }
+.lead { font-size: 18px; color: var(--ink-soft); }
+img { max-width: 100%; border-radius: 10px; display: block; margin: 14px 0; }
+figure { margin: 16px 0; }
+figcaption { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+code, kbd {
+  font: 500 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 5px; padding: 2px 5px;
+}
+.note {
+  border-left: 3px solid var(--accent); background: var(--accent-soft);
+  padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0;
+}
+.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; }
+.toc ol { margin: 6px 0 0; padding-left: 20px; }
+.toc a { color: var(--ink); }
+a { color: var(--focus); }
+table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 15px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--ink-soft); font-weight: 600; font-size: 13px; }
+footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand"><span class="mark" aria-hidden="true"></span> Isometric House Builder</span>
+  <span class="spacer"></span>
+  <a class="btn" href="https://github.com/guim31/isometric-house-builder">Code source</a>
+  <a class="btn primary" href="./">Ouvrir l’outil</a>
+</header>
+
+<main>
+<h1>Guide de prise en main</h1>
+<p class="lead">
+  Dessiner sa maison en vue isométrique et en sortir une image à poser sur un
+  tableau de bord domotique. Tout se passe dans le navigateur : rien n’est
+  envoyé nulle part, et il n’y a pas de compte à créer.
+</p>
+
+<div class="toc">
+  <strong>Sommaire</strong>
+  <ol>
+    <li><a href="#depart">Partir d’un modèle</a></li>
+    <li><a href="#interface">Les trois colonnes</a></li>
+    <li><a href="#emprise">Dessiner l’emprise</a></li>
+    <li><a href="#toiture">Régler la toiture</a></li>
+    <li><a href="#ouvertures">Fenêtres, portes, objets de toit</a></li>
+    <li><a href="#corps">Plusieurs corps de bâtiment</a></li>
+    <li><a href="#abords">Les abords : muret, portail, piscine</a></li>
+    <li><a href="#couleurs">Couleurs et matières</a></li>
+    <li><a href="#vue">Regarder sa maison</a></li>
+    <li><a href="#cadrage">Cadrer sur une zone, pour un widget</a></li>
+    <li><a href="#export">Exporter et poser dans Gladys</a></li>
+    <li><a href="#fichiers">Enregistrer, partager, confidentialité</a></li>
+    <li><a href="#raccourcis">Raccourcis</a></li>
+  </ol>
+</div>
+
+<h2 id="depart">1. Partir d’un modèle</h2>
+<p>
+  L’outil s’ouvre sur une galerie de dix maisons plutôt que sur une grille vide.
+  Prenez la plus proche de la vôtre et remodelez-la : c’est plus rapide que de
+  partir de rien, et rien n’y est définitif. Le bouton <strong>Modèles</strong>
+  rouvre la galerie à tout moment, et <em>Page blanche</em> reste disponible.
+</p>
+<img src="assets/presets.png" alt="Les dix modèles de départ">
+
+<h2 id="interface">2. Les trois colonnes</h2>
+<img src="assets/screenshot.png" alt="L’interface : outils à gauche, plan et rendu au centre, réglages à droite">
+<ul>
+  <li><strong>À gauche, créer.</strong> Les outils qui ajoutent quelque chose,
+    rangés par familles qui se replient. Deux arrivent repliées — <em>Sur le
+    toit</em> et <em>Cadrage</em> — parce qu’on les règle une fois.</li>
+  <li><strong>Au centre, dessiner et regarder.</strong> Le plan pour
+    construire, le rendu pour juger et exporter.</li>
+  <li><strong>À droite, régler</strong>, en quatre familles : <em>Sélection</em>
+    (ce qu’on vient de cliquer), <em>Bâtiment</em>, <em>Projet</em>,
+    <em>Vue et export</em>. Chaque section se replie et indique ce qu’elle
+    contient tant qu’elle est fermée.</li>
+</ul>
+
+<h2 id="emprise">3. Dessiner l’emprise</h2>
+<ol>
+  <li>Outil <strong>Rectangle</strong> : glissez dans le plan pour poser un
+    volume. Les dimensions s’affichent pendant le tracé.</li>
+  <li>Outil <strong>Pinceau</strong> pour ajouter case par case,
+    <strong>Gomme</strong> pour retirer. <kbd>Alt</kbd> inverse l’outil.</li>
+  <li>Chaque pan de mur affiche sa longueur : c’est ainsi qu’on cale les
+    dimensions réelles sans compter les cases.</li>
+</ol>
+<div class="note">
+  <strong>Pour des cotes justes,</strong> passez la <em>Trame</em> à 0,50 m dans
+  <em>Bâtiment → Tous les corps</em>. La maison déjà dessinée est conservée à
+  l’identique, ouvertures comprises — affiner la trame ne change que le pas de
+  dessin.
+</div>
+
+<h2 id="toiture">4. Régler la toiture</h2>
+<p>
+  Section <em>Toiture</em>, à droite. Quatre formes — croupe, deux pans,
+  appentis, toit plat — puis l’inclinaison, le débord et l’épaisseur de rive.
+  Les noues entre deux ailes sont calculées toutes seules : dessinez un plan en
+  L et le toit se raccorde.
+</p>
+<p>
+  Le débord se règle par pas de 25 cm, pour que la rive tombe sur la trame.
+</p>
+
+<h2 id="ouvertures">5. Fenêtres, portes, objets de toit</h2>
+<p>
+  Choisissez <em>Fenêtre</em>, <em>Fenêtre à volets</em>, <em>Porte</em> ou
+  <em>Porte de garage</em>, puis cliquez le long d’un mur — dans le plan
+  <em>ou directement sur le rendu</em>. Une ouverture sélectionnée se règle
+  (largeur, hauteur, allège) et se fait glisser le long des murs, en passant
+  les angles.
+</p>
+<p>
+  Même chose pour ce qui se pose sur le toit : panneaux solaires, cheminée,
+  fenêtre de toit, parabole. Ils épousent la pente.
+</p>
+
+<h2 id="corps">6. Plusieurs corps de bâtiment</h2>
+<p>
+  Un abri de jardin n’est pas la maison en plus petit : il a son toit plat et
+  son bardage. Bouton <strong>+ Nouveau corps</strong> dans
+  <em>Bâtiment → Tous les corps</em>. Chaque corps a sa hauteur, sa toiture, ses
+  matières et ses couleurs propres.
+</p>
+<p>
+  Cliquer un mur ou un toit dans le rendu rend son corps actif — pratique pour
+  passer de l’un à l’autre sans repasser par le plan.
+</p>
+
+<h2 id="abords">7. Les abords : muret, portail, piscine</h2>
+<p>
+  Muret, clôture et haie se <strong>tracent au glisser</strong>, leur longueur
+  s’affichant pendant le tracé. Un portail posé près d’un muret s’y aligne et
+  l’ouvre automatiquement — il n’y a pas de relation à maintenir entre les deux,
+  déplacez-le et le muret se referme derrière lui.
+</p>
+<p>
+  Terrasses et piscines peuvent être <strong>surélevées</strong> : elles
+  reçoivent alors leurs joues et cessent d’être confondues avec le sol.
+</p>
+
+<h2 id="couleurs">8. Couleurs et matières</h2>
+<p>
+  Section <em>Projet → Apparence</em> pour la palette, <em>Couleurs et
+  matières</em> pour le reste. Six palettes, des matières de toit (tuiles,
+  tuiles canal panachées, ardoise, bac acier) et de murs (brique, bardage,
+  pierre, colombages), puis chaque matériau recolorable individuellement.
+</p>
+<div class="note">
+  <strong>Pour Gladys, gardez la palette « Horizons ».</strong> Elle reprend les
+  couleurs exactes des illustrations livrées avec Gladys v5, pour que votre
+  maison ne détonne pas à côté du reste du tableau de bord.
+</div>
+
+<h2 id="vue">9. Regarder sa maison</h2>
+<p>
+  <strong>Glissez dans le rendu</strong> pour faire tourner la maison, où qu’on
+  la prenne. Le pavé en bas à droite fait la même chose au clic, et bascule
+  entre <em>Pivoter</em> et <em>Déplacer</em> — les flèches suivent ce choix, et
+  les maintenir enfoncées répète le pas.
+</p>
+<table>
+  <tr><th>Geste</th><th>Effet</th></tr>
+  <tr><td>Glisser</td><td>Faire tourner la maison, et monter ou descendre la caméra</td></tr>
+  <tr><td><kbd>Maj</kbd> + glisser</td><td>Déplacer la vue</td></tr>
+  <tr><td><kbd>Alt</kbd> + glisser</td><td>Incliner l’image dans son cadre</td></tr>
+  <tr><td>Molette</td><td>Zoomer autour du curseur</td></tr>
+  <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Tourner d’un quart de tour</td></tr>
+</table>
+<p>
+  La section <em>Vue</em> donne les mêmes réglages au degré près, et
+  <strong>+ Enregistrer cette vue</strong> garde un angle et un cadrage sous un
+  nom, pour y revenir et le réexporter plus tard.
+</p>
+<p>
+  Une case <strong>Vue de nuit</strong> dans <em>Apparence</em> fait passer
+  l’illustration à la nuit : ciel étoilé, lune, et les fenêtres allumées — ce
+  qui, sur un tableau de bord, dit si la maison est éveillée.
+</p>
+<img src="assets/night.png" alt="La même maison de jour et deux maisons de nuit">
+
+<h2 id="cadrage">10. Cadrer sur une zone, pour un widget</h2>
+<p>
+  Un widget qui pilote un seul appareil ne gagne rien à montrer toute la
+  propriété : le portail y fait quelques pixels. L’outil <strong>Zone de
+  cadrage</strong> (dernière famille, à gauche) trace un rectangle sur le plan ;
+  l’export s’y recadre.
+</p>
+<img src="assets/focus.png" alt="Une vue d’ensemble, la même cadrée sur le portail, et la même avec le fondu">
+<p>Ce qu’il faut savoir :</p>
+<ul>
+  <li>Ce qui est hors zone est <strong>retiré</strong>, pas seulement mis hors
+    champ. En isométrie, un abri au fond du jardin se projette <em>vers le
+    haut</em>, en plein dans un cadre serré sur le portail.</li>
+  <li>Ce qui traverse la zone y est <strong>coupé</strong> ; ce qui est compact
+    — un arbre, un portail — est gardé entier ou retiré selon que son centre
+    tombe dedans.</li>
+  <li>Un corps de bâtiment n’est gardé que s’il <strong>se tient</strong> dans
+    la zone. Une maison dont le mur longe la zone ne l’effleure que d’un
+    centimètre : elle disparaît. Étendez la zone d’un mètre ou deux sur le
+    bâtiment pour le garder.</li>
+  <li>La <strong>marge</strong> est de l’air autour du dessin, pas de la
+    pelouse en plus. Un ou deux mètres suffisent en général.</li>
+  <li>Le <strong>fondu des lointains</strong> estompe ce qui s’éloigne du
+    centre ; le terrain n’est pas touché.</li>
+</ul>
+
+<h2 id="export">11. Exporter et poser dans Gladys</h2>
+<ol>
+  <li><strong>Exporter une image</strong>, en haut à droite (ou le bouton au
+    pied de la section <em>Cadrage</em>).</li>
+  <li>Taille <strong>Gladys — 2560 × 1600</strong>, format <strong>PNG</strong>,
+    fond transparent.</li>
+  <li>Dans Gladys : ajoutez un widget <em>Vue de la maison</em>,
+    <strong>téléversez l’image</strong>, puis cliquez dessus pour poser vos
+    pastilles liées aux appareils.</li>
+</ol>
+<div class="note">
+  <strong>Pourquoi 2560 et pas 4×.</strong> Gladys ramène toute image à 2560 px
+  de grand côté et ne la ré-encode pas en dessous de 2 Mo. Exporter en 4×
+  (4800 px) donne donc une image <em>moins</em> nette, puisqu’elle sera
+  rééchantillonnée à l’arrivée. Le préréglage <em>Gladys</em> vise ce plafond.
+</div>
+<p>
+  Les autres sorties : <em>Les 4 faces</em> produit les quatre orientations en
+  un lot, <em>Vues enregistrées</em> régénère toutes vos vues nommées d’un coup,
+  et <em>SVG</em> donne du vectoriel éditable. Rien n’oblige à passer par le
+  widget <em>Vue de la maison</em> : une simple carte <em>Image</em> convient,
+  et l’export reste du PNG ordinaire pour Home Assistant, Jeedom ou un wiki.
+</p>
+
+<h2 id="fichiers">12. Enregistrer, partager, confidentialité</h2>
+<p>
+  <strong>Rien ne quitte votre navigateur.</strong> L’outil n’envoie aucune
+  requête : pas de compte, pas de serveur, pas de mesure d’audience. Le projet
+  en cours est gardé dans le stockage local de <em>votre</em> navigateur, sur
+  <em>votre</em> machine. Quelqu’un qui ouvre le lien de l’outil arrive sur la
+  galerie de modèles et ne voit rien de ce que vous avez dessiné.
+</p>
+<ul>
+  <li><strong>Enregistrer</strong> produit un fichier <code>.house.json</code>
+    lisible et versionnable, qu’<strong>Ouvrir</strong> relit.</li>
+  <li><strong>Partager</strong> copie un lien qui <strong>contient tout le
+    projet</strong> dans son adresse. Pratique pour envoyer une maison à
+    quelqu’un — et à ne pas confondre avec le lien de l’outil si vous ne
+    souhaitez pas montrer la vôtre.</li>
+  <li><strong>Nouveau</strong> repart d’une page blanche et efface le projet
+    conservé localement.</li>
+</ul>
+
+<h2 id="raccourcis">13. Raccourcis</h2>
+<table>
+  <tr><th>Touche</th><th>Effet</th></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>Z</kbd></td><td>Annuler, rétablir</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Dupliquer la sélection</td></tr>
+  <tr><td><kbd>Suppr</kbd></td><td>Supprimer la sélection</td></tr>
+  <tr><td><kbd>Échap</kbd></td><td>Désélectionner</td></tr>
+  <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Tourner d’un quart de tour</td></tr>
+</table>
+
+<footer>
+  <p>
+    Outil libre sous licence MIT — <a href="https://github.com/guim31/isometric-house-builder">code source et signalement de bugs</a>.
+    Une remarque, un défaut de rendu&nbsp;? Ouvrez une <em>issue</em> avec votre
+    fichier <code>.house.json</code> : c’est ce qui permet de reproduire.
+  </p>
+</footer>
+</main>
+</body>
+</html>
