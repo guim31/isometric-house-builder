@@ -61,7 +61,7 @@ tout moment, et *Page blanche* reste disponible.
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
 | **Nuit** | Une **vue de nuit** : ciel dégradé et étoilé, lune, teintes de clair de lune — et les fenêtres allumées |
 | **Caméra** | **Orbite libre** : on fait tourner la maison à la souris, sur 360° et de la vue rasante à la quasi-verticale — plus une inclinaison de l'image ; pavé de navigation à l'écran, et les quatre faces à un clic |
-| **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, ce qui s'éloigne du centre s'estompe, et chaque cadrage se garde comme **vue nommée** |
+| **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, ce qui la traverse est coupé, ce qui s'éloigne du centre s'estompe, et chaque cadrage se garde comme **vue nommée** |
 | **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, toutes les vues enregistrées en lot, copie directe dans le presse-papier |
 
 ## La vue de nuit
@@ -117,13 +117,11 @@ pas la distance à l'écran. Un abri au fond du jardin se projette *vers le haut
 en plein dans un cadre serré sur le portail — resserrer la caméra le rapproche
 au lieu de l'écarter. D'où le retrait pur et simple.
 
-Le retrait porte sur des éléments entiers, jamais sur des morceaux : une haie
-qui entre dans le cadre y reste tout entière, parce qu'une demi-haie finissant
-en l'air est un défaut pire qu'une haie qui sort de l'image. Sous un cadrage, le
-terrain est par ailleurs doublé d'un aplat de sa propre couleur : le sol est
-dimensionné avant que la caméra soit connue, et un cadre serré peut passer
-au-delà de son bord — l'image montre alors un coin de pelouse s'arrêtant net,
-et plus rien derrière.
+Ce qui traverse le cadre y est **coupé** ; ce qui est compact — un arbre, un
+portail, une voiture — est gardé entier ou retiré selon que son centre tombe
+dedans. Sous cadrage, le sol suit le cadre et non la parcelle : un jardin de
+quatre-vingts mètres recadré sur le portail remplissait sinon l'image de
+pelouse, ce que le cadrage était précisément censé éviter.
 
 Le **fondu des lointains** adoucit ensuite la coupe. Il s'applique à l'image
 composée et non à chaque face — estomper les faces une par une rendrait la
@@ -237,6 +235,23 @@ fichier `.house.json` lisible et versionnable, qu'*Ouvrir* relit ; c'est aussi
 le format des dix modèles de départ, décrits dans
 [`src/data/presets.js`](src/data/presets.js). *Partager* copie un lien qui
 encode tout le projet dans l'URL — rien ne transite par un serveur.
+
+## Une image qui se pose, pas qui recouvre
+
+Le sol n'est pas un rectangle de pelouse aux dimensions de l'image : c'est un
+**tapis aux coins arrondis sous ce qui est montré**, avec du transparent tout
+autour. La distinction décide de tout : une maison sur un coussin vert se pose
+sur n'importe quel tableau de bord, un rectangle de pelouse d'un bord à l'autre
+lui livre une tuile verte avec une maison dessus. Les illustrations livrées avec
+Gladys font la première chose, et ce sont elles que ces images côtoient.
+
+C'est aussi ce qui explique une règle qui pourrait surprendre : sous cadrage, un
+muret ou une haie qui traverse le cadre y est coupé. Tant que l'image était un
+rectangle opaque, les garder entiers valait mieux — une demi-haie finissant en
+l'air était pire qu'une haie sortant de l'image. Dès lors que le sol est un
+tapis, c'est l'inverse : la haie gardée entière sort du tapis et finit
+*réellement* en l'air, et élargir le tapis pour aller la chercher redonne la
+tuile verte.
 
 ## Intégrer l'image à Gladys Assistant
 

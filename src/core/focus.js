@@ -13,9 +13,14 @@
  * removing it. Hence `hide`: what falls outside the rectangle is taken out of
  * the model before anything is built.
  *
- * Whole items are kept or dropped, never clipped. A hedge that starts inside
- * the frame stays whole, because half a hedge ending in mid-air is a worse
- * artefact than a hedge that runs past the edge of the picture.
+ * Extended items are cut at the frame; compact ones are kept whole or dropped
+ * on where their centre falls. That is a reversal, and the reason is worth
+ * recording: they used to be kept whole, on the grounds that half a hedge
+ * ending in mid-air is worse than one running past the edge of the picture.
+ * True while the picture was an opaque rectangle. It stopped being true once
+ * the ground became a pad with transparency around it — a hedge kept whole
+ * then runs off the pad and *does* end in mid-air, and dragging the pad out to
+ * meet it turns the export back into a green tile.
  */
 
 import { parseKey } from './grid.js';
@@ -37,6 +42,41 @@ function buildingInside(b, rect, cs) {
     if (overlaps([i * cs, j * cs, (i + 1) * cs, (j + 1) * cs], rect)) return true;
   }
   return false;
+}
+
+/**
+ * Items long enough that cutting them is better than losing them.
+ *
+ * A wall, a hedge or a terrace crossing the frame is cut at it. A tree, a gate
+ * or a car is not: those are single objects with a shape of their own, and
+ * half of one is not a smaller one. They are kept whole if their centre falls
+ * inside the frame and dropped otherwise.
+ */
+const CLIPPABLE = new Set(['muret', 'hedge', 'fence', 'terrace', 'path', 'deck', 'pool']);
+
+/**
+ * Below this a cut leaves a sliver rather than an object.
+ *
+ * Measured against the item's own size, not as an absolute: a muret is 24 cm
+ * thick and a gate 16 cm, so a flat thirty-centimetre floor deleted every wall
+ * and fence in the model the moment a frame was drawn.
+ */
+const MIN_KEEP = 0.3;
+const keeps = (left, whole) => left >= Math.min(MIN_KEEP, whole * 0.5);
+
+function clipProp(p, rect) {
+  const fp = propFootprint(p);
+  if (!overlaps(fp, rect)) return null;
+  if (!CLIPPABLE.has(p.kind)) {
+    const cx = (fp[0] + fp[2]) / 2, cy = (fp[1] + fp[3]) / 2;
+    const inside = cx >= rect[0] && cx <= rect[2] && cy >= rect[1] && cy <= rect[3];
+    return inside ? p : null;
+  }
+  const x0 = Math.max(fp[0], rect[0]), x1 = Math.min(fp[2], rect[2]);
+  const y0 = Math.max(fp[1], rect[1]), y1 = Math.min(fp[3], rect[3]);
+  if (!keeps(x1 - x0, fp[2] - fp[0]) || !keeps(y1 - y0, fp[3] - fp[1])) return null;
+  if (x0 === fp[0] && y0 === fp[1] && x1 === fp[2] && y1 === fp[3]) return p;
+  return { ...p, x: x0, y: y0, w: x1 - x0, d: y1 - y0 };
 }
 
 // One-entry memo, keyed by model identity. The model is immutable, so this is
@@ -66,7 +106,7 @@ function compute(model) {
 
   const buildings = model.buildings.filter((b) => !b.cells.length || buildingInside(b, rect, cs));
   const kept = new Set(buildings.flatMap((b) => b.cells));
-  const props = model.props.filter((p) => overlaps(propFootprint(p), rect));
+  const props = model.props.map((p) => clipProp(p, rect)).filter(Boolean);
 
   // Openings and roof items live on a volume; dropping the volume drops them
   // with it. Their own position is not tested: a window on the far side of a
@@ -75,8 +115,10 @@ function compute(model) {
   const roofItems = model.roofItems.filter((it) =>
     kept.has(`${Math.floor(it.x / cs)},${Math.floor(it.y / cs)}`));
 
+  const propsUnchanged = props.length === model.props.length
+    && props.every((p, i) => p === model.props[i]);
   if (buildings.length === model.buildings.length
-    && props.length === model.props.length
+    && propsUnchanged
     && openings.length === model.openings.length
     && roofItems.length === model.roofItems.length) return model;
 

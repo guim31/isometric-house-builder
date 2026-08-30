@@ -8,9 +8,10 @@ import { boundaryEdges, decomposeRects, bounds, parseKey, SIDES } from './grid.j
 import { buildRoof, heightField, undersideAt, STEP } from './roof.js';
 import { cellSet, wallTop, cellSizeOf, buildingCells, propFootprint } from './model.js';
 import { focusRect } from './focus.js';
-import { buildProps } from './props.js';
+import { buildProps, roundedRect } from './props.js';
 
 const LIFT = 0.015; // how far detail quads float off the surface they decorate
+const GROUND_ROUND = 2.5; // corner radius of the ground pad, in metres
 
 /**
  * Geometry of one exterior wall segment, in metres.
@@ -253,12 +254,20 @@ export function buildMesh(m) {
   const cells = cellSet(m);
   const b = bounds(cells);
 
-  // --- Ground -------------------------------------------------------------
-  // Sized to the footprint *and* everything placed around it. A prop left
-  // hanging off the edge of the ground reads as floating above the roof rather
-  // than standing behind the house, because nothing anchors it to a surface.
-  // The framing rectangle counts too: a frame set on the far end of the garden
-  // may hold no building at all, and a gate standing on nothing looks broken.
+  /*
+   * --- Ground ------------------------------------------------------------
+   *
+   * A pad under what is shown, with rounded corners — not a slab filling the
+   * picture. That distinction is what decides whether an exported image sits
+   * on a dashboard or covers it: a house on a small green cushion, transparent
+   * all round, drops onto any card; a rectangle of lawn edge to edge is a
+   * green tile with a house on it. Gladys's own illustrations do the former,
+   * and they are what these images stand next to.
+   *
+   * Under a frame the pad follows the *frame*, not the whole plot. A garden
+   * eighty metres long, cropped to the gate, otherwise filled the picture with
+   * lawn — the very thing the framing was asked to avoid.
+   */
   if (m.ground.enabled) {
     const g = m.ground.margin;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -266,22 +275,29 @@ export function buildMesh(m) {
       x0 = Math.min(x0, ax0); y0 = Math.min(y0, ay0);
       x1 = Math.max(x1, ax1); y1 = Math.max(y1, ay1);
     };
+    // A building always gets ground under it: it is the one thing that cannot
+    // stand on nothing, and its footprint bounds how far that reaches.
     if (!b.empty) cover(b.i0 * cs, b.j0 * cs, (b.i1 + 1) * cs, (b.j1 + 1) * cs);
-    for (const p of m.props) {
-      const [px0, py0, px1, py1] = propFootprint(p);
-      cover(px0 - 1, py0 - 1, px1 + 1, py1 + 1);
+    if (m.focus?.enabled) {
+      cover(...focusRect(m.focus));
+    } else {
+      // Props count too: one left hanging off the edge of the ground reads as
+      // floating above the roof rather than standing behind the house,
+      // because nothing anchors it to a surface. Under a frame they do not,
+      // deliberately — a wall kept whole because it crosses the frame would
+      // otherwise drag the pad the length of the garden, which is the green
+      // tile this is meant to avoid. It simply runs off the edge instead,
+      // which is what a crop looks like.
+      for (const p of m.props) {
+        const [px0, py0, px1, py1] = propFootprint(p);
+        cover(px0 - 1, py0 - 1, px1 + 1, py1 + 1);
+      }
     }
-    // The frame itself, so that a zone holding nothing still has ground under
-    // it. How far the ground must reach to fill the picture is a question for
-    // the renderer, which knows the camera; it backs a framed view with a
-    // plain fill of this same colour.
-    if (m.focus?.enabled) cover(...focusRect(m.focus));
     if (Number.isFinite(x0)) {
-      mesh.quad(
-        [x0 - g, y0 - g, 0], [x1 + g, y0 - g, 0],
-        [x1 + g, y1 + g, 0], [x0 - g, y1 + g, 0],
-        m.ground.material, 'ground',
-      );
+      const w = x1 - x0 + 2 * g, d = y1 - y0 + 2 * g;
+      const ring = roundedRect(x0 - g, y0 - g, x1 + g, y1 + g,
+        Math.min(GROUND_ROUND, Math.min(w, d) * 0.16));
+      mesh.poly(ring.map((p) => [p[0], p[1], 0]), m.ground.material, 'ground');
     }
   }
 

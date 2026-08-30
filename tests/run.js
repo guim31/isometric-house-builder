@@ -1798,11 +1798,11 @@ check('sous cadrage, la nuit garde son ciel', () => {
     ...base, focus, style: { ...base.style, night: true },
   }), { width: 300, height: 220 }).svg;
   if (!/linearGradient/.test(dark)) return 'pas de ciel sous cadrage';
-  // One full-frame rectangle at night (the sky), two by day (sky-less: the
-  // ground backing plus nothing else).
+  // Exactly one full-frame rectangle at night — the sky — and none by day,
+  // where the ground is a pad and everything round it stays transparent.
   const rects = (svg) => (svg.match(/<rect width="300" height="220"/g) || []).length;
   if (rects(dark) !== 1) return `${rects(dark)} fonds pleins de nuit`;
-  return rects(day) === 1 || `${rects(day)} fonds pleins de jour`;
+  return rects(day) === 0 || `${rects(day)} fonds pleins de jour`;
 });
 
 await checkAsync('une vue de nuit a un ciel, même en fond transparent', async () => {
@@ -1894,7 +1894,13 @@ function occlusionErrors(model, W, H, step = 3) {
       // question nobody asked. Everything else is fair game.
       if (STACKED.has(best.F.f.group) && STACKED.has(top.f.group)) continue;
       const key = `${best.F.f.group} masqué par ${top.f.group}`;
-      bad.set(key, (bad.get(key) || 0) + 1);
+      // How deep the inversion runs matters as much as how wide: a pixel at a
+      // shared silhouette edge overshoots by centimetres, a panel seen through
+      // a roof by metres. Reporting only the count cannot tell them apart.
+      const e = bad.get(key) || { n: 0, gap: 0 };
+      e.n++;
+      e.gap = Math.max(e.gap, best.dp - dTop);
+      bad.set(key, e);
     }
   }
   return bad;
@@ -1923,8 +1929,12 @@ check('un panneau solaire ne traverse jamais le toit', () => {
   for (const pitch of [10, 16, 24, 35]) {
     for (const yaw of [0, 75, 90, 105, 135, 225, 255, 270]) {
       const bad = occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch } }, 260, 200, 4);
-      for (const [k, n] of bad) {
-        if (/^roof.* masqué par solar/.test(k)) return `${yaw}°/${pitch}° : ${n} px — ${k}`;
+      for (const [k, e] of bad) {
+        // Half a metre: deep enough that it cannot be an edge, shallow enough
+        // that the fault this guards — metres of roof — cannot slip under it.
+        if (/^roof.* masqué par solar/.test(k) && e.gap > 0.5) {
+          return `${yaw}°/${pitch}° : ${e.n} px, ${e.gap.toFixed(1)} m — ${k}`;
+        }
       }
     }
   }
@@ -1944,9 +1954,9 @@ check('un mur ne passe jamais devant le toit qui le couvre', () => {
     for (const pitch of [8, 14, 24, 40]) {
       for (const yaw of [0, 67, 146, 220, 310]) {
         const bad = occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch } }, 260, 200, 4);
-        for (const [k, n] of bad) {
+        for (const [k, e] of bad) {
           if (/^roof.* masqué par wall/.test(k)) {
-            return `${id} ${yaw}°/${pitch}° : ${n} px — ${k}`;
+            return `${id} ${yaw}°/${pitch}° : ${e.n} px — ${k}`;
           }
         }
       }
@@ -1965,8 +1975,8 @@ check('aucun recouvrement grossier, à tout angle de caméra', () => {
     const m = normalise({ ...PRESETS.find((p) => p.id === id).model });
     for (const pitch of [8, 20, 40]) {
       for (const yaw of [0, 45, 146, 220, 310]) {
-        for (const [k, n] of occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch } }, 260, 200, 4)) {
-          if (n > worst) { worst = n; name = `${id} ${k} (${yaw}°/${pitch}°)`; }
+        for (const [k, e] of occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch } }, 260, 200, 4)) {
+          if (e.n > worst) { worst = e.n; name = `${id} ${k} (${yaw}°/${pitch}°)`; }
         }
       }
     }
@@ -1992,7 +2002,7 @@ check('sans cadrage, le modèle traverse le filtre intact', () => {
   return focusModel(m) === m || 'le modèle a été recopié sans raison';
 });
 
-check('le cadrage retire ce qui est hors zone et garde ce qui la traverse', () => {
+check('le cadrage retire ce qui est hors zone et coupe ce qui la traverse', () => {
   const m = normalise({
     ...emptyModel(),
     buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 4)] })],
@@ -2006,10 +2016,15 @@ check('le cadrage retire ce qui est hors zone et garde ce qui la traverse', () =
   const out = focusModel(m);
   const kinds = out.props.map((p) => p.kind).sort().join(',');
   if (kinds !== 'bush,hedge') return `restants : ${kinds || 'aucun'}`;
-  // Whole items only: half a hedge ending in mid-air is worse than one running
-  // past the edge of the picture.
+  // Cut at the frame, not kept whole. The ground is a pad with transparency
+  // around it, so a hedge kept whole runs off the pad and ends in mid-air —
+  // and widening the pad to meet it turns the export back into a green tile.
   const hedge = out.props.find((p) => p.kind === 'hedge');
-  return hedge.w === 12 || `la haie a été rognée à ${hedge.w} m`;
+  if (hedge.w >= 12) return `la haie n’a pas été coupée (${hedge.w} m)`;
+  if (hedge.x < 0 - 1e-9) return `la haie déborde encore du cadre (x = ${hedge.x})`;
+  // A compact object is not cut: half a tree is not a smaller tree.
+  const bush = out.props.find((p) => p.kind === 'bush');
+  return bush.r === 1 || 'le buisson a été rogné';
 });
 
 check('le cadrage emporte les ouvertures du corps qu’il retire', () => {
@@ -2078,11 +2093,55 @@ check('une vue enregistrée survit à l’enregistrement du projet', () => {
   return (near(v.camera.yaw, 137) && v.focus.enabled) || 'réglages perdus';
 });
 
-await checkAsync('un export cadré n’a pas de coin vide', async () => {
-  // The ground quad is sized before the camera is known, so a tight frame can
-  // run past its edge and leave a wedge of lawn ending in a hard line with
-  // nothing beyond it. Reported in use, and only visible on real pixels: the
-  // markup looks perfectly well-formed either way.
+check('le sol est un tapis à coins arrondis, pas un rectangle', () => {
+  // Four corners make a rectangle of lawn; a rounded outline reads as a base
+  // the model sits on. It is the difference between an illustration that drops
+  // onto a dashboard and one that covers it.
+  const m = normalise({
+    ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 9, 6)] })],
+    ground: { enabled: true, material: 'grass', margin: 2 },
+  });
+  const ground = mergeCoplanar(buildMesh(m).mesh.tris).filter((f) => f.group === 'ground');
+  if (ground.length !== 1) return `${ground.length} faces de sol`;
+  const n = ground[0].loops[0].length;
+  return n > 8 || `${n} sommets : le sol est resté rectangulaire`;
+});
+
+check('sous cadrage, le sol suit le cadre et non la parcelle', () => {
+  // The reported fault: a garden eighty metres long, cropped to the gate,
+  // filled the picture with lawn — the very thing the framing was asked to
+  // avoid. The pad follows what is shown.
+  const b = makeBuilding({ cells: [...rectCells(0, 0, 5, 4)] });
+  const base = {
+    ...emptyModel(),
+    buildings: [b],
+    props: [{ id: 'h', kind: 'hedge', x: -30, y: 20, w: 70, d: 0.6, h: 1 }],
+    ground: { enabled: true, material: 'grass', margin: 1 },
+  };
+  // Through focusModel, as the renderer does: the frame first removes what it
+  // excludes, and only then is the ground sized to what is left.
+  const span = (model) => {
+    const g = mergeCoplanar(buildMesh(focusModel(normalise(model))).mesh.tris)
+      .find((f) => f.group === 'ground');
+    const xs = g.loops[0].map((p) => p[0]);
+    return Math.max(...xs) - Math.min(...xs);
+  };
+  const wide = span(base);
+  const framed = span({
+    ...base,
+    focus: { enabled: true, x: 18, y: 19, w: 6, d: 3, margin: 1, hide: true, vignette: 0 },
+  });
+  if (!(wide > 60)) return `sans cadrage le sol ne fait que ${wide.toFixed(0)} m`;
+  return framed < 12 || `sous cadrage le sol fait encore ${framed.toFixed(0)} m`;
+});
+
+await checkAsync('un export cadré pose la scène sur un tapis, pas sur un aplat', async () => {
+  // What makes an exported image sit on a dashboard rather than cover it: the
+  // ground is a pad under what is shown, with transparency all round. Filling
+  // the frame with lawn — which is what backing it with a plain rectangle did
+  // — hands the dashboard a green tile with a house on it. Reported in use,
+  // and only visible on real pixels.
   const W = 200, H = 150;
   const m = normalise({
     ...emptyModel(),
@@ -2096,11 +2155,11 @@ await checkAsync('un export cadré n’a pas de coin vide', async () => {
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0);
-  for (const [x, y] of [[2, 2], [W - 3, 2], [2, H - 3], [W - 3, H - 3], [W >> 1, 2]]) {
-    const a = ctx.getImageData(x, y, 1, 1).data[3];
-    if (a !== 255) return `coin (${x}, ${y}) transparent (alpha ${a})`;
+  const alpha = (x, y) => ctx.getImageData(x, y, 1, 1).data[3];
+  for (const [x, y] of [[2, 2], [W - 3, 2], [2, H - 3], [W - 3, H - 3]]) {
+    if (alpha(x, y) !== 0) return `coin (${x}, ${y}) opaque (alpha ${alpha(x, y)})`;
   }
-  return true;
+  return alpha(W >> 1, H >> 1) === 255 || 'le centre de l’image est vide';
 });
 
 await checkAsync('le fondu survit à la conversion en PNG, sans toucher au terrain', async () => {

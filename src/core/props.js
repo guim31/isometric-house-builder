@@ -17,7 +17,7 @@ const groundAnchor = () => null;
 const RAISED = 0.05;
 
 /** Rounded rectangle as a closed ring of points, for pools and terraces. */
-function roundedRect(x0, y0, x1, y1, r, steps = 5) {
+export function roundedRect(x0, y0, x1, y1, r, steps = 5) {
   const w = x1 - x0, d = y1 - y0;
   const rr = Math.max(0, Math.min(r, w / 2, d / 2));
   if (rr < 1e-6) return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];

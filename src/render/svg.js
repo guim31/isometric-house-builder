@@ -441,27 +441,6 @@ export function renderScene(input, opts = {}) {
   const floor = [];
   const defs = [];
 
-  /*
-   * Under a frame, the ground is backed by a plain fill of its own colour.
-   *
-   * The ground quad is sized in the scene, before the camera is known; a tight
-   * frame can therefore run past its edge, and the picture then shows a wedge
-   * of lawn ending in a hard straight line with nothing beyond it. Growing the
-   * quad by guesswork does not settle it — at a low camera the visible ground
-   * stretches away without bound. Painting the frame in the ground's own
-   * colour first does, and costs one rectangle. Only under a frame: in the
-   * ordinary view the edge of the plot is a real edge, worth seeing.
-   *
-   * And not at night, where the sky already fills the frame. Note what this
-   * says about an axonometric view: an unbounded ground plane projects over
-   * the *whole* image, so a sky can only exist because the plot is finite. A
-   * full-bleed ground and a visible sky are the same setting at two ends —
-   * you cannot have both, and after dark the sky is the one worth having.
-   */
-  if (framed && !night && model.ground?.enabled) {
-    floor.push(`<rect width="${width}" height="${height}" `
-      + `fill="${faceColour(model.ground.material, theme, ov, [0, 0, 1])}"/>`);
-  }
   const hair = Math.max(0.5, camera.scale * 0.02);
   // Night is a grade over whichever palette is in use, applied once here: the
   // textures take their own shades from `fill`, and the outlines are derived
