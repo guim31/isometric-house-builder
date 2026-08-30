@@ -8,7 +8,7 @@
 
 import { key, parseKey, boundaryEdges, boundaryRuns } from '../core/grid.js';
 import { cellSet, cellSizeOf, fmtMetres, buildingCells, setBuildingCells } from '../core/model.js';
-import { focusRect } from '../core/focus.js';
+import { focusFrame } from '../core/focus.js';
 import {
   OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS,
   placeOpening, placeRoofItem, placeProp, placeRun,
@@ -62,7 +62,7 @@ export class PlanView {
       i1 = Math.max(i1, px + pw); j1 = Math.max(j1, py + pd);
     }
     if (m.focus?.enabled) {
-      const [fx0, fy0, fx1, fy1] = focusRect(m.focus);
+      const [fx0, fy0, fx1, fy1] = focusFrame(m.focus);
       i0 = Math.min(i0, fx0); j0 = Math.min(j0, fy0);
       i1 = Math.max(i1, fx1); j1 = Math.max(j1, fy1);
     }
@@ -243,7 +243,7 @@ export class PlanView {
     // what will end up in the picture is visible rather than guessed at.
     if (m.focus?.enabled) {
       const f = m.focus;
-      const [mx0, my0, mx1, my1] = focusRect(f);
+      const [mx0, my0, mx1, my1] = focusFrame(f);
       const box = (x0, y0, x1, y1, cls) => {
         const a = this.toPx(x0, y1);
         gFrame.appendChild(el('rect', {

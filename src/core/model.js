@@ -40,7 +40,6 @@ export const DEFAULT_FOCUS = {
   enabled: false,
   x: 0, y: 0, w: 12, d: 10,
   margin: 1.5,
-  hide: true,     // drop what falls outside instead of merely cropping it
   vignette: 0.3,  // 0 = hard edge; otherwise how much of the frame fades out
 };
 
@@ -219,6 +218,8 @@ function normaliseFocus(input, base) {
   f.vignette = Math.min(0.9, num(f.vignette, 0, base.vignette));
   f.x = Number.isFinite(f.x) ? f.x : base.x;
   f.y = Number.isFinite(f.y) ? f.y : base.y;
+  // Older files carry `hide`, which is no longer a choice.
+  delete f.hide;
   return f;
 }
 

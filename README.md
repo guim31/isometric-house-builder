@@ -119,9 +119,14 @@ au lieu de l'écarter. D'où le retrait pur et simple.
 
 Ce qui traverse le cadre y est **coupé** ; ce qui est compact — un arbre, un
 portail, une voiture — est gardé entier ou retiré selon que son centre tombe
-dedans. Sous cadrage, le sol suit le cadre et non la parcelle : un jardin de
-quatre-vingts mètres recadré sur le portail remplissait sinon l'image de
-pelouse, ce que le cadrage était précisément censé éviter.
+dedans. Un corps de bâtiment n'est gardé que s'il **se tient** dans la zone,
+au sens où le centre d'une de ses cases y tombe : une maison dont le mur longe
+une zone tracée devant elle ne l'effleure que d'un centimètre, et être gardée
+pour si peu la faisait dessiner en entier puis trancher par le bord de l'image.
+
+Le sol suit la zone, et non la parcelle ni la marge. La **marge** est de l'air
+que la caméra laisse autour de la zone : la compter dans le sol y ajoutait de
+la pelouse vide au lieu de cadrer ce qu'il y avait dedans.
 
 Le **fondu des lointains** adoucit ensuite la coupe. Il s'applique à l'image
 composée et non à chaque face — estomper les faces une par une rendrait la

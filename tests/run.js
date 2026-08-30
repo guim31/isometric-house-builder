@@ -11,7 +11,7 @@ import {
   VIEWPOINTS, viewpointLabel, rotateDir, depthOf, facingOf, DEFAULT_PITCH,
   normaliseYaw, ROLL_RANGE,
 } from '../src/core/iso.js';
-import { focusModel, focusRect, focusPoints } from '../src/core/focus.js';
+import { focusModel, focusRect, focusFrame, focusPoints } from '../src/core/focus.js';
 import {
   defaultModel, emptyModel, normalise, cellSet, wallTop, withCellSize, fmtMetres,
   makeBuilding, buildingOfEdge,
@@ -2053,11 +2053,13 @@ check('le cadrage encadre la zone en tenant compte de la hauteur', () => {
     buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 4)] })],
   });
   const built = renderScene(m, { width: 400, height: 300 });
-  const focus = { enabled: true, x: 0, y: 0, w: 6, d: 5, margin: 1, hide: true, vignette: 0 };
+  const focus = { enabled: true, x: 0, y: 0, w: 6, d: 5, margin: 1, vignette: 0 };
   const pts = focusPoints(focus, built.merged);
   const zMax = Math.max(...pts.map((p) => p[2]));
   if (zMax < 2) return `hauteur encadrée ${zMax} m — le toit sortirait du cadre`;
-  const [x0, y0, x1, y1] = focusRect(focus);
+  // Against the frame, not the zone: the margin is air the camera leaves, and
+  // the points it fits on include it.
+  const [x0, y0, x1, y1] = focusFrame(focus);
   const inside = (p) => p[0] >= x0 - 1e-9 && p[0] <= x1 + 1e-9 && p[1] >= y0 - 1e-9 && p[1] <= y1 + 1e-9;
   return pts.every(inside) || 'un point encadré tombe hors de la zone';
 });
@@ -2106,6 +2108,46 @@ check('le sol est un tapis à coins arrondis, pas un rectangle', () => {
   if (ground.length !== 1) return `${ground.length} faces de sol`;
   const n = ground[0].loops[0].length;
   return n > 8 || `${n} sommets : le sol est resté rectangulaire`;
+});
+
+check('la marge du cadrage est de l’air, pas de la pelouse', () => {
+  // Reported in use: a generous margin filled the picture with empty lawn.
+  // It is what the camera leaves round the zone, not part of the ground.
+  const base = {
+    ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 4, 3)] })],
+    ground: { enabled: true, material: 'grass', margin: 0 },
+  };
+  const zone = { enabled: true, x: 20, y: 20, w: 5, d: 4, vignette: 0 };
+  const span = (margin) => {
+    const g = mergeCoplanar(buildMesh(focusModel(normalise({
+      ...base, focus: { ...zone, margin },
+    }))).mesh.tris).find((f) => f.group === 'ground');
+    const xs = g.loops[0].map((p) => p[0]);
+    return Math.max(...xs) - Math.min(...xs);
+  };
+  const tight = span(1), wide = span(8);
+  return near(tight, wide, 1e-9) || `sol de ${tight.toFixed(1)} m à ${wide.toFixed(1)} m selon la marge`;
+});
+
+check('un corps qui effleure la zone n’est pas gardé', () => {
+  // A house whose wall runs along the edge of a zone drawn in front of it
+  // grazes it by a centimetre. Kept for that, it was drawn whole and then
+  // sliced by the picture's own border.
+  const b = makeBuilding({ cells: [...rectCells(0, 0, 9, 6)] });
+  const grazing = normalise({
+    ...emptyModel(), buildings: [b],
+    focus: { enabled: true, x: 9.9, y: 2, w: 6, d: 4, margin: 1, vignette: 0 },
+  });
+  if (focusModel(grazing).buildings.some((x) => x.cells.length)) {
+    return 'le corps effleuré est encore là';
+  }
+  const standing = normalise({
+    ...emptyModel(), buildings: [b],
+    focus: { enabled: true, x: 6, y: 2, w: 6, d: 4, margin: 1, vignette: 0 },
+  });
+  return focusModel(standing).buildings.some((x) => x.cells.length)
+    || 'un corps réellement dans la zone a été retiré';
 });
 
 check('sous cadrage, le sol suit le cadre et non la parcelle', () => {

@@ -10,8 +10,13 @@
  * isometric view, distance on the ground is not distance on screen. A shed at
  * the far end of the garden projects *upward*, straight into a frame drawn
  * around the front gate. Tightening the camera brings it closer rather than
- * removing it. Hence `hide`: what falls outside the rectangle is taken out of
- * the model before anything is built.
+ * removing it. So what falls outside the rectangle is taken out of the model
+ * before anything is built.
+ *
+ * That used to be optional. It is not any more: leaving it off produced an
+ * image cropped by its own border — a roof sliced by a straight machine cut on
+ * one side, a soft rounded lawn on the other — which is the one result this
+ * whole mechanism exists to avoid.
  *
  * Extended items are cut at the frame; compact ones are kept whole or dropped
  * on where their centre falls. That is a reversal, and the reason is worth
@@ -26,8 +31,21 @@
 import { parseKey } from './grid.js';
 import { propFootprint, cellSizeOf, DEFAULT_FOCUS } from './model.js';
 
-/** The rectangle actually used, margin included: [x0, y0, x1, y1] in metres. */
+/**
+ * The zone itself: [x0, y0, x1, y1] in metres.
+ *
+ * What is kept, what is cut, and how far the ground reaches. The margin is
+ * deliberately *not* in it — the margin is air the camera leaves around the
+ * zone, and folding it in here grew the lawn instead, so a generous margin
+ * filled the picture with empty ground rather than framing what was in it.
+ */
 export function focusRect(focus) {
+  const f = { ...DEFAULT_FOCUS, ...(focus || {}) };
+  return [f.x, f.y, f.x + f.w, f.y + f.d];
+}
+
+/** The zone plus its margin: what the camera frames. */
+export function focusFrame(focus) {
   const f = { ...DEFAULT_FOCUS, ...(focus || {}) };
   const m = Math.max(0, f.margin ?? 0);
   return [f.x - m, f.y - m, f.x + f.w + m, f.y + f.d + m];
@@ -35,11 +53,19 @@ export function focusRect(focus) {
 
 const overlaps = (a, r) => a[0] < r[2] && a[2] > r[0] && a[1] < r[3] && a[3] > r[1];
 
-/** Does any cell of this building fall inside the frame? */
+/**
+ * Does this building actually stand in the zone?
+ *
+ * By cell centres, not by overlap. A house whose east wall runs along the edge
+ * of a zone drawn around the gate in front of it grazes that zone by a
+ * centimetre — and being kept for it, was drawn whole and then sliced by the
+ * picture's border. Standing in the zone means having ground inside it.
+ */
 function buildingInside(b, rect, cs) {
   for (const k of b.cells) {
     const [i, j] = parseKey(k);
-    if (overlaps([i * cs, j * cs, (i + 1) * cs, (j + 1) * cs], rect)) return true;
+    const cx = (i + 0.5) * cs, cy = (j + 0.5) * cs;
+    if (cx >= rect[0] && cx <= rect[2] && cy >= rect[1] && cy <= rect[3]) return true;
   }
   return false;
 }
@@ -100,7 +126,7 @@ export function focusModel(model) {
 
 function compute(model) {
   const f = model.focus;
-  if (!f?.enabled || !f.hide) return model;
+  if (!f?.enabled) return model;
   const rect = focusRect(f);
   const cs = cellSizeOf(model);
 
@@ -134,7 +160,7 @@ function compute(model) {
  * beheaded.
  */
 export function focusPoints(focus, faces) {
-  const [x0, y0, x1, y1] = focusRect(focus);
+  const [x0, y0, x1, y1] = focusFrame(focus);
   const pts = [];
   let zMax = 0;
   for (const f of faces) {
