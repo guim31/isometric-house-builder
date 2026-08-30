@@ -11,7 +11,7 @@ import {
   VIEWPOINTS, viewpointLabel, rotateDir, depthOf, facingOf, DEFAULT_PITCH,
   normaliseYaw, ROLL_RANGE,
 } from '../src/core/iso.js';
-import { focusModel, focusRect, focusFrame, focusPoints } from '../src/core/focus.js';
+import { focusModel, focusRect, focusFrame } from '../src/core/focus.js';
 import {
   defaultModel, emptyModel, normalise, cellSet, wallTop, withCellSize, fmtMetres,
   makeBuilding, buildingOfEdge,
@@ -2045,23 +2045,69 @@ check('le cadrage emporte les ouvertures du corps qu’il retire', () => {
   return out.openings.map((o) => o.id).join(',') === 'o1' || 'porte orpheline conservée';
 });
 
-check('le cadrage encadre la zone en tenant compte de la hauteur', () => {
-  // The rectangle is drawn on the ground, but a house inside it is metres tall
-  // and would be beheaded by a frame fitted to the ground alone.
+check('le dessin est centré dans l’image, cadré ou non', () => {
+  // Reported in use: the export sat low and to the right, with white above it.
+  // The camera was fitted on the zone's eight corners — its ground rectangle
+  // and that rectangle raised to the height of the tallest thing in it. Most
+  // of that box was imaginary: a corner six metres over an empty patch of lawn
+  // projects above anything actually there, and the camera made room for it.
+  const base = normalise({
+    ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 9, 6)] })],
+    props: [{ id: 'm', kind: 'muret', x: -2, y: 8, w: 16, d: 0.24, h: 1.5 }],
+    ground: { enabled: true, material: 'grass', margin: 1 },
+  });
+  const W = 600, H = 420;
+  const offset = (patch) => {
+    const out = renderScene({ ...base, ...patch }, { width: W, height: H });
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const f of out.faces) {
+      for (const l of f.loops) {
+        for (const p of l) {
+          const s2 = out.camera.toScreen(p);
+          x0 = Math.min(x0, s2[0]); x1 = Math.max(x1, s2[0]);
+          y0 = Math.min(y0, s2[1]); y1 = Math.max(y1, s2[1]);
+        }
+      }
+    }
+    return [(x0 + x1) / 2 - W / 2, (y0 + y1) / 2 - H / 2];
+  };
+  const cases = [
+    ['sans cadrage', {}],
+    ['cadré serré', { focus: { enabled: true, x: 2, y: 7, w: 6, d: 3, margin: 1, vignette: 0 } }],
+    ['cadré large', { focus: { enabled: true, x: -1, y: -1, w: 12, d: 12, margin: 4, vignette: 0 } }],
+  ];
+  for (const [label, patch] of cases) {
+    const [dx, dy] = offset(patch);
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+      return `${label} : décalé de ${Math.round(dx)}, ${Math.round(dy)} px`;
+    }
+  }
+  return true;
+});
+
+check('la marge du cadrage laisse de l’air autour du dessin', () => {
+  // It is padding, not geometry: it must shrink the drawing, not shift it.
   const m = normalise({
     ...emptyModel(),
-    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 4)] })],
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 9, 6)] })],
+    ground: { enabled: true, material: 'grass', margin: 0 },
   });
-  const built = renderScene(m, { width: 400, height: 300 });
-  const focus = { enabled: true, x: 0, y: 0, w: 6, d: 5, margin: 1, vignette: 0 };
-  const pts = focusPoints(focus, built.merged);
-  const zMax = Math.max(...pts.map((p) => p[2]));
-  if (zMax < 2) return `hauteur encadrée ${zMax} m — le toit sortirait du cadre`;
-  // Against the frame, not the zone: the margin is air the camera leaves, and
-  // the points it fits on include it.
-  const [x0, y0, x1, y1] = focusFrame(focus);
-  const inside = (p) => p[0] >= x0 - 1e-9 && p[0] <= x1 + 1e-9 && p[1] >= y0 - 1e-9 && p[1] <= y1 + 1e-9;
-  return pts.every(inside) || 'un point encadré tombe hors de la zone';
+  const width = (margin) => {
+    const out = renderScene({
+      ...m, focus: { enabled: true, x: -1, y: -1, w: 12, d: 9, margin, vignette: 0 },
+    }, { width: 600, height: 420 });
+    let x0 = Infinity, x1 = -Infinity;
+    for (const f of out.faces) {
+      for (const l of f.loops) for (const p of l) {
+        const s2 = out.camera.toScreen(p)[0];
+        x0 = Math.min(x0, s2); x1 = Math.max(x1, s2);
+      }
+    }
+    return x1 - x0;
+  };
+  const tight = width(0.5), airy = width(6);
+  return airy < tight * 0.8 || `${Math.round(tight)} px puis ${Math.round(airy)} px`;
 });
 
 check('cadrer sur une zone agrandit vraiment ce qu’elle contient', () => {

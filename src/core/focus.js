@@ -150,30 +150,3 @@ function compute(model) {
 
   return { ...model, buildings, props, openings, roofItems };
 }
-
-/**
- * Points the camera should frame.
- *
- * The rectangle's own eight corners, plus every vertex standing inside it. The
- * vertices are what raise the frame to clear a roof: the rectangle is drawn on
- * the ground, but a house inside it is six metres tall and would otherwise be
- * beheaded.
- */
-export function focusPoints(focus, faces) {
-  const [x0, y0, x1, y1] = focusFrame(focus);
-  const pts = [];
-  let zMax = 0;
-  for (const f of faces) {
-    for (const loop of f.loops) {
-      for (const p of loop) {
-        if (p[0] < x0 || p[0] > x1 || p[1] < y0 || p[1] > y1) continue;
-        pts.push(p);
-        if (p[2] > zMax) zMax = p[2];
-      }
-    }
-  }
-  for (const z of [0, zMax]) {
-    pts.push([x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]);
-  }
-  return pts;
-}

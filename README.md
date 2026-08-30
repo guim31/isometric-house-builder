@@ -125,8 +125,16 @@ une zone tracée devant elle ne l'effleure que d'un centimètre, et être gardé
 pour si peu la faisait dessiner en entier puis trancher par le bord de l'image.
 
 Le sol suit la zone, et non la parcelle ni la marge. La **marge** est de l'air
-que la caméra laisse autour de la zone : la compter dans le sol y ajoutait de
-la pelouse vide au lieu de cadrer ce qu'il y avait dedans.
+que la caméra laisse autour du dessin : la compter dans le sol y ajoutait de la
+pelouse vide au lieu de cadrer ce qu'il y avait dedans.
+
+La caméra se règle sur ce qui est dessiné, ce qui le centre par construction.
+Elle se réglait auparavant sur les huit coins de la zone — son rectangle au sol
+et le même rectangle élevé à la hauteur de ce qui s'y trouve. Cette boîte était
+en grande partie imaginaire : un coin à six mètres au-dessus d'un carré de
+pelouse vide se projette bien au-dessus de tout ce qui est réellement là, et la
+caméra lui faisait de la place. L'image sortait cinquante pixels sous son
+centre, avec du blanc au-dessus.
 
 Le **fondu des lointains** adoucit ensuite la coupe. Il s'applique à l'image
 composée et non à chaque face — estomper les faces une par une rendrait la

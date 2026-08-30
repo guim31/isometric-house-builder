@@ -15,7 +15,7 @@ import { Camera, rotateDir, facingOf } from '../core/iso.js';
 import { buildMesh } from '../core/scene.js';
 import { faceColour, materialColour, darken, nightColour, NIGHT } from '../core/palette.js';
 import { cellSet } from '../core/model.js';
-import { focusModel, focusPoints } from '../core/focus.js';
+import { focusModel } from '../core/focus.js';
 import { bounds } from '../core/grid.js';
 import { specFor, textureSegments, textureTiles } from './texture.js';
 
@@ -394,14 +394,31 @@ export function renderScene(input, opts = {}) {
     centre: [((b.i0 + b.i1 + 1) / 2) * cs, ((b.j0 + b.j1 + 1) / 2) * cs],
   });
 
-  let pts = [];
+  const pts = [];
   for (const f of faces) for (const loop of f.loops) for (const p of loop) pts.push(p);
-  if (framed) pts = focusPoints(model.focus, faces);
   if (opts.camera) {
     camera.scale = opts.camera.scale;
     camera.offset = opts.camera.offset;
   } else {
-    camera.fit(pts, width, height, opts.pad ?? Math.min(width, height) * 0.06);
+    const base = opts.pad ?? Math.min(width, height) * 0.06;
+    camera.fit(pts, width, height, base);
+    /*
+     * The frame's margin, as air rather than as geometry.
+     *
+     * The camera used to be fitted on the zone's own eight corners — its
+     * ground rectangle and the same rectangle raised to the height of the
+     * tallest thing standing in it. Most of that box was imaginary: a corner
+     * six metres over an empty patch of lawn projects well above anything
+     * actually there, and the camera made room for it. The drawing came out
+     * fifty pixels below centre with white space above it.
+     *
+     * Fitting on what is drawn centres it by construction. The margin is then
+     * simply padding, which needs the scale to be expressed in pixels — hence
+     * fitting twice. Cheap, and it keeps the margin meaning metres.
+     */
+    if (framed && model.focus.margin > 0) {
+      camera.fit(pts, width, height, base + model.focus.margin * camera.scale);
+    }
     camera.scale *= opts.zoom ?? 1;
     camera.offset = [
       camera.offset[0] + (opts.panX ?? 0),
