@@ -56,6 +56,10 @@ export function makeBuilding(patch = {}) {
     cells: [],
     storeys: 1,
     storeyHeight: 2.7,
+    // Optional per-level heights; each entry overrides storeyHeight for its
+    // level. The common case is an attic level shorter than the ones below —
+    // the storey where the roof already begins.
+    storeyHeights: null,
     plinth: 0,
     roof: { type: 'hip', pitch: 30, overhang: 0.5, fascia: 0.18, shedDir: 'S' },
     overrides: {},
@@ -160,6 +164,10 @@ function normaliseBuildings(input, m) {
     out.overrides = { ...(b.overrides || {}) };
     out.texture = b.texture ? { ...b.texture } : null;
     out.storeys = Math.max(1, Math.min(4, Math.round(out.storeys) || 1));
+    out.storeyHeights = Array.isArray(b.storeyHeights)
+      ? b.storeyHeights.slice(0, out.storeys)
+        .map((v) => (Number.isFinite(v) ? Math.max(0.6, Math.min(4, v)) : out.storeyHeight))
+      : null;
     return out;
   };
 
@@ -320,8 +328,21 @@ export function setBuildingCells(m, id, set) {
   };
 }
 
+/** Height of one level: its own entry when the building names one. */
+export const storeyHeightOf = (b, i) => {
+  const v = b.storeyHeights?.[i];
+  return Number.isFinite(v) ? v : b.storeyHeight;
+};
+
+/** Height of a level's floor above the ground, plinth included. */
+export function storeyBase(b, i) {
+  let z = b.plinth;
+  for (let k = 0; k < i; k++) z += storeyHeightOf(b, k);
+  return z;
+}
+
 /** Total height of the walls, plinth included. Takes a building. */
-export const wallTop = (b) => b.plinth + b.storeys * b.storeyHeight;
+export const wallTop = (b) => storeyBase(b, b.storeys);
 
 export function findById(m, list, id) {
   return (m[list] || []).find((it) => it.id === id) || null;

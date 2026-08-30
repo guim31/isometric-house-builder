@@ -51,12 +51,12 @@ tout moment, et *Page blanche* reste disponible.
 | | |
 |---|---|
 | **Volumes** | Plusieurs **corps de bâtiment indépendants** — maison, garage, abri de jardin — chacun avec sa toiture, sa hauteur, ses matières et ses couleurs |
-| **Volume** | Emprise dessinée à main levée sur une trame de 1 m ou 0,50 m, jusqu'à 4 niveaux, hauteur d'étage et soubassement réglables |
+| **Volume** | Emprise dessinée à main levée sur une trame de 1 m ou 0,50 m, jusqu'à 4 niveaux — chacun avec **sa propre hauteur**, pour l'étage sous combles — et soubassement réglable |
 | **Cotes** | Longueur affichée sur chaque pan de mur, dimensions en direct pendant le tracé, emprise et surface dans l'inspecteur |
 | **Toiture** | Croupe, deux pans, appentis, toit plat — inclinaison, débord et épaisseur de rive ; les noues entre ailes sont calculées |
-| **Ouvertures** | Fenêtres, fenêtres à volets, portes, portes de garage, posées sur n'importe quel mur et à n'importe quel niveau |
+| **Ouvertures** | Fenêtres, fenêtres à volets, portes, portes de garage, posées sur n'importe quel mur et à n'importe quel niveau — avec un **renfoncement** optionnel, la niche étant de la vraie géométrie |
 | **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente |
-| **Extérieurs** | Piscine, terrasse, allée, pelouse, haies, clôtures, arbres, buissons, voiture — terrasses et piscines pouvant être **surélevées**, avec leurs joues |
+| **Extérieurs** | Piscine, terrasse, allée, pelouse, haies, clôtures, arbres, buissons, voiture — terrasses et piscines pouvant être **surélevées jusqu'à 3 m**, avec leurs joues |
 | **Clôture** | **Muret** tracé au glisser, avec chaperon ; **portillon** battant et **portail coulissant**, qui ouvrent le muret là où on les pose |
 | **Matières** | Tuiles, **tuiles canal panachées**, ardoises, bac acier sur le toit ; briques, bardage, pierre, colombages sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |

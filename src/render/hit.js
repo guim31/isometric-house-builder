@@ -9,7 +9,7 @@
  */
 
 import { boundaryEdges, parseKey } from '../core/grid.js';
-import { cellSet, wallTop, cellSizeOf } from '../core/model.js';
+import { cellSet, wallTop, storeyBase, cellSizeOf } from '../core/model.js';
 import { unrotatePoint } from '../core/iso.js';
 
 
@@ -51,8 +51,8 @@ export function hitLayer(model, camera, built = null) {
       const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
       const p = (s, z) => [a[0] + u[0] * s, a[1] + u[1] * s, z];
       for (let st = 0; st < b.storeys; st++) {
-        const z0 = b.plinth + st * b.storeyHeight;
-        const z1 = z0 + b.storeyHeight;
+        const z0 = storeyBase(b, st);
+        const z1 = storeyBase(b, st + 1);
         add([p(0, z0), p(len, z0), p(len, z1), p(0, z1)],
           { 'data-pick': 'wall', 'data-edge': e.id, 'data-storey': String(st), 'data-building': b.id });
       }
@@ -76,7 +76,7 @@ export function hitLayer(model, camera, built = null) {
     const p = (s, z) => [a[0] + u[0] * s + e.n[0] * o, a[1] + u[1] * s + e.n[1] * o, z];
     const w = op.width ?? 1.2, h = op.height ?? 1.25;
     const c = op.offset ?? 0.5, sill = op.sill ?? 0.95;
-    const zb = b.plinth + (op.storey || 0) * b.storeyHeight + sill;
+    const zb = storeyBase(b, op.storey || 0) + sill;
     add([p(c - w / 2, zb), p(c + w / 2, zb), p(c + w / 2, zb + h), p(c - w / 2, zb + h)],
       { 'data-pick': 'opening', 'data-id': op.id });
   }
@@ -106,7 +106,8 @@ export function hitLayer(model, camera, built = null) {
     const y0 = centred ? p.y - d / 2 : p.y;
     const z = p.kind === 'tree' ? (p.r ?? 1.4) * 1.6
       : p.kind === 'bush' ? (p.r ?? 1.1) * 0.5
-        : p.kind === 'car' ? 0.7 : p.kind === 'muret' || p.kind === 'gate' ? (p.h ?? 1.5) : 0.06;
+        : p.kind === 'car' ? 0.7 : p.kind === 'muret' || p.kind === 'gate' ? (p.h ?? 1.5)
+        : (p.z ?? 0) + 0.06;
     add([[x0, y0, z], [x0 + w, y0, z], [x0 + w, y0 + d, z], [x0, y0 + d, z]],
       { 'data-pick': 'prop', 'data-id': p.id });
   }

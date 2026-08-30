@@ -5,7 +5,7 @@
 import { renderScene } from '../render/svg.js';
 import { hitLayer, screenToGround } from '../render/hit.js';
 import { boundaryEdges } from '../core/grid.js';
-import { cellSet, cellSizeOf } from '../core/model.js';
+import { cellSet, cellSizeOf, buildingOfEdge, storeyBase } from '../core/model.js';
 import { buildMesh } from '../core/scene.js';
 import { mergeCoplanar } from '../core/mesh.js';
 import { rotateDir, project, clampPitch, clampRoll, normaliseYaw } from '../core/iso.js';
@@ -131,7 +131,7 @@ export class Viewport {
       const d = item.r ? item.r * 2 : item.d ?? 2;
       const x0 = centred ? item.x - w / 2 : item.x;
       const y0 = centred ? item.y - d / 2 : item.y;
-      const z = sel.type === 'roofItem' ? 6 : 0.06;
+      const z = sel.type === 'roofItem' ? 6 : (item.z ?? 0) + 0.06;
       pts.push([x0, y0, z], [x0 + w, y0, z], [x0 + w, y0 + d, z], [x0, y0 + d, z]);
     } else if (sel.type === 'opening') {
       const m = this.store.model;
@@ -141,7 +141,12 @@ export class Viewport {
       const a = [e.a[0] * cs, e.a[1] * cs];
       const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
       const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
-      const zb = m.plinth + (item.storey || 0) * m.storeyHeight + (item.sill ?? 0);
+      // Through the opening's building: the model itself has carried no
+      // plinth or storey height since volumes became independent, and reading
+      // the deleted fields made this overlay quietly disappear.
+      const host = buildingOfEdge(m, item.edge);
+      if (!host) return '';
+      const zb = storeyBase(host, item.storey || 0) + (item.sill ?? 0);
       const w = item.width ?? 1.2, h = item.height ?? 1.25, c = item.offset ?? 0.5;
       const p = (s, z) => [a[0] + u[0] * s + e.n[0] * 0.06, a[1] + u[1] * s + e.n[1] * 0.06, z];
       pts.push(p(c - w / 2, zb), p(c + w / 2, zb), p(c + w / 2, zb + h), p(c - w / 2, zb + h));

@@ -6,7 +6,7 @@
 import { Mesh } from './mesh.js';
 import { boundaryEdges, decomposeRects, bounds, parseKey, SIDES } from './grid.js';
 import { buildRoof, heightField, undersideAt, STEP } from './roof.js';
-import { cellSet, wallTop, cellSizeOf, buildingCells, propFootprint } from './model.js';
+import { cellSet, wallTop, storeyBase, cellSizeOf, buildingCells, propFootprint } from './model.js';
 import { focusRect } from './focus.js';
 import { buildProps, roundedRect } from './props.js';
 
@@ -35,9 +35,30 @@ function wallRect(mesh, g, s0, s1, z0, z1, mat, lift, after) {
   mesh.quad(p(s0, z0), p(s1, z0), p(s1, z1), p(s0, z1), mat, mat, after);
 }
 
+/**
+ * The recess of an opening, as the wall builder needs it: where the hole is,
+ * and how deep. Null when the opening is flush — the overwhelmingly common
+ * case, which must not pay for the other one.
+ */
+function recessOf(op, b, zTopAt) {
+  const depth = Math.min(1, op.depth || 0);
+  if (depth < 0.01) return null;
+  const zBase = storeyBase(b, op.storey || 0);
+  const w = op.width ?? 1.2;
+  const c = op.offset ?? 0.5;
+  const z0 = zBase + (op.sill ?? 0.95);
+  const z1 = z0 + (op.height ?? 1.25);
+  // A niche must sit wholly inside its wall. Where the opening pokes past the
+  // roof underside — a user mid-adjustment — it falls back to flush rather
+  // than carving a hole open to the sky.
+  const s0 = c - w / 2, s1 = c + w / 2;
+  if (z1 > Math.min(zTopAt(s0), zTopAt(s1)) - 0.02) return null;
+  return { s0, s1, z0, z1, depth };
+}
+
 /** Draw one opening (window, door, garage door...) onto its wall. */
-function buildOpening(mesh, op, g, b, m) {
-  const zBase = b.plinth + (op.storey || 0) * b.storeyHeight;
+function buildOpening(mesh, op, g, b, m, rec) {
+  const zBase = storeyBase(b, op.storey || 0);
   const w = op.width ?? 1.2;
   const h = op.height ?? 1.25;
   const sill = op.sill ?? 0.95;
@@ -47,34 +68,68 @@ function buildOpening(mesh, op, g, b, m) {
   // Anchored to this building's own wall material, which may be recoloured.
   const own = (b.overrides && Object.keys(b.overrides).length) || b.texture;
   const wallMat = own ? `wall#${b.id}` : 'wall';
-  const after = { mat: wallMat, group: 'wall' };
+  // Recessed, the decals rest on the niche's back panel and on nothing else —
+  // its own group makes that anchor deterministic. Anchored merely "to the
+  // wall", the trim could pick a side reveal as carrier and get thrown in
+  // front of the facade.
+  const after = { mat: wallMat, group: rec ? 'niche' : 'wall' };
   // Plain openings read as a broad frame around one clear pane. Some palettes
   // want that flatter treatment; the default keeps the mullions, which make a
   // window legible at small sizes.
   const bars = m.style.windowBars !== false;
   const F = bars ? 0.09 : 0.14; // frame thickness
 
+  /*
+   * A recessed opening is real geometry, not shading. The wall builder has
+   * left a hole here; this closes it with a back panel and four reveals, and
+   * the door is then drawn on the back panel instead of the wall plane. Being
+   * actual boxes, the reveals shade themselves by their normals and occlude
+   * correctly at any camera angle — the plane-ordering pass treats them as
+   * shell, like the wall they are carved into.
+   *
+   * Winding note: (u, n, z-up) is consistently left-handed for boundary
+   * edges, so n×ẑ = -u everywhere; the reveal windings below rely on it.
+   */
+  const depth = rec ? rec.depth : 0;
+  if (rec) {
+    const q = (sv, z, o) => [
+      g.a[0] + g.u[0] * sv + g.n[0] * o,
+      g.a[1] + g.u[1] * sv + g.n[1] * o,
+      z,
+    ];
+    const d = depth;
+    const OV = 0.04; // tucked behind the wall strips, against antialias seams
+    mesh.quad(q(s0 - OV, z0 - OV, -d), q(s1 + OV, z0 - OV, -d),
+      q(s1 + OV, z1 + OV, -d), q(s0 - OV, z1 + OV, -d), wallMat, 'niche');
+    // Reveals: left, right, lintel underside, sill top.
+    mesh.quad(q(s0, z0, 0), q(s0, z0, -d), q(s0, z1, -d), q(s0, z1, 0), wallMat, 'wall');
+    mesh.quad(q(s1, z0, -d), q(s1, z0, 0), q(s1, z1, 0), q(s1, z1, -d), wallMat, 'wall');
+    mesh.quad(q(s1, z1, 0), q(s0, z1, 0), q(s0, z1, -d), q(s1, z1, -d), wallMat, 'wall');
+    mesh.quad(q(s0, z0, 0), q(s1, z0, 0), q(s1, z0, -d), q(s0, z0, -d), wallMat, 'wall');
+  }
+
   if (op.kind === 'shutter') {
-    // Shutters flank the opening, so they are drawn before it.
+    // Shutters flank the opening on the outer wall, so they are drawn before
+    // it — and stay on the facade even when the opening is recessed.
     const sw = Math.min(w * 0.45, 0.5);
     wallRect(mesh, g, s0 - sw, s0, z0, z1, 'shutter', LIFT, after);
     wallRect(mesh, g, s1, s1 + sw, z0, z1, 'shutter', LIFT, after);
   }
 
-  wallRect(mesh, g, s0, s1, z0, z1, 'trim', LIFT, after);
+  wallRect(mesh, g, s0, s1, z0, z1, 'trim', LIFT - depth, after);
 
-  const inner = (mat) => wallRect(mesh, g, s0 + F, s1 - F, z0 + F, z1 - F, mat, LIFT * 2, after);
+  const inner = (mat) => wallRect(mesh, g, s0 + F, s1 - F, z0 + F, z1 - F, mat, LIFT * 2 - depth, after);
   switch (op.kind) {
     case 'door':
       inner('door');
       // Handle.
-      wallRect(mesh, g, s1 - F - 0.16, s1 - F - 0.06, z0 + h * 0.45, z0 + h * 0.55, 'garageLine', LIFT * 3, after);
+      wallRect(mesh, g, s1 - F - 0.16, s1 - F - 0.06, z0 + h * 0.45, z0 + h * 0.55, 'garageLine', LIFT * 3 - depth, after);
       break;
     case 'garage':
       inner('garage');
       for (let k = 1; k < 5; k++) {
         const z = z0 + F + ((h - 2 * F) * k) / 5;
-        wallRect(mesh, g, s0 + F, s1 - F, z - 0.02, z + 0.02, 'garageLine', LIFT * 3, after);
+        wallRect(mesh, g, s0 + F, s1 - F, z - 0.02, z + 0.02, 'garageLine', LIFT * 3 - depth, after);
       }
       break;
     default: {
@@ -82,10 +137,10 @@ function buildOpening(mesh, op, g, b, m) {
       if (!bars) break;
       // A single mullion reads as a window at illustration scale.
       const mid = (s0 + s1) / 2;
-      wallRect(mesh, g, mid - 0.04, mid + 0.04, z0 + F, z1 - F, 'trim', LIFT * 3, after);
+      wallRect(mesh, g, mid - 0.04, mid + 0.04, z0 + F, z1 - F, 'trim', LIFT * 3 - depth, after);
       if (h > 1.0) {
         const zm = z0 + h * 0.55;
-        wallRect(mesh, g, s0 + F, s1 - F, zm - 0.04, zm + 0.04, 'trim', LIFT * 3, after);
+        wallRect(mesh, g, s0 + F, s1 - F, zm - 0.04, zm + 0.04, 'trim', LIFT * 3 - depth, after);
       }
     }
   }
@@ -211,9 +266,53 @@ function buildOne(mesh, m, b, cs, roofItems) {
 
   const edges = boundaryEdges(cells);
   const geoms = new Map();
+  const zTopFor = (g) => (sv) => {
+    const x = g.a[0] + g.u[0] * sv;
+    const y = g.a[1] + g.u[1] * sv;
+    return Math.max(b.plinth, undersideAt(field, top, fascia, x, y));
+  };
+  for (const e of edges) geoms.set(e.id, edgeGeometry(e, cs));
+
+  /*
+   * Recessed openings first: the wall builder must know where NOT to build.
+   * A recess is a genuine hole in the wall, with the storey above running on
+   * over the lintel — which is what distinguishes it from simply erasing a
+   * cell, where the notch would climb the full height of the building.
+   *
+   * The hole is spread over every edge it actually crosses, not just the one
+   * the opening is anchored to. Boundary edges are one cell long, and a
+   * French door is wider than a cell: cut only in its anchor edge, the niche
+   * kept its wall over one side — found by rendering, not by reasoning.
+   */
+  const recesses = new Map();
+  const addHole = (edgeId, hole) => {
+    if (!recesses.has(edgeId)) recesses.set(edgeId, []);
+    recesses.get(edgeId).push(hole);
+  };
+  for (const op of m.openings) {
+    const g = geoms.get(op.edge);
+    if (!g) continue;
+    const rec = recessOf(op, b, zTopFor(g));
+    if (!rec) continue;
+    // World endpoints of the hole, on the wall line.
+    const P = (sv) => [g.a[0] + g.u[0] * sv, g.a[1] + g.u[1] * sv];
+    const [w0, w1] = [P(rec.s0), P(rec.s1)];
+    for (const e2 of edges) {
+      const g2 = geoms.get(e2.id);
+      // Same wall line: same outward normal, and no offset across it.
+      if (Math.abs(g2.n[0] - g.n[0]) + Math.abs(g2.n[1] - g.n[1]) > 1e-9) continue;
+      const off = (g2.a[0] - g.a[0]) * g.n[0] + (g2.a[1] - g.a[1]) * g.n[1];
+      if (Math.abs(off) > 1e-6) continue;
+      const sOf = (pt) => (pt[0] - g2.a[0]) * g2.u[0] + (pt[1] - g2.a[1]) * g2.u[1];
+      const sA = Math.min(sOf(w0), sOf(w1));
+      const sB = Math.max(sOf(w0), sOf(w1));
+      if (sB <= 1e-6 || sA >= g2.len - 1e-6) continue;
+      addHole(e2.id, { ...rec, s0: Math.max(0, sA), s1: Math.min(g2.len, sB) });
+    }
+  }
+
   for (const e of edges) {
-    const g = edgeGeometry(e, cs);
-    geoms.set(e.id, g);
+    const g = geoms.get(e.id);
     const p = (s, z, out = 0) => [
       g.a[0] + g.u[0] * s + g.n[0] * out,
       g.a[1] + g.u[1] * s + g.n[1] * out,
@@ -222,24 +321,46 @@ function buildOne(mesh, m, b, cs, roofItems) {
     if (b.plinth > 0) {
       mesh.quad(p(0, 0), p(g.len, 0), p(g.len, b.plinth), p(0, b.plinth), mat('plinth'), 'plinth');
     }
-    const zTop = (s) => {
-      const x = g.a[0] + g.u[0] * s;
-      const y = g.a[1] + g.u[1] * s;
-      return Math.max(b.plinth, undersideAt(field, top, fascia, x, y));
-    };
+    const zTop = zTopFor(g);
+    const holes = recesses.get(e.id) || [];
+
+    // Column boundaries: the sampling step, plus every hole edge, so a hole
+    // lands exactly between columns instead of being rounded to the lattice.
+    const cuts = new Set([0, g.len]);
     const steps = Math.max(1, Math.round(g.len / STEP));
-    for (let k = 0; k < steps; k++) {
-      const s0 = (g.len * k) / steps;
-      const s1 = (g.len * (k + 1)) / steps;
+    for (let k = 1; k < steps; k++) cuts.add((g.len * k) / steps);
+    for (const hole of holes) {
+      if (hole.s0 > 0) cuts.add(Math.max(0, hole.s0));
+      if (hole.s1 < g.len) cuts.add(Math.min(g.len, hole.s1));
+    }
+    const xs = [...cuts].sort((a2, b2) => a2 - b2);
+
+    for (let i = 0; i + 1 < xs.length; i++) {
+      const s0 = xs[i], s1 = xs[i + 1];
+      if (s1 - s0 < 1e-6) continue;
       const z0 = zTop(s0), z1 = zTop(s1);
       if (z0 <= b.plinth + 1e-9 && z1 <= b.plinth + 1e-9) continue;
-      mesh.quad(p(s0, b.plinth), p(s1, b.plinth), p(s1, z1), p(s0, z0), mat('wall'), 'wall');
+      const mid = (s0 + s1) / 2;
+      const cut = holes.filter((hh) => hh.s0 < mid && mid < hh.s1)
+        .sort((a2, b2) => a2.z0 - b2.z0);
+      // Wall pieces between the holes of this column: sill strip below,
+      // lintel strip (and the storeys above) over the top.
+      const emit = (zb, ztA, ztB) => {
+        if (ztA <= zb + 1e-4 && ztB <= zb + 1e-4) return;
+        mesh.quad(p(s0, zb), p(s1, zb), p(s1, ztB), p(s0, ztA), mat('wall'), 'wall');
+      };
+      let zb = b.plinth;
+      for (const hh of cut) {
+        emit(zb, Math.min(hh.z0, z0), Math.min(hh.z0, z1));
+        zb = Math.max(zb, hh.z1);
+      }
+      emit(zb, z0, z1);
     }
   }
 
   for (const op of m.openings) {
     const g = geoms.get(op.edge);
-    if (g) buildOpening(mesh, op, g, b, m);
+    if (g) buildOpening(mesh, op, g, b, m, recessOf(op, b, zTopFor(g)));
   }
 
   const roof = buildRoof(mesh, field, b.roof, top, mat);

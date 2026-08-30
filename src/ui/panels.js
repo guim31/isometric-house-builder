@@ -7,7 +7,10 @@ import {
   PROJECTIONS, PITCH_RANGE, ROLL_RANGE, DEFAULT_PITCH, viewpointLabel, normaliseYaw,
 } from '../core/iso.js';
 import { ROOF_TYPES, STEP } from '../core/roof.js';
-import { withCellSize, cellSizeOf, fmtMetres, cellSet, buildingOfEdge, DEFAULT_FOCUS, newId } from '../core/model.js';
+import {
+  withCellSize, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
+  storeyHeightOf, DEFAULT_FOCUS, newId,
+} from '../core/model.js';
 import { bounds } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
 
@@ -250,10 +253,34 @@ export class Inspector {
         min: 1, max: 4, step: 1,
         onInput: (v) => this.store.patchBuilding({ storeys: v }, 'storeys'),
       })),
-      field('Hauteur d’étage', slider(b.storeyHeight, {
-        min: 2, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
-        onInput: (v) => this.store.patchBuilding({ storeyHeight: v }, 'storeyHeight'),
-      })),
+    );
+    /*
+     * One height per level once there is more than one level. The recurring
+     * real house this serves has full storeys below and a short one under the
+     * roof — the level where the slopes already start. A single shared height
+     * cannot say that, and rounding it to 2 or 3 whole storeys misses the
+     * house by half a metre either way.
+     */
+    if (b.storeys <= 1) {
+      s.append(field('Hauteur d’étage', slider(b.storeyHeight, {
+        min: 1, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+        onInput: (v) => this.store.patchBuilding({ storeyHeight: v, storeyHeights: null }, 'storeyHeight'),
+      })));
+    } else {
+      const LEVEL = ['Rez-de-chaussée', 'Étage 1', 'Étage 2', 'Étage 3'];
+      for (let i = 0; i < b.storeys; i++) {
+        const level = i;
+        s.append(field(`Hauteur — ${LEVEL[i]}`, slider(storeyHeightOf(b, i), {
+          min: 1, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          onInput: (v) => {
+            const heights = Array.from({ length: b.storeys }, (_, k) => storeyHeightOf(b, k));
+            heights[level] = v;
+            this.store.patchBuilding({ storeyHeights: heights }, `sh${level}`);
+          },
+        }), i === b.storeys - 1 ? 'un dernier niveau bas donne l’étage sous combles' : undefined));
+      }
+    }
+    s.append(
       field('Soubassement', slider(b.plinth, {
         min: 0, max: 0.8, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
         onInput: (v) => this.store.patchBuilding({ plinth: v }, 'plinth'),
@@ -618,6 +645,11 @@ export class Inspector {
           min: 0, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
           onInput: (v) => patch({ sill: v }, 'sill'),
         }), 'hauteur du bas de l’ouverture'),
+        field('Renfoncement', slider(item.depth ?? 0, {
+          min: 0, max: 0.8, step: 0.05,
+          format: (v) => (v > 0 ? `${v.toFixed(2)} m` : 'aucun'),
+          onInput: (v) => patch({ depth: v }, 'depth'),
+        }), 'creuse l’ouverture dans le mur — l’étage au-dessus continue'),
       );
     } else if (type === 'roofItem') {
       s.append(
@@ -671,7 +703,9 @@ export class Inspector {
       }
       if (['terrace', 'path', 'deck', 'pool'].includes(item.kind)) {
         s.appendChild(field('Élévation', slider(item.z ?? 0, {
-          min: 0, max: 1.2, step: 0.05, format: (v) => (v > 0 ? `${v.toFixed(2)} m` : 'au sol'),
+          // Up to a full storey: on sloping ground a terrace can sit level
+          // with the first floor, the garage opening underneath it.
+          min: 0, max: 3, step: 0.05, format: (v) => (v > 0 ? `${v.toFixed(2)} m` : 'au sol'),
           onInput: (v) => patch({ z: v }, 'z'),
         }), 'la dalle reçoit ses joues — et masque ce qui reste au sol dessous'));
       }

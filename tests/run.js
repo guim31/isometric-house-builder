@@ -14,7 +14,7 @@ import {
 import { focusModel, focusRect, focusFrame } from '../src/core/focus.js';
 import {
   defaultModel, emptyModel, normalise, cellSet, wallTop, withCellSize, fmtMetres,
-  makeBuilding, buildingOfEdge,
+  makeBuilding, buildingOfEdge, storeyBase, storeyHeightOf,
 } from '../src/core/model.js';
 
 /** First (or nth) volume of a model — most tests only ever have one. */
@@ -938,6 +938,129 @@ function muretSpans(model) {
     .filter((t) => t.group && t.group.startsWith('muret:') && !t.group.includes(':cap'))
     .map((t) => [Math.min(t.a[0], t.b[0], t.c[0]), Math.max(t.a[0], t.b[0], t.c[0])]);
 }
+
+/* ---------------- per-level heights, recesses, raised slabs ---------------- */
+
+check('chaque niveau peut avoir sa propre hauteur', () => {
+  // The recurring real house: two full storeys and a short one under the
+  // roof — the level where the slopes already start. One shared height cannot
+  // say that, and rounding to whole storeys misses the house either way.
+  const b = makeBuilding({ storeys: 3, storeyHeight: 2.7, storeyHeights: [2.5, 2.5, 1.1] });
+  if (!near(wallTop(b), 2.5 + 2.5 + 1.1)) return `sommet à ${wallTop(b)}`;
+  if (!near(storeyBase(b, 2), 5)) return `l’étage 2 démarre à ${storeyBase(b, 2)}`;
+  // Unstated levels fall back to the shared height.
+  const c = makeBuilding({ storeys: 3, storeyHeight: 2.7, storeyHeights: [2.5] });
+  if (!near(storeyHeightOf(c, 1), 2.7)) return 'le repli sur la hauteur commune a disparu';
+  // And normalise clamps what a hand-edited file may carry.
+  const m = normalise({ ...emptyModel(),
+    buildings: [makeBuilding({ cells: ['0,0'], storeys: 2, storeyHeights: [12, 'x'] })] });
+  const hs = m.buildings[0].storeyHeights;
+  return (hs[0] === 4 && hs[1] === m.buildings[0].storeyHeight)
+    || `normalisation : ${JSON.stringify(hs)}`;
+});
+
+check('une fenêtre d’un étage sous combles se pose à la bonne hauteur', () => {
+  const m = normalise({ ...emptyModel(),
+    buildings: [makeBuilding({
+      cells: [...rectCells(0, 0, 6, 4)], storeys: 3, storeyHeights: [2.5, 2.5, 1.1],
+      roof: { type: 'gable', pitch: 40, overhang: 0.3, fascia: 0.16, shedDir: 'S' },
+    })],
+    openings: [{ id: 'o1', edge: '0,2,W', kind: 'window', storey: 2, offset: 0.5, width: 0.8, height: 0.7, sill: 0.2 }],
+  });
+  const glass = mergeCoplanar(buildMesh(m).mesh.tris).find((f) => f.mat === 'glass');
+  if (!glass) return 'fenêtre absente du maillage';
+  const z = glass.centroid[2];
+  // Floor of level 2 at 5 m, sill 0.2, height 0.7 -> centre near 5.55.
+  return (z > 5.4 && z < 5.7) || `vitrage centré à ${z.toFixed(2)} m`;
+});
+
+check('un renfoncement creuse un vrai trou dans le mur', () => {
+  // The recess is geometry, not shading: the wall plane must be open where
+  // the niche is, and the door drawn on the back panel. Checked in world
+  // coordinates on the built mesh, not on pixels.
+  const mk = (depth) => normalise({ ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 6, 4)], storeys: 2,
+      roof: { type: 'gable', pitch: 35, overhang: 0.3, fascia: 0.16, shedDir: 'S' } })],
+    // Wider than a cell on purpose: boundary edges are one cell long, and the
+    // hole once stopped at its anchor edge — the wall next door kept covering
+    // half the niche. Centred on its edge, so the sample points below hold
+    // whichever way the edge runs.
+    openings: [{ id: 'o1', edge: '0,1,W', kind: 'door', storey: 0, offset: 0.5, width: 1.7, height: 2.15, sill: 0, depth }] });
+  const facesAt = (m) => mergeCoplanar(buildMesh(m).mesh.tris)
+    .filter((f) => f.mat.startsWith('wall') && Math.abs(f.normal[0] + 1) < 1e-6
+      && Math.abs(f.centroid[0]) < 1e-6);
+  // Sample points across the hole (the wall is the x=0 plane; use y, z).
+  // Edge '0,1,W' spans y 1..2; centred, the 1.7 m hole spans y 0.65..2.35.
+  const inHole = [[1.5, 1], [0.9, 1], [2.1, 1], [1.5, 0.1], [1.5, 2.0]];
+  const contains = (f, y, z) => {
+    let c = false;
+    for (const l of f.loops) {
+      for (let i = 0, j = l.length - 1; i < l.length; j = i++) {
+        if ((l[i][2] > z) !== (l[j][2] > z)
+          && y < ((l[j][1] - l[i][1]) * (z - l[i][2])) / (l[j][2] - l[i][2]) + l[i][1]) c = !c;
+      }
+    }
+    return c;
+  };
+  for (const [y, z] of inHole) {
+    if (facesAt(mk(0.6)).some((f) => contains(f, y, z))) {
+      return `le mur couvre encore le trou en (${y}, ${z})`;
+    }
+  }
+  // Flush, the wall is whole there — the hole must cost nothing by default.
+  const whole = facesAt(mk(0));
+  return inHole.every(([y, z]) => whole.some((f) => contains(f, y, z)))
+    || 'sans renfoncement, le mur devrait être plein';
+});
+
+check('la niche d’un renfoncement est fermée : fond et quatre tableaux', () => {
+  const m = normalise({ ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 6, 4)], storeys: 2,
+      roof: { type: 'gable', pitch: 35, overhang: 0.3, fascia: 0.16, shedDir: 'S' } })],
+    openings: [{ id: 'o1', edge: '0,1,W', kind: 'door', storey: 0, offset: 0.5, width: 1.7, height: 2.15, sill: 0, depth: 0.6 }] });
+  const faces = mergeCoplanar(buildMesh(m).mesh.tris).filter((f) => f.mat.startsWith('wall'));
+  // Back panel: wall-material face at x = +0.6 facing out.
+  if (!faces.some((f) => Math.abs(f.centroid[0] - 0.6) < 0.05 && f.normal[0] < -0.9)) {
+    return 'pas de fond de niche';
+  }
+  const reveal = (test) => faces.some((f) => f.centroid[0] > 0.05 && f.centroid[0] < 0.55 && test(f.normal));
+  if (!reveal((n) => n[1] > 0.9)) return 'tableau latéral manquant (+y)';
+  if (!reveal((n) => n[1] < -0.9)) return 'tableau latéral manquant (-y)';
+  if (!reveal((n) => n[2] < -0.9)) return 'sous-face de linteau manquante';
+  return reveal((n) => n[2] > 0.9) || 'seuil manquant';
+});
+
+check('une terrasse peut monter au niveau de l’étage', () => {
+  // Sloping ground, approximated: the garage opens below, the terrace sits
+  // level with the first floor. The slab keeps its skirts at that height.
+  const m = normalise({ ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 4)] })],
+    props: [{ id: 't', kind: 'terrace', x: 7, y: 0, w: 5, d: 4, z: 2.5, material: 'paving' }] });
+  const faces = mergeCoplanar(buildMesh(m).mesh.tris);
+  const topFace = faces.find((f) => f.mat === 'paving' && f.normal[2] > 0.9 && f.centroid[2] > 2.4);
+  if (!topFace) return 'pas de plateau à 2,50 m';
+  const skirt = faces.some((f) => f.mat === 'paving' && Math.abs(f.normal[2]) < 0.1
+    && f.centroid[2] > 1 && f.centroid[2] < 2.5);
+  return skirt || 'pas de joue sous le plateau';
+});
+
+check('le surlignage d’une ouverture sélectionnée existe et est fini', () => {
+  // It read plinth and storey height off the model, fields the multi-building
+  // migration deleted — the dashes quietly became NaN and vanished.
+  const s = new Store(defaultModel());
+  const div = document.createElement('div');
+  div.style.cssText = 'width:440px;height:400px';
+  document.getElementById('stage').appendChild(div);
+  const vp = new Viewport(div, s);
+  vp.render();
+  const op = s.model.openings[0];
+  if (!op) return 'le modèle par défaut n’a pas d’ouverture';
+  s.select({ type: 'opening', id: op.id });
+  vp.render();
+  const html = div.innerHTML;
+  if (!html.includes('selection-outline')) return 'pas de surlignage';
+  return !html.includes('NaN') || 'le surlignage contient NaN';
+});
 
 check('un portail ouvre le muret à l’endroit où il est posé', () => {
   const wall = { id: 'w', kind: 'muret', x: 4, y: 10, w: 12, d: 0.24, h: 1.5 };
@@ -1936,6 +2059,19 @@ check('un panneau solaire ne traverse jamais le toit', () => {
           return `${yaw}°/${pitch}° : ${e.n} px, ${e.gap.toFixed(1)} m — ${k}`;
         }
       }
+    }
+  }
+  return true;
+});
+
+check('un renfoncement ne crée pas de recouvrement grossier', () => {
+  const m = normalise({ ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 6, 4)], storeys: 2,
+      roof: { type: 'gable', pitch: 35, overhang: 0.3, fascia: 0.16, shedDir: 'S' } })],
+    openings: [{ id: 'o1', edge: '0,1,W', kind: 'door', storey: 0, offset: 0.5, width: 1.7, height: 2.15, sill: 0, depth: 0.6 }] });
+  for (const yaw of [180, 210, 250, 275, 300, 0]) {
+    for (const [k, e] of occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch: 24 } }, 260, 200, 4)) {
+      if (e.gap > 0.5 && e.n > 2) return `${yaw}° : ${e.n} px, ${e.gap.toFixed(1)} m — ${k}`;
     }
   }
   return true;

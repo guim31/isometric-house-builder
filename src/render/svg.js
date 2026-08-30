@@ -45,7 +45,7 @@ const layerOf = (f) => LAYER[f.group] ?? 5;
  * they belong to the same solid, and they meet at every edge; a centre is a
  * poor stand-in for "which of these two is nearer" when both span metres.
  */
-const SHELL = new Set(['wall', 'roof', 'roofEdge']);
+const SHELL = new Set(['wall', 'roof', 'roofEdge', 'niche']);
 
 /**
  * Does `a` lie entirely on the far side of `b`'s plane?
@@ -168,6 +168,7 @@ function repairShell(all, camera) {
 function orderFaces(faces, camera) {
   faces.forEach((f, i) => {
     f.seq = i;
+    f.rides = false;
     f.box = null; // screen boxes are per camera, and faces outlive a frame
     f.nCam = rotateDir(f.normal, camera.yaw);
     f.facing = facingOf(f.nCam, camera.lambda);
@@ -229,6 +230,10 @@ function orderFaces(faces, camera) {
     let best = null;
     for (const c of cands) {
       if (c === f) continue;
+      // A face the camera cannot see covers nothing; letting one win here
+      // anchored a niche's door to the culled side reveal and threw it in
+      // front of the facade.
+      if (c.facing <= 1e-6) continue;
       if (!contains(c, pt)) continue;
       if (behindPlane(f, c)) continue;
       if (!best || c.depth > best.depth) best = c;
@@ -248,19 +253,57 @@ function orderFaces(faces, camera) {
       }
     }
     f.carrier = best;
+    /*
+     * A decal lying on its carrier's plane rides it: same depth exactly, the
+     * stable sort's emission order putting it just on top. Anything looser —
+     * own depth, or carrier plus an epsilon — breaks the moment the shell is
+     * reordered, because the exact pass redistributes shell depths and the
+     * decal's raw depth then interleaves wrongly with walls it never touches.
+     * Found as a door drawn over the facade one metre in front of its niche.
+     *
+     * Only true decals ride. A chimney anchored to its roof stands metres off
+     * the plane and keeps the old rule: its faces need their own depths.
+     */
+    if (best && SHELL.has(best.group)) {
+      let dmax = 0;
+      for (const loop of f.loops) {
+        for (const pt2 of loop) {
+          const dd = Math.abs(
+            best.normal[0] * (pt2[0] - best.centroid[0])
+            + best.normal[1] * (pt2[1] - best.centroid[1])
+            + best.normal[2] * (pt2[2] - best.centroid[2]),
+          );
+          if (dd > dmax) dmax = dd;
+        }
+      }
+      f.rides = dmax <= 0.25;
+    }
   }
 
   repairShell(faces, camera);
 
-  // Propagate along the chain rather than resolving each link once: water
-  // rests on its coping, which rests on the terrace. Reading the carrier's raw
-  // depth only ever moved a face past its immediate support, so the water
-  // stayed behind the terrace its own coping had already cleared. Passes are
-  // capped so a malformed cycle cannot spin here.
+  /*
+   * Propagate along the chain rather than resolving each link once: water
+   * rests on its coping, which rests on the terrace. Reading the carrier's raw
+   * depth only ever moved a face past its immediate support, so the water
+   * stayed behind the terrace its own coping had already cleared. Passes are
+   * capped so a malformed cycle cannot spin here.
+   *
+   * The bump is zero when the carrier is shell. The shell's exact ordering
+   * redistributes existing depths, and two neighbours can end up closer than
+   * any epsilon — a door pushed past its niche's back panel by 1e-4 leapt
+   * over the facade strip next in line and was drawn in front of the wall.
+   * At equal depth the stable sort falls back to emission order, and a decal
+   * is always emitted after the surface it decorates.
+   */
   for (let pass = 0; pass < 4; pass++) {
     let moved = false;
     for (const f of faces) {
       if (!f.carrier) continue;
+      if (f.rides) {
+        if (f.sortDepth !== f.carrier.sortDepth) { f.sortDepth = f.carrier.sortDepth; moved = true; }
+        continue;
+      }
       const want = f.carrier.sortDepth + 1e-4;
       if (want > f.sortDepth) { f.sortDepth = want; moved = true; }
     }
