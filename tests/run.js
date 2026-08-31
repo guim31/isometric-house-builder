@@ -1818,6 +1818,44 @@ check('les réglages sont rangés en familles', () => {
   return want.every((w) => groups.includes(w)) || `familles trouvées : ${groups.join(', ')}`;
 });
 
+check('la position d’une ouverture se compte depuis l’angle du mur', () => {
+  // A user's report: "0 should intuitively be the corner where the wall
+  // begins. But it isn't." It was the start of a one-cell boundary edge, and
+  // his own file has a window at -0.75 because that is what it took to move
+  // one a little to the left.
+  //
+  // Body 6 cells wide, so its south wall runs from x = 0 to x = 6. The opening
+  // is anchored to the edge at i = 4, four metres along — the case where an
+  // edge-relative offset and a wall-relative one differ most visibly.
+  const s = new Store(normalise({ ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 3)] })],
+    openings: [{ id: 'o1', edge: '4,0,S', kind: 'window', storey: 0,
+      offset: 0.5, width: 1.2, height: 1.15, sill: 1 }] }));
+  const div = document.createElement('div');
+  document.getElementById('stage').appendChild(div);
+  const insp = new Inspector(div, s);
+  s.select({ type: 'opening', id: 'o1' });
+  insp.render();
+  const row = [...div.querySelectorAll('label.field')]
+    .find((r) => r.querySelector('.field-label').textContent === 'Position');
+  if (!row) return 'pas de champ Position';
+  const input = row.querySelector('input[type="range"]');
+  if (Number(input.min) !== 0) return `le minimum est ${input.min}, pas 0`;
+  // The wall is 6 m long and the window 1.20 m, so it can slide 4.80 m.
+  if (Math.abs(Number(input.max) - 4.8) > 1e-9) return `course de ${input.max} m au lieu de 4,80`;
+  const edgeOffset = () => s.model.openings[0].offset;
+  // At 0 the window's near edge sits on the corner: on edge '4,0,S' the wall
+  // starts 4 m back, so the centre lands at -4 + 0.60.
+  input.value = '0';
+  input.dispatchEvent(new Event('input'));
+  if (Math.abs(edgeOffset() - (-3.4)) > 1e-9) return `position 0 donne ${edgeOffset()} au lieu de -3,4`;
+  // And at the far end it stops flush with the other corner.
+  input.value = String(4.8);
+  input.dispatchEvent(new Event('input'));
+  return Math.abs(edgeOffset() - 1.4) < 1e-9
+    || `position 4,80 donne ${edgeOffset()} au lieu de 1,4`;
+});
+
 check('une terrasse se dimensionne en quarts de mètre ronds', () => {
   // A slider offers min + k x step and nothing else, so a minimum off the grid
   // takes every round size with it. At 0.40 wide by 0.20 deep a terrace could

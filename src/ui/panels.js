@@ -11,7 +11,7 @@ import {
   withCellSize, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
   storeyHeightOf, DEFAULT_FOCUS, newId,
 } from '../core/model.js';
-import { bounds } from '../core/grid.js';
+import { bounds, edgeRunExtent } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
 
 const h = (tag, cls, text) => {
@@ -90,6 +90,39 @@ const PROP_LABELS = {
   muret: 'Muret', gate: 'Portillon / portail',
   tree: 'Arbre', hedge: 'Haie', fence: 'Clôture', car: 'Voiture',
 };
+
+/**
+ * Where an opening sits along its wall, counted the way a person would.
+ *
+ * Stored, an offset is the *centre* of the opening measured from the start of
+ * a boundary edge — and a boundary edge is one cell long, so the origin is
+ * some cell corner partway along the facade. A user reported the obvious
+ * consequence: "0 should intuitively be the corner where the wall begins, but
+ * it isn't", and his own file has a window at -0.75 to prove how he got there.
+ *
+ * Only the reading changes. The file keeps its offsets exactly as they were,
+ * so a project saved or shared before this still opens where it was left, and
+ * placing or dragging an opening goes on speaking the edge's language.
+ */
+function positionField(m, item, patch) {
+  const cs = cellSizeOf(m);
+  const host = buildingOfEdge(m, item.edge);
+  const run = host ? edgeRunExtent(new Set(host.cells), item.edge, cs) : null;
+  const w = item.width ?? 1.2;
+  if (!run) {
+    // The wall has been erased under it; fall back rather than show nothing.
+    return field('Position', slider(item.offset ?? 0.5, {
+      min: -1, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+      onInput: (v) => patch({ offset: v }, 'offset'),
+    }), 'le long du mur');
+  }
+  const max = Math.max(0, run.hi - run.lo - w);
+  const from = Math.min(max, Math.max(0, (item.offset ?? 0.5) - w / 2 - run.lo));
+  return field('Position', slider(from, {
+    min: 0, max, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+    onInput: (v) => patch({ offset: v + run.lo + w / 2 }, 'offset'),
+  }), 'depuis l’angle du mur, jusqu’au bord de l’ouverture');
+}
 
 export class Inspector {
   constructor(root, store, { onExport = null } = {}) {
@@ -629,10 +662,7 @@ export class Inspector {
           (v) => patch({ storey: Number(v) }))));
       }
       s.append(
-        field('Position', slider(item.offset ?? 0.5, {
-          min: -1, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
-          onInput: (v) => patch({ offset: v }, 'offset'),
-        }), 'le long du mur, depuis le début du segment'),
+        positionField(m, item, patch),
         field('Largeur', slider(item.width, {
           min: 0.4, max: 5, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
           onInput: (v) => patch({ width: v }, 'w'),

@@ -77,9 +77,10 @@ export function boundaryRuns(cells) {
         const lo = horiz ? seg[0].i : seg[0].j;
         const hi = horiz ? seg[seg.length - 1].i : seg[seg.length - 1].j;
         const first = seg[0];
+        const ids = seg.map((x) => x.id);
         runs.push(horiz
-          ? { side, cells: seg.length, n: first.n, a: [lo, first.a[1]], b: [hi + 1, first.a[1]] }
-          : { side, cells: seg.length, n: first.n, a: [first.a[0], lo], b: [first.a[0], hi + 1] });
+          ? { side, cells: seg.length, n: first.n, a: [lo, first.a[1]], b: [hi + 1, first.a[1]], ids }
+          : { side, cells: seg.length, n: first.n, a: [first.a[0], lo], b: [first.a[0], hi + 1], ids });
         start = k;
       }
     }
@@ -192,4 +193,28 @@ export function rectCells(i0, j0, i1, j1) {
   const [c, d] = j0 <= j1 ? [j0, j1] : [j1, j0];
   for (let j = c; j <= d; j++) for (let i = a; i <= b; i++) out.add(key(i, j));
   return out;
+}
+
+/**
+ * How far the straight wall an edge belongs to runs, measured along that
+ * edge's own axis and in metres.
+ *
+ * Boundary edges are one cell long, which is a fact about the grid and not
+ * about the house. A user placing a window reasons about the wall — "eighty
+ * centimetres from the corner" — and had to reason about the cell instead,
+ * with the odd result that a value of 0 landed the window astride a cell
+ * boundary somewhere in the middle of the facade. Both ends of the run are
+ * returned so a position can be expressed from the corner that starts it.
+ */
+export function edgeRunExtent(cells, edgeId, cs = 1) {
+  const e = boundaryEdges(cells).find((x) => x.id === edgeId);
+  if (!e) return null;
+  const run = boundaryRuns(cells).find((r) => r.ids.includes(edgeId));
+  if (!run) return null;
+  // Edges are unit segments on the grid, so this difference is already a unit
+  // vector and the dot products below are lengths.
+  const u = [e.b[0] - e.a[0], e.b[1] - e.a[1]];
+  const along = (p) => ((p[0] - e.a[0]) * u[0] + (p[1] - e.a[1]) * u[1]) * cs;
+  const sA = along(run.a), sB = along(run.b);
+  return { lo: Math.min(sA, sB), hi: Math.max(sA, sB) };
 }
