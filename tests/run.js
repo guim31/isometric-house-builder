@@ -1092,6 +1092,40 @@ check('une terrasse peut monter au niveau de l’étage', () => {
   return skirt || 'pas de joue sous le plateau';
 });
 
+check('un escalier monte jusqu’en haut, marche par marche', () => {
+  const m = normalise({ ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 4)] })],
+    props: [{ id: 's1', kind: 'stairs', x: 8, y: 0, w: 1.5, d: 1.5, h: 1.2, dir: 'N', material: 'paving' }] });
+  const faces = mergeCoplanar(buildMesh(m).mesh.tris).filter((f) => f.mat === 'paving');
+  const treads = faces.filter((f) => f.normal[2] > 0.9);
+  if (treads.length < 4) return `${treads.length} marches seulement`;
+  const top = Math.max(...treads.map((f) => f.centroid[2]));
+  if (Math.abs(top - 1.2) > 1e-6) return `la dernière marche est à ${top.toFixed(2)} m au lieu de 1,20`;
+  // Rising towards the north: the higher the tread, the further along +y.
+  const sorted = [...treads].sort((a, b) => a.centroid[2] - b.centroid[2]);
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].centroid[1] <= sorted[i - 1].centroid[1]) return 'les marches ne montent pas vers le nord';
+  }
+  // Nothing underneath: the flight is closed, not a set of floating slabs.
+  return !faces.some((f) => f.normal[2] < -0.9) || 'des sous-faces sont émises';
+});
+
+check('un escalier posé au pied d’une terrasse se tourne vers elle', () => {
+  // Steps exist to reach something; turned the wrong way by default they would
+  // have to be reoriented every time.
+  const s = new Store(normalise({ ...emptyModel(),
+    props: [{ id: 't1', kind: 'terrace', x: 0, y: 0, w: 6, d: 4, material: 'paving', z: 1.5 }] }));
+  placeProp(s, 'stairs', [3, -1]); // just south of the terrace
+  const a = s.model.props.find((p) => p.kind === 'stairs');
+  if (!a) return 'pas d’escalier';
+  if (a.dir !== 'N') return `monte vers ${a.dir} au lieu du nord`;
+  if (Math.abs(a.h - 1.5) > 1e-9) return `hauteur ${a.h} au lieu de 1,5`;
+  // And on the other side, the other way round.
+  placeProp(s, 'stairs', [7.5, 2]);
+  const b = s.model.props.filter((p) => p.kind === 'stairs')[1];
+  return b.dir === 'W' || `monte vers ${b.dir} au lieu de l’ouest`;
+});
+
 check('le surlignage d’une ouverture sélectionnée existe et est fini', () => {
   // It read plinth and storey height off the model, fields the multi-building
   // migration deleted — the dashes quietly became NaN and vanished.
@@ -2220,11 +2254,13 @@ check('une terrasse surélevée reste du bon côté des murs', () => {
       { id: 'pb', kind: 'terrace', x: 9, y: 18, w: 2, d: 10, material: 'paving', z: 2.5 },
       { id: 'pc', kind: 'terrace', x: 9, y: 28, w: 13, d: 2, material: 'paving', z: 2.5 },
       { id: 'pd', kind: 'terrace', x: 21, y: 22, w: 1, d: 6, material: 'paving', z: 2.5 },
+      // And the steps down from it, which are solids of the same family.
+      { id: 'pe', kind: 'stairs', x: 9, y: 16, w: 1.5, d: 2, h: 2.5, dir: 'N', material: 'paving' },
     ] });
   for (let yaw = 0; yaw < 360; yaw += 30) {
     for (const pitch of [13, 30, 60]) {
       for (const [k, e] of occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch } }, 260, 200, 4)) {
-        if (/^slab/.test(k) && e.gap > 0.5 && e.n > 2) {
+        if (/^(slab|stairs)/.test(k) && e.gap > 0.5 && e.n > 2) {
           return `${yaw}°/${pitch}° : ${e.n} px, ${e.gap.toFixed(1)} m — ${k}`;
         }
       }

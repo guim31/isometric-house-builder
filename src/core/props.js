@@ -298,6 +298,41 @@ export function buildProps(mesh, m) {
         gate(mesh, e.a0, e.a1, e.c0, e.c1, p.h ?? 1.5, horiz, p.style === 'sliding', p.id);
         break;
       }
+      case 'stairs': {
+        /*
+         * Outdoor steps, to climb onto a raised terrace — asked for by a user
+         * who had built one and could not get down from it. Set against the
+         * terrace, not cut into it: carving one slab out of another is a
+         * different and much larger piece of work, and the point here is to be
+         * able to draw the stairs at all.
+         *
+         * Built as a stack of slabs of decreasing footprint rather than as one
+         * box per step. Each slab occupies a single riser in height and runs
+         * from its own nosing to the top of the flight, so the solid is closed,
+         * every emitted face is on the outside of it, and each piece is an
+         * axis-aligned box the exact ordering pass can place.
+         */
+        const w = p.w ?? 1.2, d = p.d ?? 1.2;
+        const hgt = Math.max(0.15, p.h ?? 0.5);
+        const mat = p.material || 'paving';
+        // About eighteen centimetres a step, which is what a stair is.
+        const n = Math.max(1, Math.min(24, Math.round(hgt / 0.18)));
+        const dir = p.dir || 'N';
+        const up = { N: [0, 1], S: [0, -1], E: [1, 0], W: [-1, 0] }[dir] || [0, 1];
+        const x1 = p.x + w, y1 = p.y + d;
+        for (let k = 0; k < n; k++) {
+          // The tread this slab starts at, as a fraction of the flight.
+          const t = k / n;
+          const lo = [p.x, p.y], hi = [x1, y1];
+          if (up[0] > 0) lo[0] = p.x + w * t;
+          else if (up[0] < 0) hi[0] = x1 - w * t;
+          else if (up[1] > 0) lo[1] = p.y + d * t;
+          else hi[1] = y1 - d * t;
+          mesh.box([lo[0], lo[1], (hgt * k) / n], [hi[0], hi[1], (hgt * (k + 1)) / n],
+            mat, `stairs:${p.id}`, ['bottom'], anchor);
+        }
+        break;
+      }
       case 'car': {
         const w = p.w ?? 1.8, d = p.d ?? 4.2;
         const x0 = p.x - w / 2, x1 = p.x + w / 2, y0 = p.y - d / 2, y1 = p.y + d / 2;

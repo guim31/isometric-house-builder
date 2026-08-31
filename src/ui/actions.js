@@ -29,6 +29,7 @@ export const PROP_DEFAULTS = {
   gate: { w: 1.1, d: 0.16, h: 1.5, style: 'swing' },
   pool: { w: 7, d: 4, shape: 'rounded' },
   terrace: { w: 6, d: 4, material: 'paving' },
+  stairs: { w: 1.25, d: 1.25, h: 0.5, dir: 'N', material: 'paving' },
   path: { w: 3, d: 2, material: 'gravel' },
   deck: { w: 5, d: 3 },
   hedge: { w: 4, d: 0.6, h: 0.8 },
@@ -82,6 +83,13 @@ export function placeProp(store, kind, pt) {
     const near = nearestMuret(store.model, pt);
     if (near) extra = near.fit(pt, def);
   }
+  if (kind === 'stairs') {
+    // Steps exist to reach something. Turned the wrong way by default they
+    // would have to be reoriented every single time, so they take their
+    // height and their direction from the raised slab they are dropped by.
+    const near = nearestRaisedSlab(store.model, pt);
+    if (near) extra = { h: near.z, dir: near.dir };
+  }
   store.update((m) => ({ ...m, props: [...m.props, { id, kind, x, y, ...def, ...extra }] }));
   store.select({ type: 'prop', id });
 }
@@ -115,6 +123,32 @@ export function nearestMuret(model, pt, maxDist = 2.5) {
           : { x: snap(c - t / 2), y: start, w: t, d: w, h: def.h };
       },
     };
+  }
+  return best;
+}
+
+/**
+ * The raised slab nearest a point, and which way one would climb onto it.
+ *
+ * The direction is the side of the slab the point falls outside of, taking the
+ * nearest edge — drop the steps below a terrace and they face up towards it.
+ */
+export function nearestRaisedSlab(model, pt, maxDist = 3) {
+  let best = null, bestD = maxDist;
+  for (const p of model.props) {
+    if (!['terrace', 'deck', 'path', 'pool'].includes(p.kind)) continue;
+    const z = p.z ?? 0;
+    if (z < 0.15) continue;
+    const x0 = p.x, x1 = p.x + (p.w ?? 2), y0 = p.y, y1 = p.y + (p.d ?? 2);
+    const dx = Math.max(x0 - pt[0], 0, pt[0] - x1);
+    const dy = Math.max(y0 - pt[1], 0, pt[1] - y1);
+    const d = Math.hypot(dx, dy);
+    if (d >= bestD) continue;
+    bestD = d;
+    // Which edge of the slab is closest: that is the one to climb.
+    const gaps = [[pt[1] - y1, 'S'], [y0 - pt[1], 'N'], [pt[0] - x1, 'W'], [x0 - pt[0], 'E']];
+    gaps.sort((a, b) => b[0] - a[0]);
+    best = { slab: p, z, dir: gaps[0][1] };
   }
   return best;
 }

@@ -87,7 +87,7 @@ const OPENING_LABELS = { window: 'Fenêtre', shutter: 'Fenêtre à volets', door
 const ROOF_ITEM_LABELS = { solar: 'Panneaux solaires', chimney: 'Cheminée', velux: 'Fenêtre de toit', dish: 'Parabole' };
 const PROP_LABELS = {
   pool: 'Piscine', terrace: 'Terrasse', path: 'Allée', deck: 'Terrasse bois', bush: 'Buisson',
-  muret: 'Muret', gate: 'Portillon / portail',
+  muret: 'Muret', gate: 'Portillon / portail', stairs: 'Escalier',
   tree: 'Arbre', hedge: 'Haie', fence: 'Clôture', car: 'Voiture',
 };
 
@@ -747,9 +747,21 @@ export class Inspector {
         s.appendChild(field('Forme', select(item.shape || 'rounded',
           [['rounded', 'Arrondie'], ['rect', 'Rectangulaire']], (v) => patch({ shape: v }))));
       }
-      if (item.kind === 'terrace' || item.kind === 'path' || item.kind === 'deck') {
+      if (['terrace', 'path', 'deck', 'stairs'].includes(item.kind)) {
         s.appendChild(field('Revêtement', select(item.material || (item.kind === 'deck' ? 'deck' : 'paving'),
           [['paving', 'Dallage'], ['gravel', 'Gravier'], ['deck', 'Bois']], (v) => patch({ material: v }))));
+      }
+      if (item.kind === 'stairs') {
+        s.append(
+          field('Hauteur', slider(item.h ?? 0.5, {
+            // As high as a terrace can be raised: the two go together.
+            min: 0.15, max: 3, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+            onInput: (v) => patch({ h: v }, 'h'),
+          }), 'ce que l’escalier monte — environ 18 cm par marche'),
+          field('Montée vers', select(item.dir || 'N',
+            [['N', 'le nord'], ['S', 'le sud'], ['E', "l'est"], ['W', "l'ouest"]],
+            (v) => patch({ dir: v }))),
+        );
       }
       if (['terrace', 'path', 'deck', 'pool'].includes(item.kind)) {
         s.appendChild(field('Élévation', slider(item.z ?? 0, {

@@ -98,7 +98,7 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
     <li><a href="#toiture">Régler la toiture</a></li>
     <li><a href="#ouvertures">Fenêtres, portes, objets de toit</a></li>
     <li><a href="#corps">Plusieurs corps de bâtiment</a></li>
-    <li><a href="#abords">Les abords : muret, portail, piscine</a></li>
+    <li><a href="#abords">Les abords : muret, portail, piscine, escalier</a></li>
     <li><a href="#couleurs">Couleurs et matières</a></li>
     <li><a href="#vue">Regarder sa maison</a></li>
     <li><a href="#cadrage">Cadrer sur une zone, pour un widget</a></li>
@@ -173,10 +173,18 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   les angles.
 </p>
 <p>
+  <strong>Position</strong> se compte depuis l’angle du mur jusqu’au bord de
+  l’ouverture : 0 la colle contre l’angle, et la course du curseur s’arrête à
+  l’autre bout du pan. Le pan entier, pas la case : une façade de dix mètres
+  offre dix mètres de course.
+</p>
+<p>
   Le réglage <strong>Renfoncement</strong> creuse une ouverture dans le mur —
   la porte-fenêtre en retrait, avec l’étage qui continue au-dessus. C’est de la
   vraie géométrie : le fond et les tableaux de la niche s’ombrent et se cachent
-  correctement sous tous les angles.
+  correctement sous tous les angles. Une fois le renfoncement posé, deux
+  réglages l’élargissent au-delà de l’ouverture, <strong>latéralement</strong>
+  et <strong>en tête</strong> — de quoi dessiner un porche, la porte au fond.
 </p>
 <p>
   Même chose pour ce qui se pose sur le toit : panneaux solaires, cheminée,
@@ -195,7 +203,7 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   passer de l’un à l’autre sans repasser par le plan.
 </p>
 
-<h2 id="abords">7. Les abords : muret, portail, piscine</h2>
+<h2 id="abords">7. Les abords : muret, portail, piscine, escalier</h2>
 <p>
   Muret, clôture et haie se <strong>tracent au glisser</strong>, leur longueur
   s’affichant pendant le tracé. Un portail posé près d’un muret s’y aligne et
@@ -207,6 +215,17 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   3 m : elles reçoivent alors leurs joues et cessent d’être confondues avec le
   sol. Sur un terrain en pente, c’est ce qui pose une terrasse au niveau de
   l’étage, le garage s’ouvrant en dessous — le terrain lui-même reste plat.
+</p>
+<p>
+  L’outil <strong>Escalier</strong> descend d’une terrasse surélevée. Posez-le
+  au pied de celle-ci : il prend sa hauteur et se tourne vers elle tout seul,
+  et compte environ 18 cm par marche. Il se pose contre la terrasse, il ne la
+  creuse pas.
+</p>
+<p>
+  Largeur et profondeur d’un extérieur se règlent par quarts de mètre, à partir
+  de 0,25 m : une terrasse de 3 × 4 m se cale donc exactement sur le bâtiment
+  qu’elle borde.
 </p>
 
 <h2 id="couleurs">8. Couleurs et matières</h2>

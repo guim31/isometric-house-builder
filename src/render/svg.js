@@ -52,14 +52,14 @@ const SHELL = new Set(['wall', 'roof', 'roofEdge', 'niche']);
  * of a raised terrace or deck.
  *
  * A terrace lying on the lawn is a decal anchored to the ground and needs none
- * of this. Lift it to storey height and it becomes a solid of its own, metres
- * wide, crossing the walls it abuts — and its centre says as little about which
+ * of this. Lift it to storey height and it becomes a solid of its own — as do
+ * the steps climbing onto it — metres wide, crossing the walls it abuts — and its centre says as little about which
  * side of a facade it is on as a roof slope's ever did. Measured on a user's
  * own house, a terrace at 2.50 m was drawn behind the wall it stands against at
  * 19 of 36 orientations, by up to twelve metres; put the same terrace back on
  * the ground and the fault goes with it.
  */
-const SOLID = new Set([...SHELL, 'slab']);
+const SOLID = new Set([...SHELL, 'slab', 'stairs']);
 
 /**
  * A group name without its per-item tag: `slab:p5shoa` -> `slab`.
