@@ -1030,6 +1030,54 @@ check('la niche d’un renfoncement est fermée : fond et quatre tableaux', () =
   return reveal((n) => n[2] > 0.9) || 'seuil manquant';
 });
 
+check('un renfoncement peut être plus large que la porte', () => {
+  // Asked for by a user with a porch: eighty centimetres of recessed wall on
+  // either side of his front door. The hole and the niche follow the widened
+  // extent; the leaf, its frame and its glass keep the door's own size.
+  const mk = (extra) => normalise({ ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 6, 4)], storeys: 2,
+      roof: { type: 'gable', pitch: 35, overhang: 0.3, fascia: 0.16, shedDir: 'S' } })],
+    openings: [{ id: 'o1', edge: '0,1,W', kind: 'door', storey: 0, offset: 0.5,
+      width: 1.2, height: 2.15, sill: 0, depth: 0.6, ...extra }] });
+  // Edge '0,1,W' spans y 1..2; centred, a 1.2 m opening spans y 0.9..2.1, and
+  // widened by 0.5 either side, y 0.4..2.6.
+  const wallAt = (m) => mergeCoplanar(buildMesh(m).mesh.tris)
+    .filter((f) => f.mat.startsWith('wall') && Math.abs(f.normal[0] + 1) < 1e-6
+      && Math.abs(f.centroid[0]) < 1e-6);
+  const contains = (f, y, z) => {
+    let c = false;
+    for (const l of f.loops) {
+      for (let i = 0, j = l.length - 1; i < l.length; j = i++) {
+        if ((l[i][2] > z) !== (l[j][2] > z)
+          && y < ((l[j][1] - l[i][1]) * (z - l[i][2])) / (l[j][2] - l[i][2]) + l[i][1]) c = !c;
+      }
+    }
+    return c;
+  };
+  // Just outside the door, inside the widening: wall before, open after.
+  const flanks = [[0.6, 1], [2.4, 1]];
+  const plain = wallAt(mk({}));
+  if (!flanks.every(([y, z]) => plain.some((f) => contains(f, y, z)))) {
+    return 'sans débord, le mur devrait être plein de part et d’autre';
+  }
+  const wide = wallAt(mk({ sides: 0.5 }));
+  for (const [y, z] of flanks) {
+    if (wide.some((f) => contains(f, y, z))) return `le mur couvre encore le débord en (${y}, ${z})`;
+  }
+  // The niche's back panel grew with it, so nothing shows through the hole.
+  const back = mergeCoplanar(buildMesh(mk({ sides: 0.5 })).mesh.tris)
+    .find((f) => f.mat.startsWith('wall') && Math.abs(f.centroid[0] - 0.6) < 0.05 && f.normal[0] < -0.9);
+  if (!back) return 'pas de fond de niche';
+  const ys = back.loops[0].map((q) => q[1]);
+  if (Math.max(...ys) - Math.min(...ys) < 2.2 - 1e-6) return 'le fond de niche n’a pas suivi le débord';
+  // And the door itself did not grow with the hole.
+  const leaf = mergeCoplanar(buildMesh(mk({ sides: 0.5 })).mesh.tris).find((f) => f.mat === 'door');
+  if (!leaf) return 'porte introuvable';
+  const ly = leaf.loops[0].map((q) => q[1]);
+  return Math.max(...ly) - Math.min(...ly) < 1.2 + 1e-6
+    || 'la porte a grandi avec le renfoncement';
+});
+
 check('une terrasse peut monter au niveau de l’étage', () => {
   // Sloping ground, approximated: the garage opens below, the terrace sits
   // level with the first floor. The slab keeps its skirts at that height.
@@ -1770,6 +1818,34 @@ check('les réglages sont rangés en familles', () => {
   return want.every((w) => groups.includes(w)) || `familles trouvées : ${groups.join(', ')}`;
 });
 
+check('une terrasse se dimensionne en quarts de mètre ronds', () => {
+  // A slider offers min + k x step and nothing else, so a minimum off the grid
+  // takes every round size with it. At 0.40 wide by 0.20 deep a terrace could
+  // be 3.15 by 3.95 but never 3 by 4 — reported by a user who could not line
+  // his up with the wall it runs along.
+  const s = new Store(normalise({ ...emptyModel(),
+    props: [{ id: 'p1', kind: 'terrace', x: 2, y: 2, w: 6, d: 4, material: 'paving', z: 0 }] }));
+  const div = document.createElement('div');
+  document.getElementById('stage').appendChild(div);
+  const insp = new Inspector(div, s);
+  s.select({ type: 'prop', id: 'p1' });
+  insp.render();
+  const rows = [...div.querySelectorAll('label.field')]
+    .filter((r) => ['Largeur', 'Profondeur'].includes(r.querySelector('.field-label').textContent));
+  if (rows.length !== 2) return `${rows.length} curseurs de taille au lieu de 2`;
+  for (const row of rows) {
+    const input = row.querySelector('input[type="range"]');
+    const min = Number(input.min), step = Number(input.step);
+    for (const want of [1, 3, 4, 6]) {
+      const k = (want - min) / step;
+      if (Math.abs(k - Math.round(k)) > 1e-9) {
+        return `${row.querySelector('.field-label').textContent} : ${want} m hors trame (min ${min}, pas ${step})`;
+      }
+    }
+  }
+  return true;
+});
+
 check('un curseur en cours de réglage survit au rafraîchissement', () => {
   const s = new Store(defaultModel());
   const div = document.createElement('div');
@@ -2065,13 +2141,21 @@ check('un panneau solaire ne traverse jamais le toit', () => {
 });
 
 check('un renfoncement ne crée pas de recouvrement grossier', () => {
-  const m = normalise({ ...emptyModel(),
+  // Both shapes: the niche exactly the size of the opening, and the porch a
+  // user asked for, wider and taller than the door standing in it.
+  const mk = (extra) => normalise({ ...emptyModel(),
     buildings: [makeBuilding({ cells: [...rectCells(0, 0, 6, 4)], storeys: 2,
       roof: { type: 'gable', pitch: 35, overhang: 0.3, fascia: 0.16, shedDir: 'S' } })],
-    openings: [{ id: 'o1', edge: '0,1,W', kind: 'door', storey: 0, offset: 0.5, width: 1.7, height: 2.15, sill: 0, depth: 0.6 }] });
-  for (const yaw of [180, 210, 250, 275, 300, 0]) {
-    for (const [k, e] of occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch: 24 } }, 260, 200, 4)) {
-      if (e.gap > 0.5 && e.n > 2) return `${yaw}° : ${e.n} px, ${e.gap.toFixed(1)} m — ${k}`;
+    openings: [{ id: 'o1', edge: '0,1,W', kind: 'door', storey: 0, offset: 0.5,
+      width: 1.7, height: 2.15, sill: 0, depth: 0.6, ...extra }] });
+  for (const extra of [{}, { sides: 0.8 }, { head: 0.3 }, { sides: 0.8, head: 0.3 }]) {
+    const m = mk(extra);
+    for (const yaw of [180, 210, 250, 275, 300, 0]) {
+      for (const [k, e] of occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch: 24 } }, 260, 200, 4)) {
+        if (e.gap > 0.5 && e.n > 2) {
+          return `${JSON.stringify(extra)} ${yaw}° : ${e.n} px, ${e.gap.toFixed(1)} m — ${k}`;
+        }
+      }
     }
   }
   return true;

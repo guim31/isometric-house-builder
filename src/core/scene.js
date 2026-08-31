@@ -40,18 +40,27 @@ function wallRect(mesh, g, s0, s1, z0, z1, mat, lift, after) {
  * and how deep. Null when the opening is flush — the overwhelmingly common
  * case, which must not pay for the other one.
  */
-function recessOf(op, b, zTopAt) {
+function recessOf(op, b, zTopAt, run) {
   const depth = Math.min(1, op.depth || 0);
   if (depth < 0.01) return null;
   const zBase = storeyBase(b, op.storey || 0);
   const w = op.width ?? 1.2;
   const c = op.offset ?? 0.5;
   const z0 = zBase + (op.sill ?? 0.95);
-  const z1 = z0 + (op.height ?? 1.25);
+  // The recess may be wider and taller than what stands in it — a doorway set
+  // back into a porch, which is what a user described: eighty centimetres of
+  // wall either side of his door. The leaf, its frame and its glass keep the
+  // opening's own dimensions; only the hole grows.
+  const side = Math.max(0, Math.min(2, op.sides || 0));
+  const head = Math.max(0, Math.min(1, op.head || 0));
+  const z1 = z0 + (op.height ?? 1.25) + head;
   // A niche must sit wholly inside its wall. Where the opening pokes past the
   // roof underside — a user mid-adjustment — it falls back to flush rather
-  // than carving a hole open to the sky.
-  const s0 = c - w / 2, s1 = c + w / 2;
+  // than carving a hole open to the sky. Measured at the widened edges, which
+  // is where a gable comes down to meet it.
+  const s0 = Math.max(run[0], c - w / 2 - side);
+  const s1 = Math.min(run[1], c + w / 2 + side);
+  if (s1 - s0 < 0.05) return null;
   if (z1 > Math.min(zTopAt(s0), zTopAt(s1)) - 0.02) return null;
   return { s0, s1, z0, z1, depth };
 }
@@ -98,14 +107,18 @@ function buildOpening(mesh, op, g, b, m, rec) {
       z,
     ];
     const d = depth;
+    // The niche follows the hole, which may be wider and taller than the
+    // opening standing in it. Taking the opening's own extent here left the
+    // recess open along the strip the wall builder had already removed.
+    const [n0, n1, nz0, nz1] = [rec.s0, rec.s1, rec.z0, rec.z1];
     const OV = 0.04; // tucked behind the wall strips, against antialias seams
-    mesh.quad(q(s0 - OV, z0 - OV, -d), q(s1 + OV, z0 - OV, -d),
-      q(s1 + OV, z1 + OV, -d), q(s0 - OV, z1 + OV, -d), wallMat, 'niche');
+    mesh.quad(q(n0 - OV, nz0 - OV, -d), q(n1 + OV, nz0 - OV, -d),
+      q(n1 + OV, nz1 + OV, -d), q(n0 - OV, nz1 + OV, -d), wallMat, 'niche');
     // Reveals: left, right, lintel underside, sill top.
-    mesh.quad(q(s0, z0, 0), q(s0, z0, -d), q(s0, z1, -d), q(s0, z1, 0), wallMat, 'wall');
-    mesh.quad(q(s1, z0, -d), q(s1, z0, 0), q(s1, z1, 0), q(s1, z1, -d), wallMat, 'wall');
-    mesh.quad(q(s1, z1, 0), q(s0, z1, 0), q(s0, z1, -d), q(s1, z1, -d), wallMat, 'wall');
-    mesh.quad(q(s0, z0, 0), q(s1, z0, 0), q(s1, z0, -d), q(s0, z0, -d), wallMat, 'wall');
+    mesh.quad(q(n0, nz0, 0), q(n0, nz0, -d), q(n0, nz1, -d), q(n0, nz1, 0), wallMat, 'wall');
+    mesh.quad(q(n1, nz0, -d), q(n1, nz0, 0), q(n1, nz1, 0), q(n1, nz1, -d), wallMat, 'wall');
+    mesh.quad(q(n1, nz1, 0), q(n0, nz1, 0), q(n0, nz1, -d), q(n1, nz1, -d), wallMat, 'wall');
+    mesh.quad(q(n0, nz0, 0), q(n1, nz0, 0), q(n1, nz0, -d), q(n0, nz0, -d), wallMat, 'wall');
   }
 
   if (op.kind === 'shutter') {
@@ -274,6 +287,30 @@ function buildOne(mesh, m, b, cs, roofItems) {
   for (const e of edges) geoms.set(e.id, edgeGeometry(e, cs));
 
   /*
+   * How far the wall an edge belongs to actually runs, measured in that edge's
+   * own frame. Boundary edges are one cell long; a wide opening, and now a
+   * recess wider still, spans several — and must stop where the wall does.
+   * Without this a porch widened past the corner of the house carved its niche
+   * out into thin air, and the return facade was painted over it.
+   */
+  const runs = new Map();
+  for (const e of edges) {
+    const g = geoms.get(e.id);
+    let lo = 0, hi = g.len;
+    for (const e2 of edges) {
+      const g2 = geoms.get(e2.id);
+      if (Math.abs(g2.n[0] - g.n[0]) + Math.abs(g2.n[1] - g.n[1]) > 1e-9) continue;
+      if (Math.abs((g2.a[0] - g.a[0]) * g.n[0] + (g2.a[1] - g.a[1]) * g.n[1]) > 1e-6) continue;
+      const dir = g2.u[0] * g.u[0] + g2.u[1] * g.u[1];
+      const sA = (g2.a[0] - g.a[0]) * g.u[0] + (g2.a[1] - g.a[1]) * g.u[1];
+      const sB = sA + g2.len * dir;
+      lo = Math.min(lo, sA, sB);
+      hi = Math.max(hi, sA, sB);
+    }
+    runs.set(e.id, [lo, hi]);
+  }
+
+  /*
    * Recessed openings first: the wall builder must know where NOT to build.
    * A recess is a genuine hole in the wall, with the storey above running on
    * over the lintel — which is what distinguishes it from simply erasing a
@@ -292,7 +329,7 @@ function buildOne(mesh, m, b, cs, roofItems) {
   for (const op of m.openings) {
     const g = geoms.get(op.edge);
     if (!g) continue;
-    const rec = recessOf(op, b, zTopFor(g));
+    const rec = recessOf(op, b, zTopFor(g), runs.get(op.edge));
     if (!rec) continue;
     // World endpoints of the hole, on the wall line.
     const P = (sv) => [g.a[0] + g.u[0] * sv, g.a[1] + g.u[1] * sv];
@@ -360,7 +397,7 @@ function buildOne(mesh, m, b, cs, roofItems) {
 
   for (const op of m.openings) {
     const g = geoms.get(op.edge);
-    if (g) buildOpening(mesh, op, g, b, m, recessOf(op, b, zTopFor(g)));
+    if (g) buildOpening(mesh, op, g, b, m, recessOf(op, b, zTopFor(g), runs.get(op.edge)));
   }
 
   const roof = buildRoof(mesh, field, b.roof, top, mat);

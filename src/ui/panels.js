@@ -651,6 +651,22 @@ export class Inspector {
           onInput: (v) => patch({ depth: v }, 'depth'),
         }), 'creuse l’ouverture dans le mur — l’étage au-dessus continue'),
       );
+      // Only once there is a recess to widen: two sliders that do nothing are
+      // worse than none, and this panel is already long.
+      if ((item.depth ?? 0) >= 0.01) {
+        s.append(
+          field('Débord latéral', slider(item.sides ?? 0, {
+            min: 0, max: 2, step: 0.05,
+            format: (v) => (v > 0 ? `${v.toFixed(2)} m` : 'aucun'),
+            onInput: (v) => patch({ sides: v }, 'sides'),
+          }), 'de chaque côté — pour une porte au fond d’un porche'),
+          field('Débord en tête', slider(item.head ?? 0, {
+            min: 0, max: 1, step: 0.05,
+            format: (v) => (v > 0 ? `${v.toFixed(2)} m` : 'aucun'),
+            onInput: (v) => patch({ head: v }, 'head'),
+          }), 'au-dessus de l’ouverture'),
+        );
+      }
     } else if (type === 'roofItem') {
       s.append(
         field('Type', select(item.kind, Object.entries(ROOF_ITEM_LABELS), (v) => patch({ kind: v }))),
@@ -683,12 +699,16 @@ export class Inspector {
         })));
       } else {
         s.append(
+          // A slider's values are min + k x step, so the minimum sets the grid
+          // as much as the step does. At 0.40 and 0.20 a terrace could be 3.15
+          // by 3.95 but never 3 by 4, and no amount of care aligned it on the
+          // building it adjoins — reported by a user trying to do exactly that.
           field('Largeur', slider(item.w ?? 2, {
-            min: 0.4, max: 24, step: 0.25, format: (v) => `${v.toFixed(2)} m`,
+            min: 0.25, max: 24, step: 0.25, format: (v) => `${v.toFixed(2)} m`,
             onInput: (v) => patch({ w: v }, 'w'),
           })),
           field('Profondeur', slider(item.d ?? 2, {
-            min: 0.2, max: 24, step: 0.25, format: (v) => `${v.toFixed(2)} m`,
+            min: 0.25, max: 24, step: 0.25, format: (v) => `${v.toFixed(2)} m`,
             onInput: (v) => patch({ d: v }, 'd'),
           })),
         );
