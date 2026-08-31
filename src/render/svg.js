@@ -48,6 +48,113 @@ const layerOf = (f) => LAYER[f.group] ?? 5;
 const SHELL = new Set(['wall', 'roof', 'roofEdge', 'niche']);
 
 /**
+ * The faces the exact ordering pass arbitrates over: the shell, plus the slab
+ * of a raised terrace or deck.
+ *
+ * A terrace lying on the lawn is a decal anchored to the ground and needs none
+ * of this. Lift it to storey height and it becomes a solid of its own, metres
+ * wide, crossing the walls it abuts — and its centre says as little about which
+ * side of a facade it is on as a roof slope's ever did. Measured on a user's
+ * own house, a terrace at 2.50 m was drawn behind the wall it stands against at
+ * 19 of 36 orientations, by up to twelve metres; put the same terrace back on
+ * the ground and the fault goes with it.
+ */
+const SOLID = new Set([...SHELL, 'slab']);
+
+/**
+ * A group name without its per-item tag: `slab:p5shoa` -> `slab`.
+ *
+ * Items that must not merge into their neighbours carry an id in their group,
+ * which is a detail of the mesh and not of what the group *means*. Membership
+ * and anchoring both ask the question of the family, not of the individual.
+ */
+const baseGroup = (g) => {
+  const i = g.indexOf(':');
+  return i < 0 ? g : g.slice(0, i);
+};
+
+/**
+ * The world direction that grows with the painter's depth.
+ *
+ * `depth` rotates a point by the yaw and sums it, which is linear, so it is
+ * also a plain dot product against a fixed direction in world space. Reading it
+ * back off the axes costs three calls and saves rederiving the yaw's sines here.
+ */
+function viewDir(camera) {
+  return [
+    camera.depth([1, 0, 0]) - camera.depth([0, 0, 0]),
+    camera.depth([0, 1, 0]) - camera.depth([0, 0, 0]),
+    camera.lambda,
+  ];
+}
+
+/**
+ * World-axis bounding box, cached on the face.
+ *
+ * Unlike the screen box this does not depend on the camera, so it is computed
+ * once and kept for as long as the face lives.
+ */
+function worldBox(f) {
+  if (f.wbox) return f.wbox;
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (const loop of f.loops) {
+    for (const p of loop) {
+      for (let k = 0; k < 3; k++) {
+        if (p[k] < lo[k]) lo[k] = p[k];
+        if (p[k] > hi[k]) hi[k] = p[k];
+      }
+    }
+  }
+  f.wbox = [lo, hi];
+  return f.wbox;
+}
+
+/**
+ * Order two faces by a world axis that separates them.
+ *
+ * The plane test below asks whether one face lies beyond the *other's* plane,
+ * which answers nothing when neither plane separates them — and a horizontal
+ * slab and a vertical wall never separate each other, whatever the distance
+ * between them. That is exactly the terrace case: the wall is not below the
+ * terrace's plane, the terrace is not behind the wall's, and the two were left
+ * to their centres.
+ *
+ * A separating plane perpendicular to a world axis settles it, and the geometry
+ * here supplies them freely: walls run along cell edges, slabs are rectangles.
+ * A plane the camera lies on one side of puts everything on its side in front,
+ * for any ray crossing both. The test is on bounding boxes, so it stays sound
+ * for a sloping roof too — a box that clears the axis contains a face that
+ * clears it. Where the axis is perpendicular to the view its two sides are at
+ * equal depth and it decides nothing, which is the `v[k]` guard.
+ *
+ * Two axes may separate the same pair and disagree, and that is not a paradox:
+ * it proves no ray meets both, so neither can ever hide the other. Answering
+ * anyway is what made this worse than the centroids it replaced — the invented
+ * constraint closed a cycle, and breaking that cycle threw away the true
+ * constraints caught in it. Disagreement means silence.
+ *
+ * @returns -1 when `a` must be drawn first, 1 when `b` must, 0 when undecided.
+ */
+function axisOrder(a, b, v) {
+  const [alo, ahi] = worldBox(a);
+  const [blo, bhi] = worldBox(b);
+  let verdict = 0;
+  for (let k = 0; k < 3; k++) {
+    if (Math.abs(v[k]) < 1e-9) continue;
+    const aLow = ahi[k] <= blo[k] + 1e-9;
+    const bLow = bhi[k] <= alo[k] + 1e-9;
+    // Neither, or both — the latter meaning two faces flat against the same
+    // plane, which do not hide each other whatever side is picked.
+    if (aLow === bLow) continue;
+    const r = aLow === (v[k] > 0) ? -1 : 1;
+    if (verdict && verdict !== r) return 0;
+    verdict = r;
+  }
+  return verdict;
+}
+
+/**
  * Does `a` lie entirely on the far side of `b`'s plane?
  *
  * The exact question the painter's order is trying to answer, and the reason a
@@ -91,6 +198,74 @@ function screenBox(f, camera) {
 }
 
 /**
+ * Convex hull of the face's projected outline, cached per camera.
+ *
+ * Monotone chain. The hull rather than the outline itself because the overlap
+ * test below wants a convex polygon, and because a hull is an over-estimate in
+ * the safe direction: it can only claim an overlap that is not there, never
+ * miss one that is.
+ */
+function screenHull(f, camera) {
+  if (f.hull) return f.hull;
+  const pts = [];
+  for (const loop of f.loops) for (const p of loop) pts.push(camera.projected(p));
+  pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (src) => {
+    const h = [];
+    for (const p of src) {
+      while (h.length >= 2 && cross(h[h.length - 2], h[h.length - 1], p) <= 0) h.pop();
+      h.push(p);
+    }
+    h.pop();
+    return h;
+  };
+  f.hull = pts.length < 3 ? pts : [...half(pts), ...half([...pts].reverse())];
+  return f.hull;
+}
+
+/**
+ * Do two projected faces share any area?
+ *
+ * The pair test that decides which faces get a constraint at all, and getting
+ * it wrong is not harmless. Two faces that only touch along an edge — a roof
+ * slope and its fascia, a terrace's top and its own side — never hide each
+ * other, so either order is defensible, and both the plane test and the axis
+ * test will happily produce one. Those arbitrary constraints closed cycles;
+ * breaking a cycle throws away whichever true constraints are caught in it,
+ * and a terrace went back behind the wall it stands against.
+ *
+ * Separating-axis test, edges of both hulls. Touching counts as apart, which
+ * is the whole point: a shared edge is not an overlap.
+ */
+function hullsOverlap(p, q) {
+  if (p.length < 3 || q.length < 3) return false;
+  for (const h of [p, q]) {
+    for (let i = 0, j = h.length - 1; i < h.length; j = i++) {
+      const ax = -(h[i][1] - h[j][1]);
+      const ay = h[i][0] - h[j][0];
+      let pmin = Infinity, pmax = -Infinity, qmin = Infinity, qmax = -Infinity;
+      for (const v of p) {
+        const d = v[0] * ax + v[1] * ay;
+        if (d < pmin) pmin = d;
+        if (d > pmax) pmax = d;
+      }
+      for (const v of q) {
+        const d = v[0] * ax + v[1] * ay;
+        if (d < qmin) qmin = d;
+        if (d > qmax) qmax = d;
+      }
+      // Scaled to the axis, so the tolerance stays a length however long the
+      // edge that produced it.
+      const eps = 1e-6 * Math.hypot(ax, ay);
+      if (pmax <= qmin + eps || qmax <= pmin + eps) return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Reorder the shell by pairwise plane tests, keeping everything else in place.
  *
  * Sorting on centres held for one camera angle and stopped holding once the
@@ -101,33 +276,39 @@ function screenBox(f, camera) {
  * to the ridge, and the band's centre lands *behind* the wall it hangs over.
  * No amount of cutting turns a centre into an answer.
  *
- * So the order between two shell faces is decided by asking, not by measuring a
- * proxy: if every vertex of one lies beyond the other's plane, it is behind it,
- * whatever their centres say. The test is exact for planar faces, which these
- * are. Only pairs that overlap on screen are constrained, so faces that cannot
- * hide each other stay where the depth sort put them; the result is settled by
- * a topological sort that falls back to that order for anything the plane test
- * leaves undecided, and for the cycles it cannot rule out.
+ * So the order between two faces is decided by asking, not by measuring a
+ * proxy: two questions, both exact, both answered in world space. Is one wholly
+ * beyond the other's plane? Failing that, does a world axis separate them? The
+ * first settles a wall against the roof that overhangs it, the second a wall
+ * against the raised terrace it stands next to — neither can answer both. Only
+ * pairs that overlap on screen are asked, so faces that cannot hide each other
+ * stay where the depth sort put them; the result is settled by a topological
+ * sort that falls back to that order for anything left undecided, and for the
+ * cycles the tests cannot rule out.
  *
- * Confined to the shell on purpose. Trees, ground and terraces are ordered by
- * machinery of their own — fixed layers and `after` anchors — and are not
- * planar solids meeting at their edges, so the same test would decide little
- * and risk much.
+ * Anchored faces stay out of it: a decal takes its depth from the surface that
+ * carries it, further down, and a place assigned here would only be overwritten.
+ * So do trees and ground-level decals, which have machinery of their own.
  */
-function repairShell(all, camera) {
-  const faces = all.filter((f) => SHELL.has(f.group) && f.facing > 1e-6);
+function repairSolids(all, camera) {
+  const faces = all.filter((f) => SOLID.has(baseGroup(f.group)) && f.facing > 1e-6 && !f.after);
   if (faces.length < 2) return;
 
   // before[j] = faces that must be drawn before faces[j].
   const before = faces.map(() => []);
   const indeg = faces.map(() => 0);
+  const v = viewDir(camera);
   const overlap = (p, q) => p[0] <= q[2] && q[0] <= p[2] && p[1] <= q[3] && q[1] <= p[3];
   for (let a = 0; a < faces.length; a++) {
     for (let b = a + 1; b < faces.length; b++) {
+      // Boxes first: cheap, and it rejects most pairs outright.
       if (!overlap(screenBox(faces[a], camera), screenBox(faces[b], camera))) continue;
+      if (!hullsOverlap(screenHull(faces[a], camera), screenHull(faces[b], camera))) continue;
       // Coplanar faces are never separated by each other's plane; leave them.
       let first = -1;
-      if (behindPlane(faces[a], faces[b])) first = a;
+      const axis = axisOrder(faces[a], faces[b], v);
+      if (axis) first = axis < 0 ? a : b;
+      else if (behindPlane(faces[a], faces[b])) first = a;
       else if (behindPlane(faces[b], faces[a])) first = b;
       if (first < 0) continue;
       const second = first === a ? b : a;
@@ -159,8 +340,19 @@ function repairShell(all, camera) {
   // put a solar panel on its slope — so handing the result back in the same
   // currency keeps a panel with the roof that carries it instead of leaving it
   // stranded in the slot its slope has just vacated. The existing depths are
-  // reused, only redistributed, so the shell keeps its place among the trees.
+  // reused, only redistributed, so the solids keep their place among the trees.
+  //
+  // Ties are pushed apart by one representable step first. A symmetric house
+  // gives several faces the same centroid depth, and handing two of them the
+  // same value again returns the decision to the emission order the sort has
+  // just overruled — which is how a terrace, correctly placed in front of a
+  // wall here, was drawn behind it anyway. A step this small cannot cross any
+  // other value in the pool, so nothing else moves.
+  const step = (v) => v + (Math.abs(v) * Number.EPSILON || Number.MIN_VALUE);
   const pool = faces.map((f) => f.sortDepth).sort((a, b) => a - b);
+  for (let k = 1; k < pool.length; k++) {
+    if (pool[k] <= pool[k - 1]) pool[k] = step(pool[k - 1]);
+  }
   out.forEach((i, k) => { faces[i].sortDepth = pool[k]; });
 }
 
@@ -170,6 +362,7 @@ function orderFaces(faces, camera) {
     f.seq = i;
     f.rides = false;
     f.box = null; // screen boxes are per camera, and faces outlive a frame
+    f.hull = null;
     f.nCam = rotateDir(f.normal, camera.yaw);
     f.facing = facingOf(f.nCam, camera.lambda);
     f.depth = camera.depth(f.centroid);
@@ -185,8 +378,9 @@ function orderFaces(faces, camera) {
     const k = `${f.mat}|${f.group}`;
     if (!byGroup.has(k)) byGroup.set(k, []);
     byGroup.get(k).push(f);
-    if (!byGroupOnly.has(f.group)) byGroupOnly.set(f.group, []);
-    byGroupOnly.get(f.group).push(f);
+    const gb = baseGroup(f.group);
+    if (!byGroupOnly.has(gb)) byGroupOnly.set(gb, []);
+    byGroupOnly.get(gb).push(f);
   }
 
   // Screen-space containment test, used to choose which surface carries a
@@ -280,7 +474,7 @@ function orderFaces(faces, camera) {
     }
   }
 
-  repairShell(faces, camera);
+  repairSolids(faces, camera);
 
   /*
    * Propagate along the chain rather than resolving each link once: water

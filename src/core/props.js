@@ -191,7 +191,12 @@ export function buildProps(mesh, m) {
         const mat = p.material || (p.kind === 'path' ? 'gravel' : p.kind === 'deck' ? 'deck' : 'paving');
         const ring = roundedRect(p.x, p.y, p.x + p.w, p.y + p.d, p.radius ?? (p.kind === 'deck' ? 0.1 : 0.2));
         const z = p.z ?? 0;
-        if (z > RAISED) raisedSlab(mesh, ring, z, mat, mat, 'slab');
+        // Tagged per prop, because coplanar faces sharing a group are merged
+        // into one. Two paved terraces meeting at a corner of the house then
+        // became a single face wrapping around it — and no draw order is right
+        // for a face that is in front of one wall and behind another. Kept
+        // apart, each stays a rectangle the sort can place exactly.
+        if (z > RAISED) raisedSlab(mesh, ring, z, mat, mat, `slab:${p.id}`);
         else ringSlab(mesh, ring, 0.012, mat, 'decal0', anchor);
         break;
       }
@@ -206,7 +211,7 @@ export function buildProps(mesh, m) {
           // their centres bring the original defect back one storey up, a large
           // terrace swallowing the small pool standing on it. So the coping is
           // anchored to whatever slab carries it, and the water to its coping.
-          raisedSlab(mesh, coping, z, 'poolRim', 'poolRim', 'poolslab', { group: 'slab' });
+          raisedSlab(mesh, coping, z, 'poolRim', 'poolRim', `poolslab:${p.id}`, { group: 'slab' });
           ringSlab(mesh, water, z + 0.015, 'water', 'poolwater', { group: 'poolslab' });
         } else {
           ringSlab(mesh, coping, 0.02, 'poolRim', 'decal1', anchor);

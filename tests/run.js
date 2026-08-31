@@ -2077,6 +2077,40 @@ check('un renfoncement ne crée pas de recouvrement grossier', () => {
   return true;
 });
 
+check('une terrasse surélevée reste du bon côté des murs', () => {
+  // Reported by a user, on his own house: a terrace at storey height was drawn
+  // behind the wall it stands against at nineteen of thirty-six orientations,
+  // by up to twelve metres. Two faults, one on top of the other. A raised slab
+  // never entered the exact ordering pass, and a horizontal slab and a vertical
+  // wall are separated by neither one's plane, so nothing could have ordered
+  // them there either. And four coplanar terraces of the same material merged
+  // into a single face wrapping around the house, for which no draw order is
+  // right at all.
+  //
+  // His arrangement, reduced: terraces on three sides of the body, meeting at
+  // its corners, at the height of the first floor.
+  const m = normalise({ ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(11, 20, 20, 27)], storeys: 3,
+      storeyHeights: [2.5, 2.5, 1],
+      roof: { type: 'gable', pitch: 40, overhang: 0.5, fascia: 0.18, shedDir: 'S' } })],
+    props: [
+      { id: 'pa', kind: 'terrace', x: 11, y: 18, w: 6.5, d: 2, material: 'paving', z: 2.5 },
+      { id: 'pb', kind: 'terrace', x: 9, y: 18, w: 2, d: 10, material: 'paving', z: 2.5 },
+      { id: 'pc', kind: 'terrace', x: 9, y: 28, w: 13, d: 2, material: 'paving', z: 2.5 },
+      { id: 'pd', kind: 'terrace', x: 21, y: 22, w: 1, d: 6, material: 'paving', z: 2.5 },
+    ] });
+  for (let yaw = 0; yaw < 360; yaw += 30) {
+    for (const pitch of [13, 30, 60]) {
+      for (const [k, e] of occlusionErrors({ ...m, camera: { ...m.camera, yaw, pitch } }, 260, 200, 4)) {
+        if (/^slab/.test(k) && e.gap > 0.5 && e.n > 2) {
+          return `${yaw}°/${pitch}° : ${e.n} px, ${e.gap.toFixed(1)} m — ${k}`;
+        }
+      }
+    }
+  }
+  return true;
+});
+
 check('un mur ne passe jamais devant le toit qui le couvre', () => {
   // What the free camera exposed, twice over. Sorting faces on their centres
   // held at one fixed angle and stopped holding once the angle was free: a roof
