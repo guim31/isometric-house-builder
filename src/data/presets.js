@@ -29,7 +29,8 @@ export const PRESETS = [
       texture: { roof: 'tiles', wall: 'none' },
       openings: [
         shut('14,21,N'), win('17,21,N', { width: 1.9, height: 1.45 }), door('20,21,N'),
-        garage('25,18,N'), shut('22,20,E'), win('22,19,E'),
+        garage('25,18,N'), win('22,19,E', { width: 1.2, offset: 0.75 }),
+        shut('22,20,E', { width: 1.2, offset: 1.2 }),
       ],
       roofItems: [
         { kind: 'solar', x: 17.5, y: 16.4, w: 4.2, d: 2.4 },
@@ -85,7 +86,7 @@ export const PRESETS = [
       texture: { roof: 'canal', wall: 'none' },
       overrides: { wall: '#ead8b6', roof: '#dda678', shutter: '#94b1a0', door: '#7b9a8a', plinth: '#dccfae' },
       openings: [
-        shut('13,20,N', { width: 1.4 }), shut('16,20,N', { width: 1.4 }), door('18,20,N'),
+        shut('13,20,N', { width: 1.4 }), shut('16,20,N', { width: 1.4 }), door('18,20,N', { offset: 0.6 }),
         shut('21,26,N', { width: 1.5 }), shut('23,26,N', { width: 1.5 }),
         shut('24,16,E', { width: 1.4 }), shut('24,23,E', { width: 1.4 }),
       ],
@@ -255,7 +256,7 @@ export const PRESETS = [
       texture: { roof: 'none', wall: 'none' },
       overrides: { wall: '#e9e7e2', roof: '#c9c6c0', trim: '#ffffff', door: '#48555f', glass: '#c3d9ea' },
       openings: [
-        win('15,22,N', { width: 3.2, height: 2.1, sill: 0.4 }),
+        win('15,22,N', { width: 3.2, height: 2.1, sill: 0.4, offset: 0.35 }),
         door('19,22,N'),
         win('21,22,N', { width: 2.2, height: 2.1, sill: 0.4 }),
         win('16,22,N', { storey: 1, width: 3.2, height: 1.8, sill: 0.5 }),

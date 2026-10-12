@@ -6,7 +6,7 @@
 import { Mesh } from './mesh.js';
 import { boundaryEdges, decomposeRects, bounds, parseKey, runExtents } from './grid.js';
 import { buildRoof, heightField, undersideAt, STEP } from './roof.js';
-import { cellSet, wallTop, storeyBase, cellSizeOf, buildingCells, propFootprint } from './model.js';
+import { cellSet, wallTop, storeyBase, cellSizeOf, buildingCells, propFootprint, openingShown } from './model.js';
 import { focusRect } from './focus.js';
 import { buildProps, roundedRect } from './props.js';
 
@@ -311,7 +311,11 @@ function buildOne(mesh, m, b, cs, roofItems) {
     if (!recesses.has(edgeId)) recesses.set(edgeId, []);
     recesses.get(edgeId).push(hole);
   };
-  for (const op of m.openings) {
+  // An opening on a level the building no longer has stays in the file — put
+  // the level back and it is there again — but is not built: it would float
+  // above the eaves, in the roof or in the air.
+  const openings = m.openings.filter((op) => openingShown(op, b));
+  for (const op of openings) {
     const g = geoms.get(op.edge);
     if (!g) continue;
     const rec = recessOf(op, b, zTopFor(g), runs.get(op.edge));
@@ -380,7 +384,7 @@ function buildOne(mesh, m, b, cs, roofItems) {
     }
   }
 
-  for (const op of m.openings) {
+  for (const op of openings) {
     const g = geoms.get(op.edge);
     if (g) buildOpening(mesh, op, g, b, m, recessOf(op, b, zTopFor(g), runs.get(op.edge)));
   }

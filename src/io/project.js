@@ -3,7 +3,7 @@
  * save format and a perfectly readable text file.
  */
 
-import { normalise, defaultModel } from '../core/model.js';
+import { normalise, defaultModel, MODEL_VERSION } from '../core/model.js';
 import { download, slug } from './files.js';
 
 const STORAGE_KEY = 'isometric-house-builder/current';
@@ -35,12 +35,19 @@ export function exportProject(model) {
   download(blob, `${slug(model.name)}.house.json`);
 }
 
+/**
+ * Read a project file. Resolves to `{ model, newer }`: `newer` flags a file
+ * written by a later version of the tool, whose settings this one may not know
+ * and will drop — worth saying, rather than losing them without a word.
+ */
 export function importProject(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        resolve(normalise(JSON.parse(String(reader.result))));
+        const raw = JSON.parse(String(reader.result));
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('ce n’est pas un projet');
+        resolve({ model: normalise(raw), newer: Number(raw.version) > MODEL_VERSION });
       } catch (e) {
         reject(new Error('Fichier illisible : ' + e.message));
       }

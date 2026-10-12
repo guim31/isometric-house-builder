@@ -230,6 +230,9 @@ function repeatable(button, run) {
   for (const type of ['pointerup', 'pointerleave', 'pointercancel']) {
     button.addEventListener(type, stop);
   }
+  // Enter and Space press a button without any pointer: a click with no
+  // detail, which the pointer path above has already handled otherwise.
+  button.addEventListener('click', (ev) => { if (ev.detail === 0) run(); });
 }
 
 function buildNav() {
@@ -339,10 +342,13 @@ $('file-input').addEventListener('change', async (ev) => {
   const file = ev.target.files?.[0];
   if (!file) return;
   try {
-    store.update(await importProject(file));
+    const { model, newer } = await importProject(file);
+    store.update(model);
     store.select(null);
     viewport.resetView();
-    toast('Projet chargé');
+    toast(newer
+      ? 'Projet chargé — enregistré par une version plus récente : certains réglages peuvent manquer'
+      : 'Projet chargé');
   } catch (e) {
     toast(e.message);
   }
@@ -413,6 +419,10 @@ nameInput.addEventListener('input', () => {
 
 document.addEventListener('keydown', (ev) => {
   const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName);
+  // In a text field, undo is the field's own: taking it over rewound the last
+  // model change — a camera turn, as likely as not — instead of the typing.
+  const textEntry = typing && /^(text|search|number|)$/.test(ev.target.type || '');
+  if (textEntry && (ev.ctrlKey || ev.metaKey) && /^[zy]$/i.test(ev.key)) return;
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') {
     ev.preventDefault();
     ev.shiftKey ? store.redo() : store.undo();

@@ -9,7 +9,7 @@ import {
 import { ROOF_TYPES, STEP } from '../core/roof.js';
 import {
   withCellSize, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
-  storeyHeightOf, DEFAULT_FOCUS, newId,
+  storeyHeightOf, DEFAULT_FOCUS, newId, CELL_SIZES, STOREY_HEIGHT_RANGE,
 } from '../core/model.js';
 import { bounds, edgeRunExtent } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
@@ -66,10 +66,21 @@ function toggle(value, onChange) {
   return input;
 }
 
+/**
+ * A number field that keeps to its own bounds. The browser only advises them:
+ * typed, -50 went through as is, and a field emptied by mistake came through
+ * as 0 — a framing zone zero metres wide, an item sent back to the origin.
+ */
 function number(value, { min, max, step, onChange }) {
   const input = document.createElement('input');
   Object.assign(input, { type: 'number', min, max, step, value });
-  input.addEventListener('change', () => onChange(Number(input.value)));
+  input.addEventListener('change', () => {
+    const v = input.valueAsNumber;
+    if (!Number.isFinite(v)) { input.value = value; return; }
+    const clamped = Math.max(min, Math.min(max, v));
+    if (clamped !== v) input.value = clamped;
+    onChange(clamped);
+  });
   return input;
 }
 
@@ -116,12 +127,19 @@ function positionField(m, item, patch) {
       onInput: (v) => patch({ offset: v }, 'offset'),
     }), 'le long du mur');
   }
-  const max = Math.max(0, run.hi - run.lo - w);
-  const from = Math.min(max, Math.max(0, (item.offset ?? 0.5) - w / 2 - run.lo));
-  return field('Position', slider(from, {
-    min: 0, max, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+  const from = (item.offset ?? 0.5) - w / 2 - run.lo;
+  // An opening already past a corner — older files have them — widens the
+  // course instead of being shown at the corner, which made the first nudge
+  // jump it there.
+  const max = Math.max(0, run.hi - run.lo - w, from);
+  const min = Math.min(0, from);
+  const outside = from < -1e-6 || from > run.hi - run.lo - w + 1e-6;
+  return field('Position', slider(Math.round(from * 100) / 100, {
+    min, max, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
     onInput: (v) => patch({ offset: v + run.lo + w / 2 }, 'offset'),
-  }), 'depuis l’angle du mur, jusqu’au bord de l’ouverture');
+  }), outside
+    ? 'l’ouverture dépasse de son pan de mur'
+    : 'depuis l’angle du mur, jusqu’au bord de l’ouverture');
 }
 
 export class Inspector {
@@ -272,7 +290,7 @@ export class Inspector {
     });
     s.append(
       field('Emprise totale', h('span', 'field-static', dims), 'hors débord de toiture'),
-      field('Trame', select(String(cs), [['1', '1 m'], ['0.5', '0,50 m']],
+      field('Trame', select(String(cs), CELL_SIZES.map((v) => [String(v), `${fmtMetres(v)} m`]),
         (v) => this.store.update((mm) => withCellSize(mm, Number(v)))),
         'le pas de dessin du plan — affiner ne change pas les dimensions de la maison'),
     );
@@ -343,19 +361,27 @@ export class Inspector {
      * cannot say that, and rounding it to 2 or 3 whole storeys misses the
      * house by half a metre either way.
      */
+    const [hMin, hMax] = STOREY_HEIGHT_RANGE;
     if (b.storeys <= 1) {
-      s.append(field('Hauteur d’étage', slider(b.storeyHeight, {
-        min: 1, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
-        onInput: (v) => this.store.patchBuilding({ storeyHeight: v, storeyHeights: null }, 'storeyHeight'),
+      // What is drawn is the first level's own height when the building has
+      // one — left over from when it had more levels, and kept for when it
+      // has them again.
+      s.append(field('Hauteur d’étage', slider(storeyHeightOf(b, 0), {
+        min: hMin, max: hMax, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+        onInput: (v) => this.store.patchBuilding((cur) => ({
+          storeyHeight: v,
+          storeyHeights: cur.storeyHeights ? [v, ...cur.storeyHeights.slice(1)] : null,
+        }), 'storeyHeight'),
       })));
     } else {
       const LEVEL = ['Rez-de-chaussée', 'Étage 1', 'Étage 2', 'Étage 3'];
       for (let i = 0; i < b.storeys; i++) {
         const level = i;
         s.append(field(`Hauteur — ${LEVEL[i]}`, slider(storeyHeightOf(b, i), {
-          min: 1, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          min: hMin, max: hMax, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
           onInput: (v) => this.store.patchBuilding((cur) => {
-            const heights = Array.from({ length: cur.storeys }, (_, k) => storeyHeightOf(cur, k));
+            const heights = Array.from({ length: Math.max(cur.storeys, cur.storeyHeights?.length ?? 0) },
+              (_, k) => storeyHeightOf(cur, k));
             heights[level] = v;
             return { storeyHeights: heights };
           }, `sh${level}`),
@@ -704,11 +730,16 @@ export class Inspector {
       const m = this.store.model;
       const host = buildingOfEdge(m, item.edge) || this.store.activeBuilding;
       const storeys = host ? host.storeys : 1;
+      const level = item.storey || 0;
       s.appendChild(field('Type', select(item.kind, Object.entries(OPENING_LABELS), (v) => patch({ kind: v }))));
-      if (storeys > 1) {
-        s.appendChild(field('Étage', select(String(item.storey || 0),
-          Array.from({ length: storeys }, (_, i) => [String(i), i === 0 ? 'Rez-de-chaussée' : `Étage ${i}`]),
-          (v) => patch({ storey: Number(v) }))));
+      // Also shown when the opening sits on a level since taken away: it is
+      // not drawn any more, and this is the one place it can be brought down.
+      if (storeys > 1 || level >= storeys) {
+        s.appendChild(field('Étage', select(String(level),
+          Array.from({ length: Math.max(storeys, level + 1) }, (_, i) => [String(i),
+            (i === 0 ? 'Rez-de-chaussée' : `Étage ${i}`) + (i >= storeys ? ' (supprimé)' : '')]),
+          (v) => patch({ storey: Number(v) })),
+        level >= storeys ? 'ce niveau n’existe plus : l’ouverture n’est pas dessinée' : undefined));
       }
       s.append(
         positionField(m, item, patch),
@@ -720,7 +751,7 @@ export class Inspector {
           min: 0.4, max: 3, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
           onInput: (v) => patch({ height: v }, 'h'),
         })),
-        field('Allège', slider(item.sill ?? 0, {
+        field('Allège', slider(item.sill ?? 0.95, {
           min: 0, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
           onInput: (v) => patch({ sill: v }, 'sill'),
         }), 'hauteur du bas de l’ouverture'),

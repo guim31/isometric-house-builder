@@ -9,7 +9,7 @@
  */
 
 import { boundaryEdges, parseKey } from '../core/grid.js';
-import { cellSet, wallTop, storeyBase, cellSizeOf } from '../core/model.js';
+import { wallTop, storeyBase, cellSizeOf, openingShown, CENTRED_KINDS } from '../core/model.js';
 import { unrotatePoint } from '../core/iso.js';
 
 // The layer is parsed as markup, and ids come from files and share links.
@@ -70,7 +70,7 @@ export function hitLayer(model, camera, built = null) {
   for (const op of model.openings) {
     const e = edgeById.get(op.edge);
     const b = model.buildings.find((bd) => bd.cells.includes(op.edge.split(',').slice(0, 2).join(',')));
-    if (!e || !b) continue;
+    if (!e || !b || !openingShown(op, b)) continue;
     const a = [e.a[0] * cs, e.a[1] * cs];
     const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
     const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
@@ -85,33 +85,47 @@ export function hitLayer(model, camera, built = null) {
 
   // Roof items, flat on the slope of whichever volume carries them.
   for (const it of model.roofItems) {
-    const cellKey = `${Math.floor(it.x / cs)},${Math.floor(it.y / cs)}`;
-    const b = model.buildings.find((bd) => bd.cells.includes(cellKey));
-    if (!b) continue;
-    const part = built?.parts?.find((p) => p.building.id === b.id);
-    const field = part ? part.field : null;
-    const top = wallTop(b);
-    const w = it.w ?? 2, d = it.d ?? 1.5;
-    const z = (x, y) => top + (field ? Math.max(0, field.h(x, y)) : 0) + (it.h ?? 0.2);
-    const x0 = it.x - w / 2, x1 = it.x + w / 2, y0 = it.y - d / 2, y1 = it.y + d / 2;
-    add([[x0, y0, z(x0, y0)], [x1, y0, z(x1, y0)], [x1, y1, z(x1, y1)], [x0, y1, z(x0, y1)]],
-      { 'data-pick': 'roofItem', 'data-id': it.id });
+    const pts = roofItemCorners(model, it, built);
+    if (pts) add(pts, { 'data-pick': 'roofItem', 'data-id': it.id });
   }
 
   // Props: a horizontal patch at roughly half their height reads well enough
-  // for picking and keeps them ordered against the house.
+  // for picking and keeps them ordered against the house. A raised slab and a
+  // flight of steps are solids standing metres high, though, and get their
+  // sides as well: with only a patch on top, half of what is drawn of them
+  // picked nothing, or the wall behind.
   for (const p of model.props) {
-    const centred = p.kind === 'tree' || p.kind === 'bush' || p.kind === 'car';
+    const centred = CENTRED_KINDS.has(p.kind);
     const w = centred ? (p.r ? p.r * 2 : p.w ?? 2) : p.w ?? 2;
     const d = centred ? (p.r ? p.r * 2 : p.d ?? 2) : p.d ?? 2;
     const x0 = centred ? p.x - w / 2 : p.x;
     const y0 = centred ? p.y - d / 2 : p.y;
+    const x1 = x0 + w, y1 = y0 + d;
+    const attrs = { 'data-pick': 'prop', 'data-id': p.id };
+    if (![x0, y0, x1, y1].every(Number.isFinite)) continue;
+    const solid = p.kind === 'stairs' ? Math.max(0.15, p.h ?? 0.5)
+      : ['terrace', 'path', 'deck', 'pool'].includes(p.kind) && (p.z ?? 0) > 0.05 ? p.z : 0;
+    if (solid) {
+      // Height of the top at a ground point: flat for a slab, rising towards
+      // its landing for a flight of steps.
+      const up = { N: [0, 1], S: [0, -1], E: [1, 0], W: [-1, 0] }[p.dir || 'N'];
+      const top = p.kind !== 'stairs' ? () => solid : (x, y) => {
+        const t = up[0] ? (up[0] > 0 ? (x - x0) / w : (x1 - x) / w) : (up[1] > 0 ? (y - y0) / d : (y1 - y) / d);
+        return Math.max(0.05, solid * t);
+      };
+      const c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+      for (let k = 0; k < 4; k++) {
+        const [a, b] = [c[k], c[(k + 1) % 4]];
+        add([[a[0], a[1], 0], [b[0], b[1], 0], [b[0], b[1], top(...b)], [a[0], a[1], top(...a)]], attrs);
+      }
+      add(c.map(([x, y]) => [x, y, top(x, y) + 0.02]), attrs);
+      continue;
+    }
     const z = p.kind === 'tree' ? (p.r ?? 1.4) * 1.6
       : p.kind === 'bush' ? (p.r ?? 1.1) * 0.5
         : p.kind === 'car' ? 0.7 : p.kind === 'muret' || p.kind === 'gate' ? (p.h ?? 1.5)
         : (p.z ?? 0) + 0.06;
-    add([[x0, y0, z], [x0 + w, y0, z], [x0 + w, y0 + d, z], [x0, y0 + d, z]],
-      { 'data-pick': 'prop', 'data-id': p.id });
+    add([[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]], attrs);
   }
 
   targets.sort((a, b) => a.depth - b.depth);
@@ -119,6 +133,24 @@ export function hitLayer(model, camera, built = null) {
     const attrs = Object.entries(t.attrs).map(([k, v]) => `${k}="${escapeAttr(v)}"`).join(' ');
     return `<path d="${t.d}" ${attrs} fill="transparent" stroke="none"/>`;
   }).join('');
+}
+
+/**
+ * The four corners of a roof item, lying on the slope of the volume under it —
+ * shared with the selection outline, which drew them at a fixed height.
+ */
+export function roofItemCorners(model, it, built = null) {
+  const cs = cellSizeOf(model);
+  const cellKey = `${Math.floor(it.x / cs)},${Math.floor(it.y / cs)}`;
+  const b = model.buildings.find((bd) => bd.cells.includes(cellKey));
+  if (!b) return null;
+  const part = built?.parts?.find((p) => p.building.id === b.id);
+  const field = part ? part.field : null;
+  const top = wallTop(b);
+  const w = it.w ?? 2, d = it.d ?? 1.5;
+  const z = (x, y) => top + (field ? Math.max(0, field.h(x, y)) : 0) + (it.h ?? 0.2);
+  const x0 = it.x - w / 2, x1 = it.x + w / 2, y0 = it.y - d / 2, y1 = it.y + d / 2;
+  return [[x0, y0, z(x0, y0)], [x1, y0, z(x1, y0)], [x1, y1, z(x1, y1)], [x0, y1, z(x0, y1)]];
 }
 
 /**

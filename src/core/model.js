@@ -3,13 +3,20 @@
  * save file, the undo stack and the shareable URL all carry.
  */
 
-import { key, rectCells, connectedComponents } from './grid.js';
+import { key, rectCells, connectedComponents, SIDES } from './grid.js';
 import { DEFAULT_PROJECTION, DEFAULT_PITCH, clampPitch, clampRoll, normaliseYaw } from './iso.js';
 import { THEMES } from './palette.js';
 import { PRESETS } from '../data/presets.js';
 
-export const MODEL_VERSION = 1;
-export const GRID = 40; // cells per side; 1 cell = 1 metre
+// 2: per-level heights, recessed openings, raised slabs, steps. Older files
+// open unchanged; the number is what tells a newer file apart.
+export const MODEL_VERSION = 2;
+
+/** Drawing pitches the plan offers, in metres per cell. */
+export const CELL_SIZES = [1, 0.5];
+
+/** Range of one level's height, in metres — the inspector's and the files'. */
+export const STOREY_HEIGHT_RANGE = [0.6, 4];
 
 let seq = 0;
 export const newId = (prefix) => `${prefix}${(seq++).toString(36)}${Math.floor(performance.now() % 1e6).toString(36)}`;
@@ -30,6 +37,22 @@ const isRecord = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /** Items positioned by their centre rather than their minimum corner. */
 export const CENTRED_KINDS = new Set(['tree', 'bush', 'car']);
+
+/**
+ * Size and height of a newly placed opening, by kind. Also what a file that
+ * leaves a field out gets: the renderer, the pick layer and the inspector each
+ * carried their own fallbacks, and a window without a sill was drawn at 0,95 m
+ * and outlined on the ground.
+ */
+export const OPENING_DEFAULTS = {
+  window: { width: 1.3, height: 1.3, sill: 0.95 },
+  shutter: { width: 1.3, height: 1.3, sill: 0.95 },
+  door: { width: 1.0, height: 2.1, sill: 0 },
+  garage: { width: 2.6, height: 2.1, sill: 0 },
+};
+
+/** An opening on a level its building no longer has is kept, but not built. */
+export const openingShown = (op, b) => (op.storey || 0) < b.storeys;
 
 /** Ground footprint of an outdoor item, in metres: [x0, y0, x1, y1]. */
 export function propFootprint(p) {
@@ -86,7 +109,7 @@ export function emptyModel() {
   return {
     version: MODEL_VERSION,
     name: 'Ma maison',
-    grid: { w: GRID, d: GRID, cellSize: 1 },
+    grid: { cellSize: 1 },
     buildings: [makeBuilding()],
     // Defaults to the Gladys Assistant v5 look, which is what this tool is
     // primarily meant to feed. Every other palette is one click away.
@@ -123,9 +146,10 @@ export function normalise(input) {
   const m = { ...base, ...input };
   if (!THEMES[m.theme]) m.theme = base.theme;
   if (typeof m.name !== 'string') m.name = base.name;
-  m.grid = { ...base.grid, ...(input?.grid || {}) };
-  if (![1, 0.5, 0.25].includes(m.grid.cellSize)) m.grid.cellSize = 1;
-  m.roof = { ...base.roof, ...(input?.roof || {}) };
+  // Only the pitch is a setting; the extent the grid once declared was never
+  // read, and is not written back.
+  const size = Number(input?.grid?.cellSize);
+  m.grid = { cellSize: [...CELL_SIZES, 0.25].includes(size) ? size : 1 };
   m.ground = { ...base.ground, ...(input?.ground || {}) };
   m.camera = normaliseCamera(input?.camera, base.camera);
   m.focus = normaliseFocus(input?.focus, base.focus);
@@ -147,13 +171,27 @@ export function normalise(input) {
     m[list] = Array.isArray(m[list]) ? m[list].filter(isRecord) : [];
     for (const it of m[list]) it.id = safeId(it.id, list[0]);
   }
+  m.openings = m.openings
+    .filter((op) => typeof op.edge === 'string' && /^-?\d+,-?\d+,[SENW]$/.test(op.edge))
+    .map((op) => {
+      const kind = OPENING_DEFAULTS[op.kind] ? op.kind : 'window';
+      const out = { storey: 0, offset: 0.5, ...OPENING_DEFAULTS[kind], ...op, kind };
+      for (const k of ['storey', 'offset', 'width', 'height', 'sill']) {
+        if (!Number.isFinite(out[k])) out[k] = k === 'storey' ? 0 : k === 'offset' ? 0.5 : OPENING_DEFAULTS[kind][k];
+      }
+      out.storey = Math.max(0, Math.min(3, Math.round(out.storey)));
+      return out;
+    });
   for (const k of ['outline', 'shadow', 'windowBars']) {
     if (input?.style?.[k] === undefined && declared[k] !== undefined) m.style[k] = declared[k];
   }
   if (!input?.texture && declared.texture) m.texture = { ...m.texture, ...declared.texture };
 
   m.version = MODEL_VERSION;
-  return m;
+  // A quarter-metre grid was accepted on input but never offered, and the roof
+  // lattice cannot hold it: a ridge over an odd number of quarter cells falls
+  // between its points. Such a file opens on the half-metre grid instead.
+  return m.grid.cellSize === 0.25 ? withCellSize(m, 0.5) : m;
 }
 
 /**
@@ -184,9 +222,14 @@ function normaliseBuildings(input, themePlinth) {
     out.overrides = safeColours(b.overrides);
     out.texture = b.texture ? { ...b.texture } : null;
     out.storeys = Math.max(1, Math.min(4, Math.round(out.storeys) || 1));
+    const [lo, hi] = STOREY_HEIGHT_RANGE;
+    out.storeyHeight = Number.isFinite(out.storeyHeight) ? Math.max(lo, Math.min(hi, out.storeyHeight)) : proto.storeyHeight;
+    out.plinth = Number.isFinite(out.plinth) ? Math.max(0, Math.min(1, out.plinth)) : 0;
+    // All four kept, not only the levels in use: taking a level away and
+    // putting it back should find its height where it was left.
     out.storeyHeights = Array.isArray(b.storeyHeights)
-      ? b.storeyHeights.slice(0, out.storeys)
-        .map((v) => (Number.isFinite(v) ? Math.max(0.6, Math.min(4, v)) : out.storeyHeight))
+      ? b.storeyHeights.slice(0, 4)
+        .map((v) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : out.storeyHeight))
       : null;
     return out;
   };
@@ -239,8 +282,10 @@ function normaliseFocus(input, base) {
   const f = { ...base, ...(input || {}) };
   const num = (v, min, fallback) =>
     (Number.isFinite(v) ? Math.max(min, v) : fallback);
-  f.w = num(f.w, 0.5, base.w);
-  f.d = num(f.d, 0.5, base.d);
+  // Two metres, as the plan and the inspector have it: below that the zone
+  // holds nothing and the camera zooms to a blur.
+  f.w = num(f.w, 2, base.w);
+  f.d = num(f.d, 2, base.d);
   f.margin = num(f.margin, 0, base.margin);
   f.x = Number.isFinite(f.x) ? f.x : base.x;
   f.y = Number.isFinite(f.y) ? f.y : base.y;
@@ -319,7 +364,15 @@ export function withCellSize(m, size) {
     const [is, js, side] = op.edge.split(',');
     const i = Number(is), j = Number(js);
     if (!exact) {
-      return { ...op, edge: `${Math.floor((i * old) / size)},${Math.floor((j * old) / size)},${side}` };
+      // The coarser cell's edge starts somewhere else along the same wall, so
+      // the offset is carried over by that distance — otherwise the opening
+      // slid along the facade by up to a cell.
+      const ni = Math.floor((i * old) / size), nj = Math.floor((j * old) / size);
+      const s = SIDES[side];
+      const a0 = s.a(i, j).map((v) => v * old), a1 = s.a(ni, nj).map((v) => v * size);
+      const u = [s.b(0, 0)[0] - s.a(0, 0)[0], s.b(0, 0)[1] - s.a(0, 0)[1]];
+      const shift = (a0[0] - a1[0]) * u[0] + (a0[1] - a1[1]) * u[1];
+      return { ...op, edge: `${ni},${nj},${side}`, offset: (op.offset ?? 0.5) + shift };
     }
     // The sub-cell holding the same start corner, so the metre offset keeps
     // naming the same point of the wall.

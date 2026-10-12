@@ -8,14 +8,10 @@
  * two had already begun to drift.
  */
 
-import { newId } from '../core/model.js';
+import { newId, OPENING_DEFAULTS, CENTRED_KINDS } from '../core/model.js';
 
-export const OPENING_DEFAULTS = {
-  window: { width: 1.3, height: 1.3, sill: 0.95 },
-  shutter: { width: 1.3, height: 1.3, sill: 0.95 },
-  door: { width: 1.0, height: 2.1, sill: 0 },
-  garage: { width: 2.6, height: 2.1, sill: 0 },
-};
+// Defined in the model, which fills them into files that leave them out.
+export { OPENING_DEFAULTS, CENTRED_KINDS };
 
 export const ROOF_ITEM_DEFAULTS = {
   solar: { w: 4, d: 2.4 },
@@ -39,8 +35,6 @@ export const PROP_DEFAULTS = {
   car: { w: 1.8, d: 4.2 },
 };
 
-/** Items positioned by their centre rather than their minimum corner. */
-export const CENTRED_KINDS = new Set(['tree', 'bush', 'car']);
 
 /** Items drawn by dragging a run, where the length is the whole point. */
 export const LINEAR_KINDS = new Set(['muret', 'fence', 'hedge']);
