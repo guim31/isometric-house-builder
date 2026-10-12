@@ -19,7 +19,11 @@ import { bounds } from '../core/grid.js';
 import { specFor, textureSegments, textureTiles } from './texture.js';
 
 // Clip paths need ids unique to the document, not just to one SVG: a gallery
-// page holding several renders would otherwise have them clip each other.
+// page holding several renders would otherwise have them clip each other. The
+// counter alone restarts with every page load, so two files exported in two
+// sessions and pasted into one dashboard would collide; a random tag per
+// session keeps them apart.
+const SESSION = Math.random().toString(36).slice(2, 7);
 let renderSeq = 0;
 
 /** Materials drawn without an outline, or with a special opacity. */
@@ -52,9 +56,10 @@ const SHELL = new Set(['wall', 'roof', 'roofEdge', 'niche']);
  * of a raised terrace or deck.
  *
  * A terrace lying on the lawn is a decal anchored to the ground and needs none
- * of this. Lift it to storey height and it becomes a solid of its own — as do
- * the steps climbing onto it — metres wide, crossing the walls it abuts — and its centre says as little about which
- * side of a facade it is on as a roof slope's ever did. Measured on a user's
+ * of this. Lift it to storey height and it becomes a solid of its own, metres
+ * wide and crossing the walls it abuts — as do the steps climbing onto it —
+ * and its centre says as little about which side of a facade it is on as a
+ * roof slope's ever did. Measured on a user's
  * own house, a terrace at 2.50 m was drawn behind the wall it stands against at
  * 19 of 36 orientations, by up to twelve metres; put the same terrace back on
  * the ground and the fault goes with it.
@@ -686,11 +691,10 @@ export function renderScene(input, opts = {}) {
     const cut = mat.indexOf('#');
     return cut < 0 ? model.texture : (textures.get(mat.slice(cut + 1)) || model.texture);
   };
-  const prefix = `t${renderSeq++}`;
+  const prefix = `t${SESSION}${renderSeq++}`;
   const out = [];
-  // The ground is emitted apart because the fade must not touch it. It is
-  // always first in draw order anyway, being a backdrop rather than a
-  // participant in the depth sort.
+  // The ground is emitted apart, in a group of its own drawn first: it is a
+  // backdrop rather than a participant in the depth sort.
   const floor = [];
   const defs = [];
 

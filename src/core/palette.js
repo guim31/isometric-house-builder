@@ -261,7 +261,7 @@ const luminance = (hex) => {
  * instead keeps the shading structure and honours the chosen hue exactly.
  */
 export function faceColour(mat, theme, overrides, n) {
-  const t = THEMES[theme] || THEMES.terracotta;
+  const t = THEMES[theme] || THEMES.horizons;
   // "wall#b3" is the wall material as recoloured by building b3: the palette
   // still answers for "wall", only the override is per building.
   const kind = mat.includes('#') ? mat.slice(0, mat.indexOf('#')) : mat;
@@ -282,7 +282,7 @@ export function materialColour(mat, theme, overrides = {}) {
   if (overrides[mat]) return overrides[mat];
   const base = mat.includes('#') ? mat.slice(0, mat.indexOf('#')) : mat;
   if (overrides[base]) return overrides[base];
-  const t = THEMES[theme] || THEMES.terracotta;
+  const t = THEMES[theme] || THEMES.horizons;
   const spec = t[base] !== undefined ? t[base] : FIXED[base];
   if (spec && typeof spec === 'object') return spec.base;
   return spec || '#cccccc';

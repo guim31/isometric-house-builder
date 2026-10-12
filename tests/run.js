@@ -14,7 +14,7 @@ import {
 import { focusModel, focusRect, focusFrame } from '../src/core/focus.js';
 import {
   defaultModel, emptyModel, normalise, cellSet, wallTop, withCellSize, fmtMetres,
-  makeBuilding, buildingOfEdge, storeyBase, storeyHeightOf, MODEL_VERSION,
+  makeBuilding, buildingOfEdge, storeyBase, storeyHeightOf, MODEL_VERSION, stairsRun,
 } from '../src/core/model.js';
 
 /** First (or nth) volume of a model — most tests only ever have one. */
@@ -55,6 +55,9 @@ function check(name, fn) {
 }
 
 const near = (a, b, tol = 1e-6) => Math.abs(a - b) <= tol;
+
+/** Clip-path and gradient ids are unique per render; two renders compare without them. */
+const stripIds = (svg) => svg.replace(/\bt[0-9a-z]+(?=-)/g, 't');
 
 /* ---------------- geometry ---------------- */
 
@@ -540,9 +543,8 @@ check('le panachage est déterministe', () => {
   const m = normalise({ ...defaultModel(), texture: { roof: 'canal', wall: 'none' } });
   // Clip-path ids are deliberately unique per render, so they are normalised
   // out: what must be identical is the geometry and the shades.
-  const strip = (svg) => svg.replace(/t\d+-\d+/g, 'id');
-  return strip(renderScene(m, { width: 500, height: 380 }).svg)
-    === strip(renderScene(m, { width: 500, height: 380 }).svg) || 'deux rendus divergent';
+  return stripIds(renderScene(m, { width: 500, height: 380 }).svg)
+    === stripIds(renderScene(m, { width: 500, height: 380 }).svg) || 'deux rendus divergent';
 });
 
 check('le camaïeu reste discret et proche de la teinte du toit', () => {
@@ -1711,7 +1713,7 @@ check('l’inclinaison tourne le dessin sans toucher au tri des faces', () => {
   // And zero must be exactly the identity, not merely close to it.
   const zero = renderScene({ ...m, camera: { ...m.camera, roll: 0 } },
     { width: 400, height: 300 });
-  return zero.svg.replace(/t\d+/g, 't') === flat.svg.replace(/t\d+/g, 't')
+  return stripIds(zero.svg) === stripIds(flat.svg)
     || 'une inclinaison nulle modifie le rendu';
 });
 
@@ -2238,6 +2240,70 @@ check('aucun modèle de départ n’a d’ouvertures qui se chevauchent ou dépa
   return true;
 });
 
+/* ---------------- revue d'octobre : reste ---------------- */
+
+check('un escalier posé contre une terrasse haute a la longueur de sa hauteur', () => {
+  const s = new Store(normalise({ ...emptyModel(),
+    props: [{ id: 't1', kind: 'terrace', x: 0, y: 4, w: 6, d: 4, z: 2.5 }] }));
+  placeProp(s, 'stairs', [3, 3]);
+  const st = s.model.props.find((p) => p.kind === 'stairs');
+  if (st.dir !== 'N' || !near(st.h, 2.5)) return `escalier ${st.dir} ${st.h}`;
+  const steps = Math.round(2.5 / 0.18);
+  if (st.d / steps < 0.27) return `giron de ${Math.round((st.d / steps) * 100)} cm`;
+  return st.d === stairsRun(2.5) || `volée de ${st.d} m`;
+});
+
+check('la cote d’un muret en cours de tracé est celle du muret posé', () => {
+  const s = new Store(emptyModel());
+  const view = new PlanView(document.getElementById('plan'), s);
+  view.render();
+  s.setTool('muret');
+  view.svg.dispatchEvent(pointer(view, 0.1, 5, 'pointerdown'));
+  view.svg.dispatchEvent(pointer(view, 1.2, 5, 'pointermove'));
+  const label = view.svg.querySelector('.rect-size')?.textContent;
+  view.svg.dispatchEvent(pointer(view, 1.2, 5, 'pointerup'));
+  const wall = s.model.props.find((p) => p.kind === 'muret');
+  return (label === `${fmtMetres(wall.w)} m`) || `annoncé ${label}, posé ${wall.w} m`;
+});
+
+check('Alt inverse aussi la gomme', () => {
+  const s = new Store(emptyModel());
+  const view = new PlanView(document.getElementById('plan'), s);
+  view.render();
+  s.setTool('erase');
+  view.svg.dispatchEvent(pointer(view, 7.3, 7.2, 'pointerdown', { altKey: true }));
+  view.svg.dispatchEvent(pointer(view, 7.3, 7.2, 'pointerup', { altKey: true }));
+  return cellsOf(s.model).length === 1 || 'la gomme avec Alt n’a pas peint';
+});
+
+check('cliquer un volume dans le plan le rend actif', () => {
+  const m = normalise({ ...emptyModel(), buildings: [
+    makeBuilding({ id: 'b1', cells: [...rectCells(2, 2, 5, 5)] }),
+    makeBuilding({ id: 'b2', cells: [...rectCells(10, 2, 12, 4)] })] });
+  const s = new Store(m);
+  const view = new PlanView(document.getElementById('plan'), s);
+  view.render();
+  s.setTool('select');
+  const cell = view.svg.querySelector('rect.cell[data-building="b2"]');
+  if (!cell) return 'les cases ne portent pas leur volume';
+  cell.dispatchEvent(pointer(view, 11, 3, 'pointerdown'));
+  cell.dispatchEvent(pointer(view, 11, 3, 'pointerup'));
+  return s.activeBuildingId === 'b2' || `actif : ${s.activeBuildingId}`;
+});
+
+check('une palette inconnue retombe sur la palette par défaut', () => {
+  return faceColour('wall', 'inconnue', {}, [0, -1, 0]) === faceColour('wall', 'horizons', {}, [0, -1, 0])
+    && normalise({ theme: 'inconnue' }).theme === 'horizons';
+});
+
+check('un objet extérieur incomplet prend les valeurs de son type', () => {
+  const m = normalise({ ...emptyModel(), props: [
+    { kind: 'stairs', x: 0, y: 0 }, { kind: 'soucoupe', x: 1, y: 1 }, { kind: 'tree', x: 'a', y: 2 }] });
+  if (m.props.length !== 1) return `${m.props.length} objets gardés`;
+  const st = m.props[0];
+  return (st.w === 1.25 && st.d === 1.25 && st.h === 0.5 && st.dir === 'N') || JSON.stringify(st);
+});
+
 check('le rendu isométrique et l’inspecteur se construisent sans erreur', () => {
   const s = new Store(defaultModel());
   const vp = new Viewport(document.getElementById('iso'), s);
@@ -2342,7 +2408,7 @@ check('le ciel étoilé est identique d’un rendu à l’autre', () => {
   const m = normalise({ ...defaultModel(), style: { ...defaultModel().style, night: true } });
   const a = renderScene(m, { width: 400, height: 300 }).svg;
   const b = renderScene(m, { width: 400, height: 300 }).svg;
-  if (a.replace(/id="t\d+/g, '').replace(/#t\d+/g, '') !== b.replace(/id="t\d+/g, '').replace(/#t\d+/g, '')) {
+  if (stripIds(a) !== stripIds(b)) {
     return 'deux rendus successifs diffèrent';
   }
   return (a.match(/<circle/g) || []).length > 30 || 'aucune étoile';
@@ -3095,6 +3161,23 @@ await checkAsync('la page s’amorce avec ses outils et un rendu visible', async
   const box = svg.getBBox();
   return (box.y + box.height <= panel.height + 2 && box.height > 40)
     || `dessin en dehors du panneau : y=${Math.round(box.y)} h=${Math.round(box.height)} pour ${Math.round(panel.height)}px`;
+});
+
+await checkAsync('une sauvegarde locale impossible est signalée, une fois', async () => {
+  const orig = Storage.prototype.setItem;
+  Storage.prototype.setItem = () => { throw new Error('quota'); };
+  let told = 0;
+  try {
+    const s = new Store(defaultModel());
+    s.onSaveError = () => { told++; };
+    s.update((m) => ({ ...m, name: 'a' }));
+    await new Promise((r) => setTimeout(r, 450));
+    s.update((m) => ({ ...m, name: 'b' }));
+    await new Promise((r) => setTimeout(r, 450));
+  } finally {
+    Storage.prototype.setItem = orig;
+  }
+  return told === 1 || `signalée ${told} fois`;
 });
 
 await checkAsync('un export PNG impossible échoue au lieu de rester en suspens', async () => {

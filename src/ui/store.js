@@ -25,6 +25,8 @@ export class Store {
     this.saveTimer = null;
     this.lastEditAt = 0;
     this.activeId = null;
+    this.saveFailed = false;
+    this.onSaveError = null;
   }
 
   subscribe(fn) {
@@ -35,7 +37,13 @@ export class Store {
   emit(reason) {
     for (const fn of this.listeners) fn(this, reason);
     clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => saveLocal(this.model), 400);
+    this.saveTimer = setTimeout(() => {
+      const ok = saveLocal(this.model);
+      // Said once, not at every change: private browsing or a full storage
+      // otherwise loses the work at the next reload without a word.
+      if (!ok && !this.saveFailed) this.onSaveError?.();
+      this.saveFailed = !ok;
+    }, 400);
   }
 
   /**

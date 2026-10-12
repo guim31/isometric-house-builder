@@ -187,8 +187,9 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   et <strong>en tête</strong> — de quoi dessiner un porche, la porte au fond.
 </p>
 <p>
-  Même chose pour ce qui se pose sur le toit : panneaux solaires, cheminée,
-  fenêtre de toit, parabole. Ils épousent la pente.
+  Ce qui se pose sur le toit — panneaux solaires, cheminée, fenêtre de toit,
+  parabole — se place dans le plan, d’un clic sur l’emprise. Ils épousent la
+  pente.
 </p>
 
 <h2 id="corps">6. Plusieurs corps de bâtiment</h2>
@@ -199,8 +200,9 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   matières et ses couleurs propres.
 </p>
 <p>
-  Cliquer un mur ou un toit dans le rendu rend son corps actif — pratique pour
-  passer de l’un à l’autre sans repasser par le plan.
+  Cliquer un volume dans le plan, avec l’outil <em>Sélection</em>, ou un mur
+  ou un toit dans le rendu, rend son corps actif — pratique pour passer de l’un
+  à l’autre.
 </p>
 
 <h2 id="abords">7. Les abords : muret, portail, piscine, escalier</h2>
@@ -218,9 +220,11 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 </p>
 <p>
   L’outil <strong>Escalier</strong> descend d’une terrasse surélevée. Posez-le
-  au pied de celle-ci : il prend sa hauteur et se tourne vers elle tout seul,
-  et compte environ 18 cm par marche. Il se pose contre la terrasse, il ne la
-  creuse pas.
+  au pied de celle-ci : il prend sa hauteur, se tourne vers elle et s’allonge
+  tout seul — environ 18 cm de hauteur et 28 cm de giron par marche.
+  L’inspecteur affiche le nombre de marches et leur giron, et prévient quand la
+  volée devient trop raide. Il se pose contre la terrasse, il ne la creuse
+  pas.
 </p>
 <p>
   Largeur et profondeur d’un extérieur se règlent par quarts de mètre, à partir
@@ -333,17 +337,21 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   <li><strong>Partager</strong> copie un lien qui <strong>contient tout le
     projet</strong> dans son adresse. Pratique pour envoyer une maison à
     quelqu’un — et à ne pas confondre avec le lien de l’outil si vous ne
-    souhaitez pas montrer la vôtre.</li>
+    souhaitez pas montrer la vôtre. Ouvrir un tel lien remplace le projet en
+    cours ; le lien est ensuite retiré de la barre d’adresse, pour qu’un
+    rechargement garde vos retouches.</li>
   <li><strong>Nouveau</strong> repart d’une page blanche et efface le projet
-    conservé localement.</li>
+    conservé localement. Si le navigateur refuse la sauvegarde locale
+    (navigation privée, stockage plein), l’outil le signale : pensez alors à
+    <strong>Enregistrer</strong>.</li>
 </ul>
 
 <h2 id="raccourcis">13. Raccourcis</h2>
 <table>
   <tr><th>Touche</th><th>Effet</th></tr>
-  <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>Z</kbd></td><td>Annuler, rétablir</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>Z</kbd></td><td>Annuler, rétablir — dans un champ texte, annule la saisie</td></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Dupliquer la sélection</td></tr>
-  <tr><td><kbd>Suppr</kbd></td><td>Supprimer la sélection</td></tr>
+  <tr><td><kbd>Suppr</kbd></td><td>Supprimer l’élément sélectionné (un corps se supprime depuis l’inspecteur)</td></tr>
   <tr><td><kbd>Échap</kbd></td><td>Désélectionner</td></tr>
   <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Tourner d’un quart de tour</td></tr>
 </table>

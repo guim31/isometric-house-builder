@@ -90,6 +90,7 @@ const $ = (id) => document.getElementById(id);
 
 const boot = initialModel();
 const store = new Store(boot.model);
+store.onSaveError = () => toast('Sauvegarde automatique impossible dans ce navigateur : pensez à « Enregistrer »');
 const plan = new PlanView($('plan'), store);
 const viewport = new Viewport($('iso'), store);
 const inspector = new Inspector($('inspector'), store, {

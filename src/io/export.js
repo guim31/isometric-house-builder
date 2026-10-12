@@ -16,7 +16,9 @@ export const SIZES = [
   { id: 'hd', label: '2× — 2400 × 1600', width: 1200, height: 800, ratio: 2 },
   { id: 'uhd', label: '4× — 4800 × 3200', width: 1200, height: 800, ratio: 4 },
   { id: 'square', label: 'Carré 1024 × 1024', width: 1024, height: 1024, ratio: 1 },
-  { id: 'widget', label: 'Widget 640 × 400', width: 640, height: 400, ratio: 2 },
+  // Laid out at 640 × 400 and rendered at twice that, for a sharp widget on a
+  // high-density screen; the label gives the file's size, like the others.
+  { id: 'widget', label: 'Widget — 1280 × 800 (640 × 400 à 2×)', width: 640, height: 400, ratio: 2 },
 ];
 
 export function svgFor(model, size) {
@@ -61,7 +63,9 @@ export async function exportPng(model, size) {
 }
 
 export function exportSvg(model, size) {
-  const svg = svgFor(model, size);
+  // A vector file has no pixel density: at « 4× » it declared a 4800-pixel
+  // width for the very same drawing. It keeps the layout size.
+  const svg = svgFor(model, { ...size, ratio: 1 });
   download(new Blob([svg], { type: 'image/svg+xml' }), `${slug(model.name)}.svg`);
 }
 

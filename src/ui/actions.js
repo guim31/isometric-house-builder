@@ -8,10 +8,10 @@
  * two had already begun to drift.
  */
 
-import { newId, OPENING_DEFAULTS, CENTRED_KINDS } from '../core/model.js';
+import { newId, OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, stairsRun } from '../core/model.js';
 
 // Defined in the model, which fills them into files that leave them out.
-export { OPENING_DEFAULTS, CENTRED_KINDS };
+export { OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS };
 
 export const ROOF_ITEM_DEFAULTS = {
   solar: { w: 4, d: 2.4 },
@@ -20,20 +20,6 @@ export const ROOF_ITEM_DEFAULTS = {
   dish: { w: 0.8, d: 0.8 },
 };
 
-export const PROP_DEFAULTS = {
-  muret: { w: 6, d: 0.24, h: 1.5 },
-  gate: { w: 1.1, d: 0.16, h: 1.5, style: 'swing' },
-  pool: { w: 7, d: 4, shape: 'rounded' },
-  terrace: { w: 6, d: 4, material: 'paving' },
-  stairs: { w: 1.25, d: 1.25, h: 0.5, dir: 'N', material: 'paving' },
-  path: { w: 3, d: 2, material: 'gravel' },
-  deck: { w: 5, d: 3 },
-  hedge: { w: 4, d: 0.6, h: 0.8 },
-  fence: { w: 6, d: 0.2, h: 1.1 },
-  tree: { r: 1.5 },
-  bush: { r: 1.1 },
-  car: { w: 1.8, d: 4.2 },
-};
 
 
 /** Items drawn by dragging a run, where the length is the whole point. */
@@ -67,23 +53,29 @@ export function placeRoofItem(store, kind, pt) {
 
 export function placeProp(store, kind, pt) {
   const id = newId('p');
-  const def = PROP_DEFAULTS[kind];
-  const centred = CENTRED_KINDS.has(kind);
-  let x = snap(centred ? pt[0] : pt[0] - (def.w ?? 2) / 2);
-  let y = snap(centred ? pt[1] : pt[1] - (def.d ?? 2) / 2);
+  let def = PROP_DEFAULTS[kind];
   let extra = {};
+  if (kind === 'stairs') {
+    // Steps exist to reach something. Turned the wrong way by default they
+    // would have to be reoriented every single time, so they take their
+    // height and their direction from the raised slab they are dropped by —
+    // and a run long enough to climb it: at a fixed 1,25 m, three metres of
+    // steps had seven-centimetre treads.
+    const near = nearestRaisedSlab(store.model, pt);
+    if (near) {
+      const run = stairsRun(near.z);
+      const along = near.dir === 'N' || near.dir === 'S';
+      def = { ...def, h: near.z, dir: near.dir, w: along ? def.w : run, d: along ? run : def.d };
+    }
+  }
+  const centred = CENTRED_KINDS.has(kind);
+  const x = snap(centred ? pt[0] : pt[0] - (def.w ?? 2) / 2);
+  const y = snap(centred ? pt[1] : pt[1] - (def.d ?? 2) / 2);
   if (kind === 'gate') {
     // Snap onto the nearest wall: a gate is only useful in one, and aligning
     // it by hand to a quarter of a metre would be tedious and easy to miss.
     const near = nearestMuret(store.model, pt);
     if (near) extra = near.fit(pt, def);
-  }
-  if (kind === 'stairs') {
-    // Steps exist to reach something. Turned the wrong way by default they
-    // would have to be reoriented every single time, so they take their
-    // height and their direction from the raised slab they are dropped by.
-    const near = nearestRaisedSlab(store.model, pt);
-    if (near) extra = { h: near.z, dir: near.dir };
   }
   store.update((m) => ({ ...m, props: [...m.props, { id, kind, x, y, ...def, ...extra }] }));
   store.select({ type: 'prop', id });
@@ -148,17 +140,26 @@ export function nearestRaisedSlab(model, pt, maxDist = 3) {
   return best;
 }
 
-/** Create a linear prop from a dragged run, snapped to quarter metres. */
-export function placeRun(store, kind, from, to) {
-  const id = newId('p');
-  const def = PROP_DEFAULTS[kind] || {};
+/**
+ * The footprint a dragged run becomes, snapped to quarter metres — shared by
+ * the placement and by the length shown while dragging, which rounded the raw
+ * distance and could announce 1 m for a wall laid at 1,25 m.
+ */
+export function runShape(kind, from, to) {
   const t = LINEAR_THICKNESS[kind] ?? 0.24;
   const horiz = Math.abs(to[0] - from[0]) >= Math.abs(to[1] - from[1]);
   const a0 = snap(Math.min(horiz ? from[0] : from[1], horiz ? to[0] : to[1]));
   const a1 = snap(Math.max(horiz ? from[0] : from[1], horiz ? to[0] : to[1]));
   const len = Math.max(0.5, a1 - a0);
   const c = snap((horiz ? from[1] : from[0]) - t / 2);
-  const shape = horiz ? { x: a0, y: c, w: len, d: t } : { x: c, y: a0, w: t, d: len };
+  return { len, shape: horiz ? { x: a0, y: c, w: len, d: t } : { x: c, y: a0, w: t, d: len } };
+}
+
+/** Create a linear prop from a dragged run. */
+export function placeRun(store, kind, from, to) {
+  const id = newId('p');
+  const def = PROP_DEFAULTS[kind] || {};
+  const { shape } = runShape(kind, from, to);
   store.update((m) => ({ ...m, props: [...m.props, { id, kind, ...def, ...shape }] }));
   store.select({ type: 'prop', id });
 }
