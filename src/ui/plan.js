@@ -11,7 +11,7 @@ import { cellSet, cellSizeOf, fmtMetres, buildingCells, setBuildingCells } from 
 import { focusFrame } from '../core/focus.js';
 import {
   OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS,
-  placeOpening, placeRoofItem, placeProp, placeRun,
+  placeOpening, placeRoofItem, placeProp, placeRun, runShape,
 } from './actions.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -176,6 +176,9 @@ export class PlanView {
           x: a[0], y: a[1], width: map.scale * cs, height: map.scale * cs,
           class: active ? 'cell' : 'cell inactive',
         });
+        // So that clicking a volume anywhere makes it the active one, and not
+        // only on the three pixels of its outline.
+        r.dataset.building = bd.id;
         gCells.appendChild(r);
       }
       for (const e of boundaryEdges(bCells)) {
@@ -319,7 +322,8 @@ export class PlanView {
       }
 
       if (tool === 'paint' || tool === 'erase') {
-        this.drag = { mode: 'brush', erase: tool === 'erase' || ev.altKey };
+        // Alt swaps the tool for its opposite, both ways — as the guide says.
+        this.drag = { mode: 'brush', erase: (tool === 'erase') !== ev.altKey };
         this.paintAt(pt, this.drag.erase, true);
         return;
       }
@@ -509,11 +513,11 @@ export class PlanView {
     this.svg.appendChild(el('line', {
       x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1], class: `run-preview run-${kind}`,
     }));
-    const len = Math.abs(horiz ? to[0] - from[0] : to[1] - from[1]);
+    const { len } = runShape(kind, from, to);
     const label = el('text', {
       x: (p0[0] + p1[0]) / 2, y: (p0[1] + p1[1]) / 2 - 10, class: 'rect-size',
     });
-    label.textContent = `${fmtMetres(Math.round(len * 4) / 4)} m`;
+    label.textContent = `${fmtMetres(len)} m`;
     this.svg.appendChild(label);
   }
 

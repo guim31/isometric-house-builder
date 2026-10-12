@@ -1,17 +1,16 @@
 /**
- * Outdoor items: pool, terrace, path, greenery, fence, car.
+ * Outdoor items: pool, terrace, path, greenery, walls and gates, steps, car.
  *
  * Rectangular props are positioned by their minimum corner (x, y) plus a size
- * (w, d); trees and cars are positioned by their centre. All of them anchor to
- * the ground plane so they sort after it whatever the rotation.
+ * (w, d); trees, bushes and cars are positioned by their centre.
  */
 
-import { cellSet } from './model.js';
+import { stairsSteps } from './model.js';
 
 // Props are ordered by their own depth. They do not anchor to the ground:
 // the renderer already draws the ground plane as a backdrop, and anchoring to
 // a scene-sized quad would drag every prop to the front.
-const groundAnchor = () => null;
+const anchor = null;
 
 /** Above this, a slab stops being a decal and becomes geometry with sides. */
 const RAISED = 0.05;
@@ -179,8 +178,6 @@ function extent(p, horiz) {
 }
 
 export function buildProps(mesh, m) {
-  const anchor = groundAnchor(m);
-  const occupied = cellSet(m);
   const gates = m.props.filter((p) => p.kind === 'gate');
 
   for (const p of m.props) {
@@ -308,15 +305,15 @@ export function buildProps(mesh, m) {
          *
          * Built as a stack of slabs of decreasing footprint rather than as one
          * box per step. Each slab occupies a single riser in height and runs
-         * from its own nosing to the top of the flight, so the solid is closed,
-         * every emitted face is on the outside of it, and each piece is an
-         * axis-aligned box the exact ordering pass can place.
+         * from its own nosing to the top of the flight, so the solid is closed
+         * and each piece is an axis-aligned box the exact ordering pass can
+         * place. The top of each slab runs on under the next one; those hidden
+         * strips are drawn over, never seen.
          */
-        const w = p.w ?? 1.2, d = p.d ?? 1.2;
+        const w = p.w ?? 1.25, d = p.d ?? 1.25;
         const hgt = Math.max(0.15, p.h ?? 0.5);
         const mat = p.material || 'paving';
-        // About eighteen centimetres a step, which is what a stair is.
-        const n = Math.max(1, Math.min(24, Math.round(hgt / 0.18)));
+        const n = stairsSteps(hgt);
         const dir = p.dir || 'N';
         const up = { N: [0, 1], S: [0, -1], E: [1, 0], W: [-1, 0] }[dir] || [0, 1];
         const x1 = p.x + w, y1 = p.y + d;
@@ -347,5 +344,4 @@ export function buildProps(mesh, m) {
         break;
     }
   }
-  return occupied;
 }

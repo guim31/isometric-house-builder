@@ -56,7 +56,7 @@ tout moment, et *Page blanche* reste disponible.
 | **Toiture** | Croupe, deux pans, appentis, toit plat — inclinaison, débord et épaisseur de rive ; les noues entre ailes sont calculées |
 | **Ouvertures** | Fenêtres, fenêtres à volets, portes, portes de garage, posées sur n'importe quel mur et à n'importe quel niveau — avec un **renfoncement** optionnel, la niche étant de la vraie géométrie |
 | **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente |
-| **Extérieurs** | Piscine, terrasse, allée, pelouse, haies, clôtures, arbres, buissons, voiture — terrasses et piscines pouvant être **surélevées jusqu'à 3 m**, avec leurs joues |
+| **Extérieurs** | Piscine, terrasse, allée, haies, clôtures, arbres, buissons, voiture — terrasses et piscines pouvant être **surélevées jusqu'à 3 m**, avec leurs joues, et un **escalier** qui s'y pose de lui-même à la bonne hauteur |
 | **Clôture** | **Muret** tracé au glisser, avec chaperon ; **portillon** battant et **portail coulissant**, qui ouvrent le muret là où on les pose |
 | **Matières** | Tuiles, **tuiles canal panachées**, ardoises, bac acier sur le toit ; briques, bardage, pierre, colombages sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
@@ -194,7 +194,7 @@ session.
    ce qui fait son allure.
 4. **Posez les ouvertures.** Choisissez *Fenêtre*, *Porte* ou *Porte de garage*,
    puis cliquez le long d'un mur — dans le plan, ou directement sur le rendu.
-5. **Ajoutez d'autres corps** si besoin (bouton *Nouveau corps de bâtiment*) :
+5. **Ajoutez d'autres corps** si besoin (bouton *+ Nouveau corps*) :
    chacun se dessine et se règle séparément, et cliquer un volume dans le plan
    le rend actif. C'est ainsi qu'un abri de jardin reçoit un toit plat pendant
    que la maison garde ses tuiles.
@@ -214,9 +214,10 @@ session.
 ouvertures semblent absentes, elles sont probablement sur les deux façades
 opposées — tournez la vue avec `[` et `]`.
 
-Raccourcis : `Ctrl+Z` / `Ctrl+Maj+Z` annuler et rétablir, `Ctrl+D` dupliquer la
-sélection, `[` et `]` tourner d'un quart de tour, `Suppr` supprimer, `Échap`
-désélectionner.
+Raccourcis : `Ctrl+Z` / `Ctrl+Maj+Z` annuler et rétablir (dans un champ texte,
+la saisie), `Ctrl+D` dupliquer la sélection, `[` et `]` tourner d'un quart de
+tour, `Suppr` supprimer l'élément sélectionné, `Échap` désélectionner. Le pavé
+de navigation se commande aussi au clavier.
 
 Dans le rendu, **glisser fait pivoter** la maison — où qu'on la prenne, sur le
 fond comme sur le toit. `Maj` + glisser la déplace, `Alt` + glisser **incline
@@ -245,7 +246,9 @@ Le projet en cours est conservé dans le navigateur. *Enregistrer* produit un
 fichier `.house.json` lisible et versionnable, qu'*Ouvrir* relit ; c'est aussi
 le format des dix modèles de départ, décrits dans
 [`src/data/presets.js`](src/data/presets.js). *Partager* copie un lien qui
-encode tout le projet dans l'URL — rien ne transite par un serveur.
+encode tout le projet dans l'URL — rien ne transite par un serveur. Ouvrir un
+tel lien remplace le projet en cours ; il est ensuite retiré de la barre
+d'adresse, pour qu'un rechargement garde les retouches faites depuis.
 
 ## Une image qui se pose, pas qui recouvre
 

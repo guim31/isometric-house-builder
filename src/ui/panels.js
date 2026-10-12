@@ -9,7 +9,7 @@ import {
 import { ROOF_TYPES, STEP } from '../core/roof.js';
 import {
   withCellSize, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
-  storeyHeightOf, DEFAULT_FOCUS, newId, CELL_SIZES, STOREY_HEIGHT_RANGE,
+  storeyHeightOf, DEFAULT_FOCUS, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
 } from '../core/model.js';
 import { bounds, edgeRunExtent } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
@@ -832,12 +832,18 @@ export class Inspector {
           [['paving', 'Dallage'], ['gravel', 'Gravier'], ['deck', 'Bois']], (v) => patch({ material: v }))));
       }
       if (item.kind === 'stairs') {
+        // What the flight comes to, so a run too short for its height shows
+        // before it is noticed on the drawing.
+        const steps = stairsSteps(Math.max(0.15, item.h ?? 0.5));
+        const up = item.dir === 'E' || item.dir === 'W' ? item.w : item.d;
+        const tread = Math.round(((up ?? 1.25) / steps) * 100);
         s.append(
           field('Hauteur', slider(item.h ?? 0.5, {
             // As high as a terrace can be raised: the two go together.
             min: 0.15, max: 3, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
             onInput: (v) => patch({ h: v }, 'h'),
-          }), 'ce que l’escalier monte — environ 18 cm par marche'),
+          }), `${steps} marche${steps > 1 ? 's' : ''}, giron de ${tread} cm`
+            + (tread < 24 ? ' — trop raide : allongez la volée' : '')),
           field('Montée vers', select(item.dir || 'N',
             [['N', 'le nord'], ['S', 'le sud'], ['E', "l'est"], ['W', "l'ouest"]],
             (v) => patch({ dir: v }))),

@@ -1,23 +1,20 @@
 /**
  * Isometric camera: projection, rotation and painter's-algorithm depth.
  *
- * The camera orbits freely — any yaw, any pitch — and the depth sort stays
- * exact. That is worth spelling out, because it is not obvious and the whole
- * renderer leans on it.
+ * The camera orbits freely — any yaw, any pitch. A point's depth is its
+ * coordinate along the view axis. Solving "which world direction moves nothing
+ * on screen" for the projection below gives that axis as (1, 1, lambda) in
+ * *view* space, with `lambda = 2 * ky / kz`. So depth is `x + y + lambda*z`
+ * after rotation — a plain linear form, whatever the angle.
  *
- * A point's depth is its coordinate along the view axis. Solving "which world
- * direction moves nothing on screen" for the projection below gives that axis
- * as (1, 1, lambda) in *view* space, with `lambda = 2 * ky / kz`. So depth is
- * `x + y + lambda*z` after rotation — a plain linear form, whatever the angle.
- *
- * Sorting faces by that depth is *correct*, not merely plausible, because the
- * geometry is axis-aligned boxes: two disjoint boxes always have a separating
- * plane perpendicular to a world axis, and the view axis has a non-zero
- * component on that axis, so one box's depths lie entirely beyond the other's.
- * The exceptions are the four yaws where the camera looks straight down a world
- * axis; there one component vanishes, but a shift along that axis is then a
- * pure screen translation, so the boxes it separates cannot occlude each other
- * anyway. Ties there are harmless, which is why no angle has to be forbidden.
+ * That makes the depth of a point exact. The depth of a *face* is another
+ * matter: sorting faces by one number each is the painter's algorithm, and it
+ * is only a heuristic. Two disjoint boxes always have a separating plane, but
+ * their depth intervals can still overlap — a long box beside a short one is
+ * enough — so neither centroid nor nearest point decides between them. The
+ * renderer sorts by centroid to start with, then settles the faces this gets
+ * wrong (the building shell, raised slabs) with an exact plane test; see
+ * render/svg.js.
  *
  * Pitch is the one real constraint: at 0 the vertical component vanishes and a
  * chimney would no longer sort above the roof it stands on. Hence PITCH_RANGE.

@@ -35,6 +35,13 @@ const safeColours = (o) => Object.fromEntries(
 );
 const isRecord = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
+// Spreading a source that carries explicit `undefined` would overwrite the
+// defaults with it — a file that simply omits a storey height would then
+// build a roof at NaN. Only stated keys are taken.
+const stated = (o) => Object.fromEntries(
+  Object.entries(o || {}).filter(([, v]) => v !== undefined && v !== null),
+);
+
 /** Items positioned by their centre rather than their minimum corner. */
 export const CENTRED_KINDS = new Set(['tree', 'bush', 'car']);
 
@@ -51,13 +58,45 @@ export const OPENING_DEFAULTS = {
   garage: { width: 2.6, height: 2.1, sill: 0 },
 };
 
+/**
+ * Size and look of a newly placed outdoor item, by kind — filled, like the
+ * opening defaults, into files that leave a field out. The renderer, the pick
+ * layer and the framing each had their own fallbacks, and had drifted: a
+ * stair without a size was 1,2 m in one and 2 m in another.
+ */
+export const PROP_DEFAULTS = {
+  muret: { w: 6, d: 0.24, h: 1.5 },
+  gate: { w: 1.1, d: 0.16, h: 1.5, style: 'swing' },
+  pool: { w: 7, d: 4, shape: 'rounded' },
+  terrace: { w: 6, d: 4, material: 'paving' },
+  stairs: { w: 1.25, d: 1.25, h: 0.5, dir: 'N', material: 'paving' },
+  path: { w: 3, d: 2, material: 'gravel' },
+  deck: { w: 5, d: 3 },
+  hedge: { w: 4, d: 0.6, h: 0.8 },
+  fence: { w: 6, d: 0.2, h: 1.1 },
+  tree: { r: 1.5 },
+  bush: { r: 1.1 },
+  car: { w: 1.8, d: 4.2 },
+};
+
+/** About eighteen centimetres a riser, which is what a stair is. */
+export const stairsSteps = (h) => Math.max(1, Math.min(24, Math.round(h / 0.18)));
+
+/**
+ * Length a flight needs to climb `h` metres comfortably: a tread of about
+ * twenty-eight centimetres a step, rounded up to the quarter-metre grid.
+ */
+export const stairsRun = (h) => Math.max(1.25, Math.ceil((stairsSteps(h) * 0.28) * 4) / 4);
+
 /** An opening on a level its building no longer has is kept, but not built. */
 export const openingShown = (op, b) => (op.storey || 0) < b.storeys;
 
 /** Ground footprint of an outdoor item, in metres: [x0, y0, x1, y1]. */
 export function propFootprint(p) {
-  const w = p.r ? p.r * 2 : p.w ?? 2;
-  const d = p.r ? p.r * 2 : p.d ?? 2;
+  const def = PROP_DEFAULTS[p.kind] || {};
+  const r = p.r ?? def.r;
+  const w = r ? r * 2 : p.w ?? def.w ?? 2;
+  const d = r ? r * 2 : p.d ?? def.d ?? 2;
   const x0 = CENTRED_KINDS.has(p.kind) ? p.x - w / 2 : p.x;
   const y0 = CENTRED_KINDS.has(p.kind) ? p.y - d / 2 : p.y;
   return [x0, y0, x0 + w, y0 + d];
@@ -171,6 +210,11 @@ export function normalise(input) {
     m[list] = Array.isArray(m[list]) ? m[list].filter(isRecord) : [];
     for (const it of m[list]) it.id = safeId(it.id, list[0]);
   }
+  // Missing fields take their kind's defaults; a kind nobody knows is dropped,
+  // as nothing would draw it.
+  m.props = m.props
+    .filter((p) => PROP_DEFAULTS[p.kind] && Number.isFinite(p.x) && Number.isFinite(p.y))
+    .map((p) => ({ ...PROP_DEFAULTS[p.kind], ...stated(p) }));
   m.openings = m.openings
     .filter((op) => typeof op.edge === 'string' && /^-?\d+,-?\d+,[SENW]$/.test(op.edge))
     .map((op) => {
@@ -204,12 +248,6 @@ export function normalise(input) {
  */
 function normaliseBuildings(input, themePlinth) {
   const proto = makeBuilding();
-  // Spreading a source that carries explicit `undefined` would overwrite the
-  // defaults with it — a file that simply omits a storey height would then
-  // build a roof at NaN. Only stated keys are taken.
-  const stated = (o) => Object.fromEntries(
-    Object.entries(o || {}).filter(([, v]) => v !== undefined),
-  );
   const clean = (b, fallbackName) => {
     const out = { ...proto, ...stated(b) };
     out.id = safeId(b.id, 'b');

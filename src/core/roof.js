@@ -7,14 +7,15 @@
  * decomposed into rectangles in the first place.
  *
  * The height field is sampled on a lattice, turned into triangles, and later
- * merged back into flat polygons by mesh.js. Because every rectangle edge and
- * every 45-degree hip crease lands exactly on lattice lines, the sampled
- * surface is not an approximation: it reproduces the analytic roof exactly.
+ * merged back into flat polygons by mesh.js. On the grids the plan offers —
+ * 1 m and 0,50 m, with the overhang snapped to the lattice — every rectangle
+ * edge, every ridge and every 45-degree hip crease lands on lattice lines, so
+ * the sampled surface is not an approximation: it reproduces the analytic roof
+ * exactly. A finer grid would break that: a ridge over an odd number of
+ * quarter-metre cells falls between two lattice lines.
  */
 
-import { Mesh } from './mesh.js';
-
-export const STEP = 0.25; // lattice resolution, in grid cells
+export const STEP = 0.25; // lattice resolution, in metres
 export const ROOF_TYPES = ['hip', 'gable', 'flat', 'shed'];
 
 const NEG = -1e9;
