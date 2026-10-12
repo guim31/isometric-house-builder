@@ -6,9 +6,9 @@ import { Store } from './ui/store.js';
 import { PlanView } from './ui/plan.js';
 import { Viewport } from './ui/viewport.js';
 import { Inspector } from './ui/panels.js';
-import { initialModel, exportProject, importProject, clearLocal, loadLocal, fromShareUrl, toShareUrl } from './io/project.js';
+import { initialModel, exportProject, importProject, clearLocal, toShareUrl } from './io/project.js';
 import { Gallery } from './ui/gallery.js';
-import { defaultModel, emptyModel, cellSet } from './core/model.js';
+import { emptyModel } from './core/model.js';
 import { SIZES, exportPng, exportSvg, exportFourViews, exportSavedViews, copyPngToClipboard } from './io/export.js';
 import { viewpointLabel, normaliseYaw } from './core/iso.js';
 
@@ -88,7 +88,8 @@ const HINTS = {
 
 const $ = (id) => document.getElementById(id);
 
-const store = new Store(initialModel());
+const boot = initialModel();
+const store = new Store(boot.model);
 const plan = new PlanView($('plan'), store);
 const viewport = new Viewport($('iso'), store);
 const inspector = new Inspector($('inspector'), store, {
@@ -429,7 +430,7 @@ document.addEventListener('keydown', (ev) => {
     return;
   }
   if (ev.key === 'Delete' || ev.key === 'Backspace') {
-    if (store.selection) { ev.preventDefault(); store.deleteSelected(); }
+    if (store.deleteSelected()) ev.preventDefault();
   } else if (ev.key === '[') rotate(-1);
   else if (ev.key === ']') rotate(1);
   else if (ev.key === 'Escape') store.select(null);
@@ -474,14 +475,10 @@ nameInput.value = store.model.name;
 store.setTool('select');
 scheduleRender();
 
-// A first-run project that shows what the tool can do beats an empty grid.
-if (!cellSet(store.model).size) {
-  store.update(defaultModel(), { silent: true });
-}
-
 // On a genuinely first visit, offer the gallery rather than leaving someone to
-// guess what the tool is for. Returning visitors get their project straight
-// back, with the gallery a click away.
-if (!fromShareUrl() && !loadLocal()) {
+// guess what the tool is for — over the first preset, which beats an empty
+// grid behind it. Returning visitors get their project straight back, even an
+// empty one: a page left blank on purpose is still their page.
+if (boot.source === 'default') {
   requestAnimationFrame(() => gallery.open());
 }

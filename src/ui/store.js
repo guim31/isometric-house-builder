@@ -11,6 +11,9 @@ import { saveLocal } from '../io/project.js';
 
 const HISTORY_LIMIT = 80;
 
+/** The model list each kind of selectable item lives in. A volume is not one. */
+const LISTS = { opening: 'openings', roofItem: 'roofItems', prop: 'props' };
+
 export class Store {
   constructor(model) {
     this.model = normalise(model);
@@ -122,12 +125,18 @@ export class Store {
     this.emit('selection');
   }
 
-  /** Patch the active building. */
+  /**
+   * Patch the active building. `patch` may be a function of the building as it
+   * stands, for a change that builds on its current value — a closure over the
+   * building as it was when a control was drawn would undo every other edit
+   * made since.
+   */
   patchBuilding(patch, coalesce) {
     const id = this.activeBuildingId;
     this.update((m) => ({
       ...m,
-      buildings: m.buildings.map((b) => (b.id === id ? { ...b, ...patch } : b)),
+      buildings: m.buildings.map((b) => (b.id === id
+        ? { ...b, ...(typeof patch === 'function' ? patch(b) : patch) } : b)),
     }), { coalesce });
   }
 
@@ -166,7 +175,7 @@ export class Store {
   /** The currently selected item, or null. */
   get selected() {
     if (!this.selection) return null;
-    const list = { opening: 'openings', roofItem: 'roofItems', prop: 'props' }[this.selection.type];
+    const list = LISTS[this.selection.type];
     if (!list) return null;
     return (this.model[list] || []).find((it) => it.id === this.selection.id) || null;
   }
@@ -175,7 +184,8 @@ export class Store {
   patchSelected(patch, coalesce) {
     const sel = this.selection;
     if (!sel) return;
-    const list = { opening: 'openings', roofItem: 'roofItems', prop: 'props' }[sel.type];
+    const list = LISTS[sel.type];
+    if (!list) return;
     this.update((m) => ({
       ...m,
       [list]: m[list].map((it) => (it.id === sel.id ? { ...it, ...patch } : it)),
@@ -186,7 +196,8 @@ export class Store {
   duplicateSelected() {
     const sel = this.selection;
     if (!sel) return;
-    const list = { opening: 'openings', roofItem: 'roofItems', prop: 'props' }[sel.type];
+    const list = LISTS[sel.type];
+    if (!list) return;
     const src = (this.model[list] || []).find((it) => it.id === sel.id);
     if (!src) return;
     const copy = { ...src, id: newId(sel.type[0]) };
@@ -196,11 +207,17 @@ export class Store {
     this.select({ type: sel.type, id: copy.id });
   }
 
+  /**
+   * Remove the selected item. Returns whether anything was removed: a selected
+   * volume is left alone — a stray key press should not take a whole building
+   * with it, and the inspector has its own button for that.
+   */
   deleteSelected() {
     const sel = this.selection;
-    if (!sel) return;
-    const list = { opening: 'openings', roofItem: 'roofItems', prop: 'props' }[sel.type];
+    const list = sel && LISTS[sel.type];
+    if (!list) return false;
     this.update((m) => ({ ...m, [list]: m[list].filter((it) => it.id !== sel.id) }));
     this.select(null);
+    return true;
   }
 }

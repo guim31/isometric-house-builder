@@ -14,6 +14,20 @@ export const GRID = 40; // cells per side; 1 cell = 1 metre
 let seq = 0;
 export const newId = (prefix) => `${prefix}${(seq++).toString(36)}${Math.floor(performance.now() % 1e6).toString(36)}`;
 
+/*
+ * A model also arrives from a share link or a file someone else wrote, and its
+ * ids and colours end up inside SVG attributes. Anything that is not plainly an
+ * id or a colour is replaced rather than escaped at every place it is written.
+ */
+const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const COLOUR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+const safeId = (id, prefix) => (typeof id === 'string' && ID_RE.test(id) ? id : newId(prefix));
+const safeColours = (o) => Object.fromEntries(
+  Object.entries(o && typeof o === 'object' ? o : {})
+    .filter(([k, v]) => ID_RE.test(k.replace('#', '')) && COLOUR_RE.test(v)),
+);
+const isRecord = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+
 /** Items positioned by their centre rather than their minimum corner. */
 export const CENTRED_KINDS = new Set(['tree', 'bush', 'car']);
 
@@ -104,8 +118,11 @@ export function defaultModel() {
 
 /** Fill in anything a hand-edited or older file may be missing. */
 export function normalise(input) {
+  if (!isRecord(input)) input = {};
   const base = emptyModel();
-  const m = { ...base, ...(input || {}) };
+  const m = { ...base, ...input };
+  if (!THEMES[m.theme]) m.theme = base.theme;
+  if (typeof m.name !== 'string') m.name = base.name;
   m.grid = { ...base.grid, ...(input?.grid || {}) };
   if (![1, 0.5, 0.25].includes(m.grid.cellSize)) m.grid.cellSize = 1;
   m.roof = { ...base.roof, ...(input?.roof || {}) };
@@ -115,25 +132,25 @@ export function normalise(input) {
   m.views = normaliseViews(input?.views);
   m.texture = { ...base.texture, ...(input?.texture || {}) };
   m.style = { ...base.style, ...(input?.style || {}) };
-  m.overrides = { ...(input?.overrides || {}) };
-  m.buildings = normaliseBuildings(input, m);
-  delete m.cells; delete m.storeys; delete m.storeyHeight; delete m.plinth; delete m.roof;
-  for (const list of ['openings', 'roofItems', 'props']) {
-    m[list] = Array.isArray(m[list]) ? m[list].filter(Boolean) : [];
-    for (const it of m[list]) if (!it.id) it.id = newId(list[0]);
+  if (m.style.background !== 'transparent' && !COLOUR_RE.test(m.style.background)) {
+    m.style.background = base.style.background;
   }
+  m.overrides = safeColours(input?.overrides);
   // Anything the file does not state falls back to what its own palette
   // prescribes, not to the global default. Without this, a project saved
   // before a setting existed would inherit whichever palette happens to be
   // the current default — and render with the wrong palette's conventions.
-  const declared = (THEMES[m.theme] || {}).style;
-  if (declared) {
-    for (const k of ['outline', 'shadow', 'windowBars']) {
-      if (input?.style?.[k] === undefined && declared[k] !== undefined) m.style[k] = declared[k];
-    }
-    if (input?.plinth === undefined && declared.plinth !== undefined) m.plinth = declared.plinth;
-    if (!input?.texture && declared.texture) m.texture = { ...m.texture, ...declared.texture };
+  const declared = THEMES[m.theme].style || {};
+  m.buildings = normaliseBuildings(input, declared.plinth);
+  delete m.cells; delete m.storeys; delete m.storeyHeight; delete m.plinth; delete m.roof;
+  for (const list of ['openings', 'roofItems', 'props']) {
+    m[list] = Array.isArray(m[list]) ? m[list].filter(isRecord) : [];
+    for (const it of m[list]) it.id = safeId(it.id, list[0]);
   }
+  for (const k of ['outline', 'shadow', 'windowBars']) {
+    if (input?.style?.[k] === undefined && declared[k] !== undefined) m.style[k] = declared[k];
+  }
+  if (!input?.texture && declared.texture) m.texture = { ...m.texture, ...declared.texture };
 
   m.version = MODEL_VERSION;
   return m;
@@ -147,7 +164,7 @@ export function normalise(input) {
  * so a shed drawn apart from the house can be re-roofed the moment the file
  * is opened, without any manual re-splitting.
  */
-function normaliseBuildings(input, m) {
+function normaliseBuildings(input, themePlinth) {
   const proto = makeBuilding();
   // Spreading a source that carries explicit `undefined` would overwrite the
   // defaults with it — a file that simply omits a storey height would then
@@ -157,11 +174,14 @@ function normaliseBuildings(input, m) {
   );
   const clean = (b, fallbackName) => {
     const out = { ...proto, ...stated(b) };
-    out.id = b.id || newId('b');
-    out.name = b.name || fallbackName;
+    out.id = safeId(b.id, 'b');
+    out.name = typeof b.name === 'string' && b.name ? b.name : fallbackName;
+    // A file that says nothing about the plinth gets its palette's: brick and
+    // stone houses stand on one, the flat Horizons look does not.
+    if (!Number.isFinite(b.plinth)) out.plinth = Number.isFinite(themePlinth) ? themePlinth : 0;
     out.cells = Array.isArray(b.cells) ? b.cells.filter((c) => /^-?\d+,-?\d+$/.test(c)).sort() : [];
     out.roof = { ...proto.roof, ...(b.roof || {}) };
-    out.overrides = { ...(b.overrides || {}) };
+    out.overrides = safeColours(b.overrides);
     out.texture = b.texture ? { ...b.texture } : null;
     out.storeys = Math.max(1, Math.min(4, Math.round(out.storeys) || 1));
     out.storeyHeights = Array.isArray(b.storeyHeights)
@@ -174,7 +194,7 @@ function normaliseBuildings(input, m) {
   // Empty volumes never win over a legacy footprint: a caller that spreads a
   // blank model and then sets `cells` means the cells, and silently dropping
   // them would lose the whole house.
-  const declared = Array.isArray(input?.buildings) ? input.buildings : null;
+  const declared = Array.isArray(input?.buildings) ? input.buildings.filter(isRecord) : null;
   const declaredHasCells = declared && declared.some((b) => (b.cells || []).length);
   const legacyCells = Array.isArray(input?.cells) && input.cells.length;
   if (declared && declared.length && (declaredHasCells || !legacyCells)) {
@@ -235,9 +255,9 @@ function normaliseFocus(input, base) {
 /** Saved framings: a named camera and focus, re-exportable in one click. */
 function normaliseViews(input) {
   if (!Array.isArray(input)) return [];
-  return input.filter(Boolean).map((v, i) => ({
-    id: v.id || newId('v'),
-    name: v.name || `Vue ${i + 1}`,
+  return input.filter(isRecord).map((v, i) => ({
+    id: safeId(v.id, 'v'),
+    name: typeof v.name === 'string' && v.name ? v.name : `Vue ${i + 1}`,
     camera: normaliseCamera(v.camera, DEFAULT_CAMERA),
     focus: normaliseFocus(v.focus, DEFAULT_FOCUS),
   }));

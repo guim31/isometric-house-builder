@@ -73,6 +73,20 @@ export function fromShareUrl() {
   }
 }
 
+/**
+ * The model to open with, and where it came from.
+ *
+ * A share link is read once and then taken off the address: left there, every
+ * reload would bring the shared model back over the edits made since, and the
+ * autosave would then write it over them.
+ */
 export function initialModel() {
-  return fromShareUrl() || loadLocal() || defaultModel();
+  const shared = fromShareUrl();
+  if (shared) {
+    try { history.replaceState(null, '', location.pathname + location.search); } catch { /* sandboxed */ }
+    return { model: shared, source: 'link' };
+  }
+  const saved = loadLocal();
+  if (saved) return { model: saved, source: 'local' };
+  return { model: defaultModel(), source: 'default' };
 }

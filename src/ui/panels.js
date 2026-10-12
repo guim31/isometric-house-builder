@@ -133,15 +133,62 @@ export class Inspector {
     // is rebuilt on every change to the model, and a <details> rebuilt from
     // scratch would spring shut under the hand.
     this.open = new Map();
+    // The range or colour input in the middle of a gesture, if any. Replacing
+    // one mid-drag detaches it, which kills the drag and can close a native
+    // colour picker, so the panel waits. The gesture ends with 'change', and
+    // the shell listens for it to run the refresh deferred until then.
+    //
+    // Keyed on the gesture, not on focus: a slider keeps the focus once let go,
+    // and a panel waiting for it to lose it went on showing — and writing back —
+    // values from before the change.
+    this.busy = null;
+    root.addEventListener('input', (ev) => {
+      if (ev.target.type === 'range' || ev.target.type === 'color') this.busy = ev.target;
+    }, true);
+    root.addEventListener('change', (ev) => {
+      if (ev.target === this.busy) this.busy = null;
+    }, true);
+    // A colour picker dismissed without a choice may never fire 'change'.
+    root.addEventListener('focusout', (ev) => {
+      if (ev.target !== this.busy) return;
+      this.busy = null;
+      requestAnimationFrame(() => this.render());
+    });
+  }
+
+  /**
+   * Which control has the focus, in terms that survive a rebuild: its section,
+   * its label, and its rank among controls sharing both.
+   */
+  focusKey(el) {
+    if (!el || !this.root.contains(el) || !el.matches('input, select, button')) return null;
+    const sig = (n) => [
+      n.closest('details')?.dataset.section ?? '',
+      n.closest('.field')?.querySelector('.field-label')?.textContent ?? n.textContent,
+      n.type,
+    ].join('|');
+    const key = sig(el);
+    const same = [...this.root.querySelectorAll('input, select, button')].filter((n) => sig(n) === key);
+    return { key, rank: same.indexOf(el), sig };
+  }
+
+  restoreFocus(f, caret) {
+    if (!f) return;
+    const same = [...this.root.querySelectorAll('input, select, button')].filter((n) => f.sig(n) === f.key);
+    const el = same[f.rank];
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    if (caret && el.type === 'text') el.setSelectionRange(caret[0], caret[1]);
   }
 
   render() {
-    // Never rebuild under a control that is being used: replacing a range or
-    // colour input mid-gesture detaches it, which kills the drag and can
-    // close a native colour picker. The control's 'change' event fires on
-    // release, and the shell listens for it to run the deferred refresh.
+    if (this.busy && this.root.contains(this.busy)) return;
+    this.busy = null;
+    // The panel is rebuilt from scratch on every change, which would drop the
+    // focus — and with it the next keystroke typed into a name.
     const active = document.activeElement;
-    if (active && this.root.contains(active) && (active.type === 'range' || active.type === 'color')) return;
+    const focus = this.focusKey(active);
+    const caret = active?.type === 'text' ? [active.selectionStart, active.selectionEnd] : null;
     this.root.replaceChildren();
     const sel = this.store.selected;
     // Three families, in the order the work goes: what is selected, then the
@@ -163,6 +210,7 @@ export class Inspector {
       this.viewSection(),
       this.focusSection(),
     );
+    this.restoreFocus(focus, caret);
   }
 
   /** Stands in for the selection panel, so the group is never a bare title. */
@@ -182,6 +230,7 @@ export class Inspector {
    */
   section(title, { id = title, open = false, badge = '', accent = false } = {}) {
     const d = h('details', `panel${accent ? ' panel-selected' : ''}`);
+    d.dataset.section = id;
     d.open = this.open.has(id) ? this.open.get(id) : open;
     const sum = document.createElement('summary');
     sum.className = 'panel-title';
@@ -305,11 +354,11 @@ export class Inspector {
         const level = i;
         s.append(field(`Hauteur — ${LEVEL[i]}`, slider(storeyHeightOf(b, i), {
           min: 1, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
-          onInput: (v) => {
-            const heights = Array.from({ length: b.storeys }, (_, k) => storeyHeightOf(b, k));
+          onInput: (v) => this.store.patchBuilding((cur) => {
+            const heights = Array.from({ length: cur.storeys }, (_, k) => storeyHeightOf(cur, k));
             heights[level] = v;
-            this.store.patchBuilding({ storeyHeights: heights }, `sh${level}`);
-          },
+            return { storeyHeights: heights };
+          }, `sh${level}`),
         }), i === b.storeys - 1 ? 'un dernier niveau bas donne l’étage sous combles' : undefined));
       }
     }
@@ -360,7 +409,7 @@ export class Inspector {
       input.value = materialColour(key, m.theme, { ...m.overrides, ...b.overrides });
       input.addEventListener('input', () => {
         this.store.patchBuilding(
-          { overrides: { ...b.overrides, [key]: input.value } }, `bcol:${key}`,
+          (cur) => ({ overrides: { ...cur.overrides, [key]: input.value } }), `bcol:${key}`,
         );
       });
       cell.append(input, h('span', null, label));
