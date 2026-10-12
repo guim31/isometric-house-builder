@@ -56,9 +56,12 @@ export function heightField(rects, opts) {
       case 'flat':
         return 0;
       case 'shed': {
-        const span = { S: r.y1 - r.y0, N: r.y1 - r.y0, W: r.x1 - r.x0, E: r.x1 - r.x0 }[shedDir];
-        const d = { S: dN, N: dS, W: dE, E: dW }[shedDir];
-        return (span - d) * slope;
+        // One plane for the whole volume, measured from the low side of the
+        // footprint and not of each rectangle: on an L, rectangles of
+        // different depths each made their own slope, and the envelope of two
+        // parallel planes is a cliff where one gives way to the other.
+        const rise = { S: y - by0, N: by1 - y, W: x - bx0, E: bx1 - x }[shedDir];
+        return rise * slope;
       }
       case 'gable':
         // Ridge runs along the longer side, so the gable ends sit on the short walls.

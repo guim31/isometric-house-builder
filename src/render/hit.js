@@ -12,6 +12,8 @@ import { boundaryEdges, parseKey } from '../core/grid.js';
 import { cellSet, wallTop, storeyBase, cellSizeOf } from '../core/model.js';
 import { unrotatePoint } from '../core/iso.js';
 
+// The layer is parsed as markup, and ids come from files and share links.
+const escapeAttr = (v) => String(v).replace(/[&"<>]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 function quadPath(camera, pts) {
   return pts.map((p, i) => {
@@ -114,7 +116,7 @@ export function hitLayer(model, camera, built = null) {
 
   targets.sort((a, b) => a.depth - b.depth);
   return targets.map((t) => {
-    const attrs = Object.entries(t.attrs).map(([k, v]) => `${k}="${v}"`).join(' ');
+    const attrs = Object.entries(t.attrs).map(([k, v]) => `${k}="${escapeAttr(v)}"`).join(' ');
     return `<path d="${t.d}" ${attrs} fill="transparent" stroke="none"/>`;
   }).join('');
 }

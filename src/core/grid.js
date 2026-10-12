@@ -207,14 +207,28 @@ export function rectCells(i0, j0, i1, j1) {
  * returned so a position can be expressed from the corner that starts it.
  */
 export function edgeRunExtent(cells, edgeId, cs = 1) {
-  const e = boundaryEdges(cells).find((x) => x.id === edgeId);
-  if (!e) return null;
-  const run = boundaryRuns(cells).find((r) => r.ids.includes(edgeId));
-  if (!run) return null;
-  // Edges are unit segments on the grid, so this difference is already a unit
-  // vector and the dot products below are lengths.
-  const u = [e.b[0] - e.a[0], e.b[1] - e.a[1]];
-  const along = (p) => ((p[0] - e.a[0]) * u[0] + (p[1] - e.a[1]) * u[1]) * cs;
-  const sA = along(run.a), sB = along(run.b);
-  return { lo: Math.min(sA, sB), hi: Math.max(sA, sB) };
+  return runExtents(cells, cs).get(edgeId) || null;
+}
+
+/**
+ * The same for every boundary edge at once: edge id -> { lo, hi }. The renderer
+ * and the inspector both ask, and must get the same wall — a recess bounded by
+ * a looser definition than the slider's carved across a courtyard into the
+ * facade of the next wing.
+ */
+export function runExtents(cells, cs = 1) {
+  const out = new Map();
+  const byId = new Map(boundaryEdges(cells).map((e) => [e.id, e]));
+  for (const run of boundaryRuns(cells)) {
+    for (const id of run.ids) {
+      const e = byId.get(id);
+      // Edges are unit segments on the grid, so this difference is already a
+      // unit vector and the dot products below are lengths.
+      const u = [e.b[0] - e.a[0], e.b[1] - e.a[1]];
+      const along = (p) => ((p[0] - e.a[0]) * u[0] + (p[1] - e.a[1]) * u[1]) * cs;
+      const sA = along(run.a), sB = along(run.b);
+      out.set(id, { lo: Math.min(sA, sB), hi: Math.max(sA, sB) });
+    }
+  }
+  return out;
 }

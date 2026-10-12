@@ -32,13 +32,22 @@ export function svgToPng(svg, width, height) {
     const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      URL.revokeObjectURL(url);
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('encodage PNG impossible'))), 'image/png');
+      // A throw in here would leave the promise pending for good, and the
+      // interface on "Rendu en cours…" with it. A canvas past the browser's
+      // size limit is the usual cause: getContext then returns null.
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error(`image trop grande (${width} × ${height} px)`);
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('encodage PNG impossible'))), 'image/png');
+      } catch (e) {
+        reject(e);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG illisible')); };
     img.src = url;

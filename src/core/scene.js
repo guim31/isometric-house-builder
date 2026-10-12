@@ -4,7 +4,7 @@
  */
 
 import { Mesh } from './mesh.js';
-import { boundaryEdges, decomposeRects, bounds, parseKey, SIDES } from './grid.js';
+import { boundaryEdges, decomposeRects, bounds, parseKey, runExtents } from './grid.js';
 import { buildRoof, heightField, undersideAt, STEP } from './roof.js';
 import { cellSet, wallTop, storeyBase, cellSizeOf, buildingCells, propFootprint } from './model.js';
 import { focusRect } from './focus.js';
@@ -293,22 +293,7 @@ function buildOne(mesh, m, b, cs, roofItems) {
    * Without this a porch widened past the corner of the house carved its niche
    * out into thin air, and the return facade was painted over it.
    */
-  const runs = new Map();
-  for (const e of edges) {
-    const g = geoms.get(e.id);
-    let lo = 0, hi = g.len;
-    for (const e2 of edges) {
-      const g2 = geoms.get(e2.id);
-      if (Math.abs(g2.n[0] - g.n[0]) + Math.abs(g2.n[1] - g.n[1]) > 1e-9) continue;
-      if (Math.abs((g2.a[0] - g.a[0]) * g.n[0] + (g2.a[1] - g.a[1]) * g.n[1]) > 1e-6) continue;
-      const dir = g2.u[0] * g.u[0] + g2.u[1] * g.u[1];
-      const sA = (g2.a[0] - g.a[0]) * g.u[0] + (g2.a[1] - g.a[1]) * g.u[1];
-      const sB = sA + g2.len * dir;
-      lo = Math.min(lo, sA, sB);
-      hi = Math.max(hi, sA, sB);
-    }
-    runs.set(e.id, [lo, hi]);
-  }
+  const runs = new Map([...runExtents(cells, cs)].map(([id, r]) => [id, [r.lo, r.hi]]));
 
   /*
    * Recessed openings first: the wall builder must know where NOT to build.

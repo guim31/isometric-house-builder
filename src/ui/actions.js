@@ -36,6 +36,7 @@ export const PROP_DEFAULTS = {
   fence: { w: 6, d: 0.2, h: 1.1 },
   tree: { r: 1.5 },
   bush: { r: 1.1 },
+  car: { w: 1.8, d: 4.2 },
 };
 
 /** Items positioned by their centre rather than their minimum corner. */

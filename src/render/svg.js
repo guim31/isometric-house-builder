@@ -758,8 +758,10 @@ export function renderScene(input, opts = {}) {
     sink.push(...layers);
   });
 
-  const bg = model.style.background;
-  let bgRect = bg && bg !== 'transparent'
+  // Checked here as well as in normalise: this string goes into the exported
+  // file, and a caller may hand over a model that never went through it.
+  const bg = /^#[0-9a-f]{3,8}$/i.test(model.style.background) ? model.style.background : null;
+  let bgRect = bg
     ? `<rect width="${width}" height="${height}" fill="${bg}"/>` : '';
   if (night) bgRect = nightSky(width, height, defs, prefix);
 
