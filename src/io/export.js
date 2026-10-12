@@ -103,10 +103,13 @@ export async function exportSavedViews(model, size, onProgress) {
 
 /** Copy the current view to the clipboard, ready to paste into a dashboard. */
 export async function copyPngToClipboard(model, size) {
-  const svg = svgFor(model, size);
-  const blob = await svgToPng(svg, size.width * size.ratio, size.height * size.ratio);
   if (!navigator.clipboard || !window.ClipboardItem) {
     throw new Error("Le presse-papier image n'est pas disponible dans ce navigateur");
   }
-  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  // The item is handed a promise of the image and written straight away:
+  // Safari only lets a page write to the clipboard within the click itself,
+  // and the click is long over by the time the image has been rendered.
+  const png = Promise.resolve().then(() =>
+    svgToPng(svgFor(model, size), size.width * size.ratio, size.height * size.ratio));
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
 }

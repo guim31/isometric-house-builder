@@ -204,8 +204,10 @@ export class PlanView {
       }
     }
 
-    // Openings, as marks straddling their wall.
-    const byId = new Map(boundaryEdges(cells).map((e) => [e.id, e]));
+    // Openings, as marks straddling their wall — each volume's own walls, as
+    // the renderer has them: a wall another volume was later built against
+    // is still drawn, so it must still be findable here.
+    const byId = new Map(m.buildings.flatMap((bd) => boundaryEdges(new Set(bd.cells))).map((e) => [e.id, e]));
     for (const op of m.openings) {
       const e = byId.get(op.edge);
       if (!e) continue;

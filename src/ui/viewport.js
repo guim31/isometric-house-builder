@@ -3,9 +3,9 @@
  */
 
 import { renderScene } from '../render/svg.js';
-import { hitLayer, screenToGround } from '../render/hit.js';
+import { hitLayer, screenToGround, roofItemCorners } from '../render/hit.js';
 import { boundaryEdges } from '../core/grid.js';
-import { cellSet, cellSizeOf, buildingOfEdge, storeyBase } from '../core/model.js';
+import { cellSizeOf, buildingOfEdge, storeyBase } from '../core/model.js';
 import { buildMesh } from '../core/scene.js';
 import { mergeCoplanar } from '../core/mesh.js';
 import { rotateDir, project, clampPitch, clampRoll, normaliseYaw } from '../core/iso.js';
@@ -125,28 +125,34 @@ export class Viewport {
     const item = this.store.selected;
     if (!item) return '';
     const pts = [];
-    if (sel.type === 'prop' || sel.type === 'roofItem') {
-      const centred = CENTRED_KINDS.has(item.kind) || sel.type === 'roofItem';
+    if (sel.type === 'roofItem') {
+      const corners = roofItemCorners(this.store.model, item, this.cache?.built);
+      if (!corners) return '';
+      pts.push(...corners);
+    } else if (sel.type === 'prop') {
+      const centred = CENTRED_KINDS.has(item.kind);
       const w = item.r ? item.r * 2 : item.w ?? 2;
       const d = item.r ? item.r * 2 : item.d ?? 2;
       const x0 = centred ? item.x - w / 2 : item.x;
       const y0 = centred ? item.y - d / 2 : item.y;
-      const z = sel.type === 'roofItem' ? 6 : (item.z ?? 0) + 0.06;
+      const z = (item.z ?? 0) + 0.06;
       pts.push([x0, y0, z], [x0 + w, y0, z], [x0 + w, y0 + d, z], [x0, y0 + d, z]);
     } else if (sel.type === 'opening') {
       const m = this.store.model;
       const cs = cellSizeOf(m);
-      const e = boundaryEdges(cellSet(m)).find((x) => x.id === item.edge);
+      // Through the opening's building: the model itself has carried no
+      // plinth or storey height since volumes became independent, and reading
+      // the deleted fields made this overlay quietly disappear. Its edges too,
+      // as the renderer does: on the union of every volume, a wall another one
+      // was later built against is no edge at all, and the outline vanished.
+      const host = buildingOfEdge(m, item.edge);
+      if (!host) return '';
+      const e = boundaryEdges(new Set(host.cells)).find((x) => x.id === item.edge);
       if (!e) return '';
       const a = [e.a[0] * cs, e.a[1] * cs];
       const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
       const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
-      // Through the opening's building: the model itself has carried no
-      // plinth or storey height since volumes became independent, and reading
-      // the deleted fields made this overlay quietly disappear.
-      const host = buildingOfEdge(m, item.edge);
-      if (!host) return '';
-      const zb = storeyBase(host, item.storey || 0) + (item.sill ?? 0);
+      const zb = storeyBase(host, item.storey || 0) + (item.sill ?? 0.95);
       const w = item.width ?? 1.2, h = item.height ?? 1.25, c = item.offset ?? 0.5;
       const p = (s, z) => [a[0] + u[0] * s + e.n[0] * 0.06, a[1] + u[1] * s + e.n[1] * 0.06, z];
       pts.push(p(c - w / 2, zb), p(c + w / 2, zb), p(c + w / 2, zb + h), p(c - w / 2, zb + h));
@@ -326,20 +332,37 @@ export class Viewport {
     this.render();
   }
 
-  /** Place an opening where the wall was actually clicked, not at its centre. */
+  /**
+   * Place an opening where the wall was actually clicked, not at its centre.
+   *
+   * The click is solved on the wall's own plane — so many metres along, so
+   * many up — rather than projected onto its foot: a wall seen from above
+   * leans on screen, and a click high on it landed metres off along the line
+   * at ground level.
+   */
   addOpening(kind, edgeId, storey, ev) {
     const camera = this.lastRender?.camera;
-    const e = boundaryEdges(cellSet(this.store.model)).find((x) => x.id === edgeId);
+    const m = this.store.model;
+    const host = buildingOfEdge(m, edgeId);
+    const e = host && boundaryEdges(new Set(host.cells)).find((x) => x.id === edgeId);
     if (!camera || !e) return;
+    const cs = cellSizeOf(m);
     const rect = this.svg.getBoundingClientRect();
     const px = ev.clientX - rect.left, py = ev.clientY - rect.top;
-    const a = camera.toScreen([e.a[0], e.a[1], 0]);
-    const b = camera.toScreen([e.b[0], e.b[1], 0]);
-    const dx = b[0] - a[0], dy = b[1] - a[1];
-    const len2 = dx * dx + dy * dy || 1;
-    const t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / len2));
+    const z = storeyBase(host, storey || 0);
+    const A = camera.toScreen([e.a[0] * cs, e.a[1] * cs, z]);
+    const B = camera.toScreen([e.b[0] * cs, e.b[1] * cs, z]);
+    const C = camera.toScreen([e.a[0] * cs, e.a[1] * cs, z + 1]);
+    // P = A + s·(B − A) + h·(C − A), solved for s.
+    const u = [B[0] - A[0], B[1] - A[1]], v = [C[0] - A[0], C[1] - A[1]];
+    const det = u[0] * v[1] - u[1] * v[0];
+    const dx = px - A[0], dy = py - A[1];
+    let t = Math.abs(det) > 1e-9
+      ? (dx * v[1] - dy * v[0]) / det
+      : (dx * u[0] + dy * u[1]) / (u[0] * u[0] + u[1] * u[1] || 1);
+    t = Math.max(0, Math.min(1, t));
     // t is a fraction of the edge; openings store metres along the wall.
-    placeOpening(this.store, kind, edgeId, storey || 0, t * cellSizeOf(this.store.model));
+    placeOpening(this.store, kind, edgeId, storey || 0, t * cs);
   }
 
   /** Switch what a plain drag does. */
