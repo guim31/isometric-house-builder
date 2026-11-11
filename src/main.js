@@ -88,6 +88,24 @@ const HINTS = {
 
 const $ = (id) => document.getElementById(id);
 
+/*
+ * A safety net before anything else. An exception in a click handler leaves
+ * the page looking alive while the click did nothing — the palette list threw
+ * on every change for months, and nothing said so. A short message is better
+ * than silence, and it gives a report something to quote.
+ */
+let errorTimer = null;
+function reportError(text) {
+  const t = $('toast');
+  if (!t) return;
+  t.textContent = `Une erreur est survenue : ${text || 'erreur inconnue'}`;
+  t.classList.add('show', 'error');
+  clearTimeout(errorTimer);
+  errorTimer = setTimeout(() => t.classList.remove('show', 'error'), 7000);
+}
+window.addEventListener('error', (ev) => reportError(ev.message || ev.error?.message));
+window.addEventListener('unhandledrejection', (ev) => reportError(ev.reason?.message || String(ev.reason)));
+
 const boot = initialModel();
 const store = new Store(boot.model);
 store.onSaveError = () => toast('Sauvegarde automatique impossible dans ce navigateur : pensez à « Enregistrer »');
@@ -449,19 +467,23 @@ document.addEventListener('keydown', (ev) => {
 
 /* ---------- render loop ---------- */
 
+function renderAll() {
+  plan.render();
+  viewport.render();
+  inspector.render();
+  syncTools();
+  $('btn-undo').disabled = !store.canUndo;
+  $('btn-redo').disabled = !store.canRedo;
+  $('rot-label').textContent = viewpointLabel(store.model.camera.yaw);
+  if (nameInput.value !== store.model.name) nameInput.value = store.model.name;
+}
+
 let frame = null;
 function scheduleRender() {
   if (frame) return;
   frame = requestAnimationFrame(() => {
     frame = null;
-    plan.render();
-    viewport.render();
-    inspector.render();
-    syncTools();
-    $('btn-undo').disabled = !store.canUndo;
-    $('btn-redo').disabled = !store.canRedo;
-    $('rot-label').textContent = viewpointLabel(store.model.camera.yaw);
-    if (nameInput.value !== store.model.name) nameInput.value = store.model.name;
+    renderAll();
   });
 }
 
@@ -484,7 +506,13 @@ buildTools();
 buildNav();
 nameInput.value = store.model.name;
 store.setTool('select');
-scheduleRender();
+// The first drawing is made now, not in an animation frame: a frame that the
+// browser judges hidden — a background tab, an iframe under load — gets none,
+// and the page stayed blank until it did. Later changes go through the frame.
+renderAll();
+
+// For the test bench and the console: the running store, nothing else.
+window.__app = { store, viewport, plan };
 
 // On a genuinely first visit, offer the gallery rather than leaving someone to
 // guess what the tool is for — over the first preset, which beats an empty
