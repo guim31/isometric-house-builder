@@ -1,8 +1,9 @@
 /**
  * Moving, turning, mirroring and duplicating a whole building volume.
  *
- * A body is more than its cells: the openings on its walls and the items on
- * its roof belong to it, and a shed roof slopes one way. Each transformation
+ * A body is more than its cells: the openings and the fixtures on its walls
+ * and the items on its roof belong to it, a shed roof slopes one way and a
+ * gable's ridge may be told which way to run. Each transformation
  * here carries all of them along, so that what comes out is the same building
  * somewhere else — not a footprint that left its windows behind.
  *
@@ -27,7 +28,7 @@ function roofOwner(m, it) {
   return m.buildings.find((b) => b.cells.includes(k)) || null;
 }
 
-/** What belongs to a body: its openings and its roof items. */
+/** What belongs to a body: its openings, its fixtures and its roof items. */
 export function bodyParts(m, id) {
   const b = m.buildings.find((x) => x.id === id);
   if (!b) return null;
@@ -35,6 +36,7 @@ export function bodyParts(m, id) {
   return {
     body: b,
     openings: m.openings.filter((o) => cells.has(edgeCell(o.edge))),
+    fixtures: (m.fixtures || []).filter((f) => cells.has(edgeCell(f.edge))),
     roofItems: m.roofItems.filter((it) => roofOwner(m, it) === b),
   };
 }
@@ -51,7 +53,8 @@ export function collides(m, id, cells) {
  * `cell(i, j)` gives the image of a cell, `point(x, y)` the image of a point
  * in metres, `side(s)` the image of a wall side; `flips` says whether the map
  * reverses orientation, which turns an opening's distance along its edge
- * around; `turns` whether it swaps the two horizontal axes.
+ * around; `turns` whether it swaps the two horizontal axes — and with them
+ * the way a forced ridge runs.
  */
 function mapBody(m, id, { cell, point, side, flips = false, turns = false, shed = null }) {
   const parts = bodyParts(m, id);
@@ -62,23 +65,33 @@ function mapBody(m, id, { cell, point, side, flips = false, turns = false, shed 
     return key(...cell(i, j));
   });
   if (collides(m, id, cells)) return null;
-  const ops = new Set(parts.openings.map((o) => o.id));
+  const ops = new Set([...parts.openings, ...parts.fixtures].map((o) => o.id));
   const items = new Set(parts.roofItems.map((it) => it.id));
-  return {
+  // Fixtures hang off an edge exactly as openings do, and go where they go.
+  const onWall = (o) => {
+    if (!ops.has(o.id)) return o;
+    const [i, j, s] = o.edge.split(',');
+    const [ni, nj] = cell(Number(i), Number(j));
+    // A rotation sends an edge's start to the new edge's start, so the
+    // distance along it holds; a mirror sends it to the far end.
+    return { ...o, edge: `${ni},${nj},${side(s)}`, offset: flips ? tidy(cs - (o.offset ?? 0.5)) : o.offset };
+  };
+  const roofOf = (r) => {
+    let out = r;
+    if (shed) out = { ...out, shedDir: shed(r.shedDir) };
+    // East-west becomes north-south on a quarter turn; « auto » follows the
+    // longer side, which turns by itself.
+    if (turns && RIDGE_TURN[r.ridge]) out = { ...out, ridge: RIDGE_TURN[r.ridge] };
+    return out;
+  };
+  const out = {
     ...m,
     buildings: m.buildings.map((b) => (b.id !== id ? b : {
       ...b,
       cells: [...cells].sort(),
-      roof: shed ? { ...b.roof, shedDir: shed(b.roof.shedDir) } : b.roof,
+      roof: roofOf(b.roof),
     })),
-    openings: m.openings.map((o) => {
-      if (!ops.has(o.id)) return o;
-      const [i, j, s] = o.edge.split(',');
-      const [ni, nj] = cell(Number(i), Number(j));
-      // A rotation sends an edge's start to the new edge's start, so the
-      // distance along it holds; a mirror sends it to the far end.
-      return { ...o, edge: `${ni},${nj},${side(s)}`, offset: flips ? tidy(cs - (o.offset ?? 0.5)) : o.offset };
-    }),
+    openings: m.openings.map(onWall),
     roofItems: m.roofItems.map((it) => {
       if (!items.has(it.id)) return it;
       const [x, y] = point(it.x, it.y);
@@ -87,7 +100,11 @@ function mapBody(m, id, { cell, point, side, flips = false, turns = false, shed 
       return out;
     }),
   };
+  if (m.fixtures) out.fixtures = m.fixtures.map(onWall);
+  return out;
 }
+
+const RIDGE_TURN = { ew: 'ns', ns: 'ew' };
 
 /** Move a body by whole cells, or null when it would land on another. */
 export function moveBody(m, id, di, dj) {
@@ -155,7 +172,8 @@ function freshId(prefix, taken) {
 }
 
 /**
- * A copy of a body, with its openings and roof items, set down beside it.
+ * A copy of a body, with its openings, fixtures and roof items, set down
+ * beside it.
  *
  * Beside, not on top: a copy in the same place would be refused anyway, a
  * cell belonging to one body. The first free spot is taken, east of the
@@ -181,6 +199,10 @@ export function duplicateBody(m, id) {
         const [i, j, s] = o.edge.split(',');
         return { ...o, id: freshId('o', taken), edge: `${Number(i) + di},${Number(j) + dj},${s}` };
       });
+      const fixtures = parts.fixtures.map((f) => {
+        const [i, j, s] = f.edge.split(',');
+        return { ...f, id: freshId('f', taken), edge: `${Number(i) + di},${Number(j) + dj},${s}` };
+      });
       const items = parts.roofItems.map((it) => ({
         ...it, id: freshId('r', taken), x: tidy(it.x + di * cs), y: tidy(it.y + dj * cs),
       }));
@@ -193,6 +215,7 @@ export function duplicateBody(m, id) {
           ...m,
           buildings: [...m.buildings, copy],
           openings: [...m.openings, ...ops],
+          fixtures: [...(m.fixtures || []), ...fixtures],
           roofItems: [...m.roofItems, ...items],
         },
       };
