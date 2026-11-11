@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Empreintes de référence</title>
+<pre id="out">…</pre>
+<script type="module">
+  // Prints the fingerprints that tests/fixtures/reference-svg.json holds.
+  // Regenerate them only for a change of rendering that is meant, and say so.
+  import { referenceRenders } from '../tests/reference.js';
+  const out = await referenceRenders('..');
+  document.getElementById('out').textContent = JSON.stringify(out, null, 2);
+  window.__reference = out;
+</script>

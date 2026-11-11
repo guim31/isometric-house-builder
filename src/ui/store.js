@@ -6,7 +6,7 @@
  * references.
  */
 
-import { normalise, newId, makeBuilding } from '../core/model.js';
+import { normalise, newId, makeBuilding, fitOpening, limitBreach } from '../core/model.js';
 import { saveLocal } from '../io/project.js';
 
 const HISTORY_LIMIT = 80;
@@ -27,6 +27,7 @@ export class Store {
     this.activeId = null;
     this.saveFailed = false;
     this.onSaveError = null;
+    this.onLimit = null;
   }
 
   subscribe(fn) {
@@ -37,13 +38,26 @@ export class Store {
   emit(reason) {
     for (const fn of this.listeners) fn(this, reason);
     clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
-      const ok = saveLocal(this.model);
-      // Said once, not at every change: private browsing or a full storage
-      // otherwise loses the work at the next reload without a word.
-      if (!ok && !this.saveFailed) this.onSaveError?.();
-      this.saveFailed = !ok;
-    }, 400);
+    this.saveTimer = setTimeout(() => this.save(), 400);
+  }
+
+  save() {
+    clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    const ok = saveLocal(this.model);
+    // Said once, not at every change: private browsing or a full storage
+    // otherwise loses the work at the next reload without a word.
+    if (!ok && !this.saveFailed) this.onSaveError?.();
+    this.saveFailed = !ok;
+  }
+
+  /**
+   * Write a pending save now. The page calls it as it is hidden or closed:
+   * the last change before closing the tab fell inside the delay, and was
+   * lost.
+   */
+  flush() {
+    if (this.saveTimer) this.save();
   }
 
   /**
@@ -56,6 +70,19 @@ export class Store {
   update(fn, { coalesce = null, silent = false } = {}) {
     const next = typeof fn === 'function' ? fn(this.model) : fn;
     if (!next || next === this.model) return;
+    // The ceilings a file is cut down to on opening apply to editing too: the
+    // edit that would cross one is refused, and said, rather than accepted
+    // and silently taken back at the next reload.
+    const grows = next.buildings !== this.model.buildings || next.props !== this.model.props
+      || next.openings !== this.model.openings || next.roofItems !== this.model.roofItems
+      || next.views !== this.model.views;
+    if (!silent && grows) {
+      const breach = limitBreach(next);
+      if (breach && !limitBreach(this.model)) {
+        this.onLimit?.(`Limite atteinte : ${breach}`);
+        return;
+      }
+    }
     if (!silent) {
       const now = Date.now();
       const last = this.past[this.past.length - 1];
@@ -75,6 +102,32 @@ export class Store {
     this.emit('model');
   }
 
+  /**
+   * Move the camera, outside the history.
+   *
+   * Looking is not editing. With the camera in the history, undoing a change
+   * and then turning the house to check the result emptied « Rétablir » — the
+   * one moment it was wanted — and undo spent its steps rewinding orbits. The
+   * camera is still part of the model, so it is saved with the project and a
+   * saved view still carries one; it simply never makes an entry, and undo and
+   * redo leave it where it is.
+   */
+  setCamera(patch) {
+    const cur = this.model.camera;
+    const next = { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) };
+    if (Object.keys(next).every((k) => next[k] === cur[k])) return;
+    this.update({ ...this.model, camera: next }, { silent: true });
+  }
+
+  /** Start over on `model`, with an empty history: nothing to undo back into. */
+  reset(model) {
+    this.model = normalise(model);
+    this.past = [];
+    this.future = [];
+    this.selection = null;
+    this.emit('model');
+  }
+
   /** End a coalescing run, so the next edit starts a fresh history entry. */
   commit() {
     const last = this.past[this.past.length - 1];
@@ -85,15 +138,26 @@ export class Store {
     const entry = this.past.pop();
     if (!entry) return;
     this.future.push({ model: this.model });
-    this.model = entry.model;
-    this.emit('model');
+    this.restore(entry.model);
   }
 
   redo() {
     const entry = this.future.pop();
     if (!entry) return;
     this.past.push({ model: this.model, coalesce: null });
-    this.model = entry.model;
+    this.restore(entry.model);
+  }
+
+  /**
+   * Bring back a model from the history, keeping the camera of the moment —
+   * and ending any coalescing run: the next edit after an undo is a new step,
+   * not a continuation of whichever entry of the same kind is now on top.
+   */
+  restore(model) {
+    this.model = { ...model, camera: this.model.camera };
+    const last = this.past[this.past.length - 1];
+    if (last) last.coalesce = null;
+    this.lastEditAt = 0;
     this.emit('model');
   }
 
@@ -159,22 +223,28 @@ export class Store {
 
   /** Add an empty volume and make it the one being painted into. */
   addBuilding() {
-    const b = makeBuilding({ name: `Bâtiment ${this.model.buildings.length + 1}` });
+    const b = makeBuilding({ id: newId('b', this.model), name: `Bâtiment ${this.model.buildings.length + 1}` });
     this.update((m) => ({ ...m, buildings: [...m.buildings, b] }));
     this.activeId = b.id;
     this.emit('selection');
     return b.id;
   }
 
-  /** Remove a volume, along with the openings that lived on its walls. */
+  /**
+   * Remove a volume, along with what lived on it: the openings on its walls
+   * and the items on its roof — left behind, those fell to the ground or onto
+   * whichever roof was next drawn under them.
+   */
   removeBuilding(id) {
     if (this.model.buildings.length <= 1) return;
     const gone = this.model.buildings.find((b) => b.id === id);
     const cells = new Set(gone ? gone.cells : []);
+    const cs = this.model.grid?.cellSize || 1;
     this.update((m) => ({
       ...m,
       buildings: m.buildings.filter((b) => b.id !== id),
       openings: m.openings.filter((o) => !cells.has(o.edge.split(',').slice(0, 2).join(','))),
+      roofItems: m.roofItems.filter((it) => !cells.has(`${Math.floor(it.x / cs)},${Math.floor(it.y / cs)}`)),
     }));
     this.activeId = null;
     this.emit('selection');
@@ -188,7 +258,11 @@ export class Store {
     return (this.model[list] || []).find((it) => it.id === this.selection.id) || null;
   }
 
-  /** Patch the selected item. */
+  /**
+   * Patch the selected item. `patch` may be a function of the item and the
+   * model as they stand, for an edit that depends on them — an opening put
+   * back on its wall after being widened, for one.
+   */
   patchSelected(patch, coalesce) {
     const sel = this.selection;
     if (!sel) return;
@@ -196,7 +270,8 @@ export class Store {
     if (!list) return;
     this.update((m) => ({
       ...m,
-      [list]: m[list].map((it) => (it.id === sel.id ? { ...it, ...patch } : it)),
+      [list]: m[list].map((it) => (it.id !== sel.id ? it
+        : { ...it, ...(typeof patch === 'function' ? patch(it, m) : patch) })),
     }), { coalesce });
   }
 
@@ -208,9 +283,22 @@ export class Store {
     if (!list) return;
     const src = (this.model[list] || []).find((it) => it.id === sel.id);
     if (!src) return;
-    const copy = { ...src, id: newId(sel.type[0]) };
-    if (sel.type === 'opening') copy.offset = (src.offset ?? 0.5) + 1;
-    else copy.x = (src.x ?? 0) + 1.5;
+    let copy = { ...src, id: newId(sel.type[0], this.model) };
+    if (sel.type === 'opening') {
+      // Beside the original, and still whole on the same wall.
+      copy = fitOpening(this.model, { ...copy, offset: (src.offset ?? 0.5) + (src.width ?? 1.2) + 0.2 });
+    } else if (sel.type === 'roofItem') {
+      // On the same roof when there is room beside it: a copy nudged off the
+      // eaves fell to the ground, or landed on the neighbour's roof.
+      const cs = this.model.grid?.cellSize || 1;
+      const owner = (x, y) => this.model.buildings.find((b) => b.cells.includes(`${Math.floor(x / cs)},${Math.floor(y / cs)}`));
+      const home = owner(src.x, src.y);
+      const step = Math.max(src.w ?? 1, src.d ?? 1) + 0.25;
+      const spots = [[step, 0], [-step, 0], [0, step], [0, -step], [1.5, 0]];
+      const [dx, dy] = spots.find(([ax, ay]) => home && owner(src.x + ax, src.y + ay) === home) || [1.5, 0];
+      copy.x = src.x + dx;
+      copy.y = src.y + dy;
+    } else copy.x = (src.x ?? 0) + 1.5;
     this.update((m) => ({ ...m, [list]: [...m[list], copy] }));
     this.select({ type: sel.type, id: copy.id });
   }

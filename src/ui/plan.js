@@ -7,7 +7,7 @@
  */
 
 import { key, parseKey, boundaryEdges, boundaryRuns } from '../core/grid.js';
-import { cellSet, cellSizeOf, fmtMetres, buildingCells, setBuildingCells } from '../core/model.js';
+import { cellSet, cellSizeOf, fmtMetres, buildingCells, setBuildingCells, fitOpening } from '../core/model.js';
 import { focusFrame } from '../core/focus.js';
 import {
   OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS,
@@ -304,6 +304,9 @@ export class PlanView {
     this.pointers = new Map();
 
     this.svg.addEventListener('pointerdown', (ev) => {
+      // Only the main button draws, and the middle one pans. A right click
+      // painted cells, and opened the browser's menu over them as well.
+      if (ev.button !== 0 && ev.button !== 1) return;
       // Capture is a convenience, not a requirement: synthetic pointers (and
       // some browsers) reject an id they never issued.
       try { this.svg.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
@@ -394,7 +397,11 @@ export class PlanView {
         this.previewRun();
       } else if (this.drag.mode === 'slide') {
         const hit = this.nearestEdge(pt, 3);
-        if (hit) s.patchSelected({ edge: hit.edge.id, offset: Math.round(hit.offset * 20) / 20 }, 'move');
+        if (hit) {
+          s.patchSelected((it, m) => fitOpening(m, {
+            ...it, edge: hit.edge.id, offset: Math.round(hit.offset * 20) / 20,
+          }), 'move');
+        }
       } else if (this.drag.mode === 'move' && this.drag.origin) {
         const dx = pt[0] - this.drag.from[0];
         const dy = pt[1] - this.drag.from[1];
@@ -461,17 +468,24 @@ export class PlanView {
     this.render();
   }
 
+  /**
+   * Paint or erase one cell.
+   *
+   * A cell belongs to one building only. Painting over a neighbour used to
+   * give both of them the cell, hence two walls and two roofs in the same
+   * place; the brush now passes over cells another body owns. Erasing acts on
+   * whichever body owns the cell, not only the active one — the eraser is
+   * aimed at what is under it.
+   */
   paintAt(pt, erase, fresh) {
     const cs = cellSizeOf(this.store.model);
-    const i = Math.floor(pt[0] / cs), j = Math.floor(pt[1] / cs);
-    const k = key(i, j);
+    const k = key(Math.floor(pt[0] / cs), Math.floor(pt[1] / cs));
     const s = this.store;
-    const cells = buildingCells(s.activeBuilding || { cells: [] });
-    if (erase ? !cells.has(k) : cells.has(k)) { if (!fresh) return; }
+    const owner = s.model.buildings.find((b) => b.cells.includes(k));
+    const id = erase ? owner?.id : s.activeBuildingId;
+    if (!id || (!erase && owner)) { if (fresh) s.commit(); return; }
     s.update((m) => {
-      const id = s.activeBuildingId;
-      const b = m.buildings.find((x) => x.id === id);
-      const set = buildingCells(b);
+      const set = buildingCells(m.buildings.find((x) => x.id === id));
       if (erase) set.delete(k); else set.add(k);
       return setBuildingCells(m, id, set);
     }, { coalesce: 'brush' });
@@ -561,16 +575,24 @@ export class PlanView {
     const x1 = Math.max(Math.floor(a[0] / cs), Math.floor(b[0] / cs));
     const y1 = Math.max(Math.floor(a[1] / cs), Math.floor(b[1] / cs));
     const erase = this.drag.erase;
+    const id = this.store.activeBuildingId;
     this.store.update((m) => {
-      const id = this.store.activeBuildingId;
-      const b = m.buildings.find((x) => x.id === id);
-      const set = buildingCells(b);
-      for (let j = y0; j <= y1; j++) {
-        for (let i = x0; i <= x1; i++) {
-          if (erase) set.delete(key(i, j)); else set.add(key(i, j));
+      // As with the brush: removing takes the cells from whichever body owns
+      // them, adding leaves alone the cells another body already owns.
+      const taken = new Set(m.buildings.filter((b) => b.id !== id).flatMap((b) => b.cells));
+      let next = m;
+      for (const b of m.buildings) {
+        if (!erase && b.id !== id) continue;
+        const set = buildingCells(b);
+        for (let j = y0; j <= y1; j++) {
+          for (let i = x0; i <= x1; i++) {
+            const k = key(i, j);
+            if (erase) set.delete(k); else if (!taken.has(k)) set.add(k);
+          }
         }
+        if (set.size !== b.cells.length || erase) next = setBuildingCells(next, b.id, set);
       }
-      return setBuildingCells(m, id, set);
+      return next;
     });
   }
 }

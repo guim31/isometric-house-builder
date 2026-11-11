@@ -6,9 +6,11 @@ import { Store } from './ui/store.js';
 import { PlanView } from './ui/plan.js';
 import { Viewport } from './ui/viewport.js';
 import { Inspector } from './ui/panels.js';
-import { initialModel, exportProject, importProject, clearLocal, toShareUrl } from './io/project.js';
+import {
+  initialModel, exportProject, importProject, clearLocal, toShareUrl, readShareUrl, clearShareHash, setAside,
+} from './io/project.js';
 import { Gallery } from './ui/gallery.js';
-import { emptyModel } from './core/model.js';
+import { emptyModel, defaultModel } from './core/model.js';
 import { SIZES, exportPng, exportSvg, exportFourViews, exportSavedViews, copyPngToClipboard } from './io/export.js';
 import { viewpointLabel, normaliseYaw } from './core/iso.js';
 
@@ -88,8 +90,30 @@ const HINTS = {
 
 const $ = (id) => document.getElementById(id);
 
+/*
+ * A safety net before anything else. An exception in a click handler leaves
+ * the page looking alive while the click did nothing — the palette list threw
+ * on every change for months, and nothing said so. A short message is better
+ * than silence, and it gives a report something to quote.
+ */
+let errorTimer = null;
+function reportError(text) {
+  const t = $('toast');
+  if (!t) return;
+  t.textContent = `Une erreur est survenue : ${text || 'erreur inconnue'}`;
+  t.classList.add('show', 'error');
+  clearTimeout(errorTimer);
+  errorTimer = setTimeout(() => t.classList.remove('show', 'error'), 7000);
+}
+window.addEventListener('error', (ev) => reportError(ev.message || ev.error?.message));
+window.addEventListener('unhandledrejection', (ev) => reportError(ev.reason?.message || String(ev.reason)));
+
 const boot = initialModel();
-const store = new Store(boot.model);
+// A link opened over a project already here does not erase it: that project
+// becomes the history entry before the link, and « Annuler » brings it back.
+const store = new Store(boot.source === 'link' && boot.previous ? boot.previous : boot.model);
+if (boot.source === 'link' && boot.previous) store.update(boot.model);
+store.onLimit = (message) => toast(message, 4000);
 store.onSaveError = () => toast('Sauvegarde automatique impossible dans ce navigateur : pensez à « Enregistrer »');
 const plan = new PlanView($('plan'), store);
 const viewport = new Viewport($('iso'), store);
@@ -98,13 +122,35 @@ const inspector = new Inspector($('inspector'), store, {
 });
 
 let toastTimer = null;
-function toast(message) {
+function toast(message, duration = 2600) {
   const t = $('toast');
   t.textContent = message;
+  t.classList.remove('error');
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  toastTimer = setTimeout(() => t.classList.remove('show'), duration);
 }
+
+const LINK_OPENED = 'Projet du lien ouvert — Annuler pour retrouver le vôtre';
+
+/*
+ * A link pasted into the address bar of a page already open changes only the
+ * fragment: no reload, so nothing happened at all, and the fragment stayed —
+ * the next reload then opened the link over everything done since.
+ */
+window.addEventListener('hashchange', () => {
+  const link = readShareUrl();
+  if (!link) return;
+  clearShareHash();
+  if (link.failed) {
+    toast('Ce lien de partage est illisible : votre projet reste ouvert, et le lien est mis de côté', 6000);
+    return;
+  }
+  store.update(link.model);
+  store.select(null);
+  viewport.resetView();
+  toast(LINK_OPENED, 6000);
+});
 
 /* ---------- tool palette ---------- */
 
@@ -166,10 +212,10 @@ function syncTools() {
  * the nearest quarter turn. The buttons always move the way they point.
  */
 function rotate(delta) {
-  store.update((m) => {
-    const q = m.camera.yaw / 90;
+  store.setCamera((c) => {
+    const q = c.yaw / 90;
     const next = delta > 0 ? Math.floor(q) + 1 : Math.ceil(q) - 1;
-    return { ...m, camera: { ...m.camera, yaw: normaliseYaw(next * 90) } };
+    return { yaw: normaliseYaw(next * 90) };
   });
 }
 
@@ -380,8 +426,10 @@ $('btn-png').addEventListener('click', async () => {
 });
 
 $('btn-svg').addEventListener('click', () => {
-  exportSvg(store.model, currentSize());
-  status('Fichier SVG téléchargé.');
+  try {
+    exportSvg(store.model, currentSize());
+    status('Fichier SVG téléchargé.');
+  } catch (e) { status('Échec : ' + e.message); }
 });
 
 $('btn-four').addEventListener('click', async () => {
@@ -419,10 +467,18 @@ nameInput.addEventListener('input', () => {
 /* ---------- keyboard ---------- */
 
 document.addEventListener('keydown', (ev) => {
-  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName);
+  // Only a field one types into keeps the keyboard. A slider, a checkbox or a
+  // button that merely has the focus after a click did too, and the shortcuts
+  // went dead — Suppr, [ ], Échap — until one clicked somewhere else. A list
+  // keeps the keys it uses itself: arrows, letters for type-ahead, Enter.
+  const t = ev.target;
+  const textEntry = t.tagName === 'TEXTAREA' || t.isContentEditable
+    || (t.tagName === 'INPUT' && /^(text|search|number|email|url|tel|password|)$/.test(t.type || ''));
+  const listKey = t.tagName === 'SELECT' && !ev.ctrlKey && !ev.metaKey
+    && (ev.key.length === 1 || /^(Arrow|Page|Home|End|Enter)/.test(ev.key));
+  const typing = textEntry || listKey;
   // In a text field, undo is the field's own: taking it over rewound the last
-  // model change — a camera turn, as likely as not — instead of the typing.
-  const textEntry = typing && /^(text|search|number|)$/.test(ev.target.type || '');
+  // model change instead of the typing.
   if (textEntry && (ev.ctrlKey || ev.metaKey) && /^[zy]$/i.test(ev.key)) return;
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') {
     ev.preventDefault();
@@ -449,23 +505,32 @@ document.addEventListener('keydown', (ev) => {
 
 /* ---------- render loop ---------- */
 
+function renderAll() {
+  plan.render();
+  viewport.render();
+  inspector.render();
+  syncTools();
+  $('btn-undo').disabled = !store.canUndo;
+  $('btn-redo').disabled = !store.canRedo;
+  $('rot-label').textContent = viewpointLabel(store.model.camera.yaw);
+  if (nameInput.value !== store.model.name) nameInput.value = store.model.name;
+}
+
 let frame = null;
 function scheduleRender() {
   if (frame) return;
   frame = requestAnimationFrame(() => {
     frame = null;
-    plan.render();
-    viewport.render();
-    inspector.render();
-    syncTools();
-    $('btn-undo').disabled = !store.canUndo;
-    $('btn-redo').disabled = !store.canRedo;
-    $('rot-label').textContent = viewpointLabel(store.model.camera.yaw);
-    if (nameInput.value !== store.model.name) nameInput.value = store.model.name;
+    renderAll();
   });
 }
 
 store.subscribe(scheduleRender);
+// The autosave waits for a pause; a page being closed will not get one.
+window.addEventListener('pagehide', () => store.flush());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') store.flush();
+});
 window.addEventListener('resize', scheduleRender);
 // The inspector skips its own rebuild while one of its controls is mid-drag;
 // the release fires 'change', which runs the refresh it deferred.
@@ -484,12 +549,34 @@ buildTools();
 buildNav();
 nameInput.value = store.model.name;
 store.setTool('select');
-scheduleRender();
+// The first drawing is made now, not in an animation frame: a frame that the
+// browser judges hidden — a background tab, an iframe under load — gets none,
+// and the page stayed blank until it did. Later changes go through the frame.
+try {
+  renderAll();
+} catch (e) {
+  // A project that normalises but will not draw: set it aside like one that
+  // will not parse, and open the default model rather than a blank page.
+  setAside(store.model);
+  boot.rejected = 'local';
+  store.reset(defaultModel());
+  renderAll();
+}
+if (boot.rejected) {
+  toast(boot.rejected === 'link'
+    ? 'Ce lien de partage est illisible : le modèle par défaut est ouvert, et le lien mis de côté'
+    : 'Le projet enregistré n’a pas pu être ouvert : il est mis de côté, et le modèle par défaut est ouvert', 8000);
+}
+
+// For the test bench and the console: the running store, nothing else.
+window.__app = { store, viewport, plan, render: renderAll };
 
 // On a genuinely first visit, offer the gallery rather than leaving someone to
 // guess what the tool is for — over the first preset, which beats an empty
 // grid behind it. Returning visitors get their project straight back, even an
 // empty one: a page left blank on purpose is still their page.
+if (boot.source === 'link') toast(boot.previous ? LINK_OPENED : 'Projet du lien ouvert', 6000);
+
 if (boot.source === 'default') {
   requestAnimationFrame(() => gallery.open());
 }

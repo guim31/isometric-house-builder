@@ -100,7 +100,12 @@ export function decomposeRects(cells) {
   const b = bounds(cells);
   if (b.empty) return [];
   const W = b.w, D = b.d;
-  const at = (x, y) => (x >= 0 && y >= 0 && x < W && y < D && cells.has(key(x + b.i0, y + b.j0)) ? 1 : 0);
+  const filled = new Uint8Array(W * D);
+  for (const k of cells) {
+    const [i, j] = parseKey(k);
+    filled[(j - b.j0) * W + (i - b.i0)] = 1;
+  }
+  const at = (x, y) => (x >= 0 && y >= 0 && x < W && y < D ? filled[y * W + x] : 0);
 
   // Prefix sums make "is this rectangle entirely filled" an O(1) test.
   const ps = new Int32Array((W + 1) * (D + 1));
@@ -115,39 +120,61 @@ export function decomposeRects(cells) {
     return P(x1 + 1, y1 + 1) - P(x0, y1 + 1) - P(x1 + 1, y0) + P(x0, y0) === area;
   };
 
+  /*
+   * Every maximal rectangle, by the histogram method: for each row taken as
+   * the top, the column heights of filled cells below it, and a stack that
+   * pops each rectangle as wide as it can be for its height. Those cannot grow
+   * sideways or upwards; one test settles downwards.
+   *
+   * Trying every corner pair instead cost the fourth power of the side: a
+   * 200 × 200 footprint froze the tab for fifteen seconds, at every reload,
+   * since the project is saved as soon as it opens.
+   */
   const maximal = [];
-  for (let y0 = 0; y0 < D; y0++) {
-    for (let x0 = 0; x0 < W; x0++) {
-      if (!at(x0, y0)) continue;
-      for (let y1 = y0; y1 < D; y1++) {
-        if (!full(x0, y0, x0, y1)) break;
-        for (let x1 = x0; x1 < W; x1++) {
-          if (!full(x0, y0, x1, y1)) break;
-          // Keep only rectangles that cannot grow in any direction.
-          if (x0 > 0 && full(x0 - 1, y0, x0 - 1, y1)) continue;
-          if (x1 < W - 1 && full(x1 + 1, y0, x1 + 1, y1)) continue;
-          if (y0 > 0 && full(x0, y0 - 1, x1, y0 - 1)) continue;
-          if (y1 < D - 1 && full(x0, y1 + 1, x1, y1 + 1)) continue;
-          maximal.push({ x0, y0, x1, y1, area: (x1 - x0 + 1) * (y1 - y0 + 1) });
+  const hgt = new Int32Array(W + 1);
+  for (let y = D - 1; y >= 0; y--) {
+    // hgt[x]: filled cells from row y upwards (towards larger y).
+    for (let x = 0; x < W; x++) hgt[x] = at(x, y) ? hgt[x] + 1 : 0;
+    hgt[W] = 0;
+    const stack = []; // [start x, height]
+    for (let x = 0; x <= W; x++) {
+      let start = x;
+      while (stack.length && stack[stack.length - 1][1] >= hgt[x]) {
+        const [sx, h] = stack.pop();
+        start = sx;
+        // Equal heights are one rectangle, emitted once by the last pop.
+        if (h > hgt[x] && h > 0) {
+          const x0 = sx, x1 = x - 1, y0 = y, y1 = y + h - 1;
+          if (!(y0 > 0 && full(x0, y0 - 1, x1, y0 - 1))) {
+            maximal.push({ x0, y0, x1, y1, area: (x1 - x0 + 1) * h });
+          }
         }
       }
+      stack.push([start, hgt[x]]);
     }
   }
+  // The order the exhaustive enumeration produced, so that rectangles of
+  // equal area are chosen exactly as before — and a roof is drawn exactly as
+  // it was.
+  maximal.sort((p, q) => p.y0 - q.y0 || p.x0 - q.x0 || p.y1 - q.y1 || p.x1 - q.x1);
 
   // Greedily keep the biggest rectangles until every cell is covered.
   maximal.sort((p, q) => q.area - p.area);
-  const covered = new Set();
+  const covered = new Uint8Array(W * D);
+  let count = 0;
   const chosen = [];
   const total = cells.size;
   for (const r of maximal) {
-    if (covered.size >= total) break;
+    if (count >= total) break;
     let gains = 0;
     for (let y = r.y0; y <= r.y1; y++) {
-      for (let x = r.x0; x <= r.x1; x++) if (!covered.has(key(x, y))) gains++;
+      for (let x = r.x0; x <= r.x1; x++) if (!covered[y * W + x]) gains++;
     }
     if (!gains) continue;
     for (let y = r.y0; y <= r.y1; y++) {
-      for (let x = r.x0; x <= r.x1; x++) covered.add(key(x, y));
+      for (let x = r.x0; x <= r.x1; x++) {
+        if (!covered[y * W + x]) { covered[y * W + x] = 1; count++; }
+      }
     }
     chosen.push({
       x0: r.x0 + b.i0, y0: r.y0 + b.j0,

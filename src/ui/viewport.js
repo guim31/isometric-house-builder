@@ -5,12 +5,14 @@
 import { renderScene } from '../render/svg.js';
 import { hitLayer, screenToGround, roofItemCorners } from '../render/hit.js';
 import { boundaryEdges } from '../core/grid.js';
-import { cellSizeOf, buildingOfEdge, storeyBase } from '../core/model.js';
+import { cellSizeOf, buildingOfEdge, storeyBase, openingSpan } from '../core/model.js';
 import { buildMesh } from '../core/scene.js';
 import { mergeCoplanar } from '../core/mesh.js';
 import { rotateDir, project, clampPitch, clampRoll, normaliseYaw } from '../core/iso.js';
 import { focusModel } from '../core/focus.js';
-import { OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, placeOpening, placeProp } from './actions.js';
+import {
+  OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS, placeOpening, placeProp,
+} from './actions.js';
 
 /** Degrees of orbit per pixel dragged. */
 const ORBIT_YAW = 0.4;
@@ -152,10 +154,10 @@ export class Viewport {
       const a = [e.a[0] * cs, e.a[1] * cs];
       const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
       const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
-      const zb = storeyBase(host, item.storey || 0) + (item.sill ?? 0.95);
-      const w = item.width ?? 1.2, h = item.height ?? 1.25, c = item.offset ?? 0.5;
+      const { z0, z1 } = openingSpan(item, host);
+      const w = item.width ?? 1.2, c = item.offset ?? 0.5;
       const p = (s, z) => [a[0] + u[0] * s + e.n[0] * 0.06, a[1] + u[1] * s + e.n[1] * 0.06, z];
-      pts.push(p(c - w / 2, zb), p(c + w / 2, zb), p(c + w / 2, zb + h), p(c - w / 2, zb + h));
+      pts.push(p(c - w / 2, z0), p(c + w / 2, z0), p(c + w / 2, z1), p(c - w / 2, z1));
     }
     if (!pts.length) return '';
     const d = pts.map((p, i) => {
@@ -169,6 +171,9 @@ export class Viewport {
     const s = this.store;
 
     this.root.addEventListener('pointerdown', (ev) => {
+      // As in the plan: the main button acts, the middle one pans, and the
+      // others are left to the browser.
+      if (ev.button !== 0 && ev.button !== 1) return;
       this.pointers.set(ev.pointerId, [ev.clientX, ev.clientY]);
       if (this.pointers.size === 2) { this.startPinch(); return; }
       if (this.pinch) return;
@@ -178,7 +183,10 @@ export class Viewport {
 
       // Outdoor items can be dropped straight onto the render: the ground
       // plane is exactly invertible, so a click maps back to a grid position.
-      if (!pick && ev.button === 0 && !ev.shiftKey && PROP_DEFAULTS[tool] && this.lastRender) {
+      // Not the runs — wall, fence, hedge: those are dragged out on the plan,
+      // and a click here dropped a default length nobody asked for.
+      if (!pick && ev.button === 0 && !ev.shiftKey && PROP_DEFAULTS[tool] && !LINEAR_KINDS.has(tool)
+        && this.lastRender) {
         const rect = this.root.getBoundingClientRect();
         placeProp(s, tool, screenToGround(this.lastRender.camera, ev.clientX - rect.left, ev.clientY - rect.top));
         return;
@@ -213,7 +221,10 @@ export class Viewport {
         pick: pickTarget(pick, ev.target.dataset),
         moved: false,
       };
-      this.root.setPointerCapture?.(ev.pointerId);
+      // Capture is a convenience, not a requirement: a pointer the browser
+      // did not issue — a synthetic one, or a pen some drivers report late —
+      // is refused with an exception that would abort the whole gesture.
+      try { this.root.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
     });
 
     this.root.addEventListener('pointermove', (ev) => {
@@ -230,24 +241,17 @@ export class Viewport {
         this.drag.moved = true;
       }
       if (this.drag.mode === 'roll') {
-        this.store.update((mm) => ({
-          ...mm,
-          camera: { ...mm.camera, roll: clampRoll(this.drag.camera.roll + dx * ROLL_PER_PX) },
-        }), { coalesce: 'orbit' });
+        this.store.setCamera({ roll: clampRoll(this.drag.camera.roll + dx * ROLL_PER_PX) });
         return;
       }
       if (this.drag.mode === 'orbit') {
         // Dragging right turns the house to the right. That is the direction
         // increasing yaw moves it: at yaw 0 the east corner sits on the screen
         // left, and every added degree walks it back towards the centre.
-        this.store.update((mm) => ({
-          ...mm,
-          camera: {
-            ...mm.camera,
-            yaw: normaliseYaw(this.drag.camera.yaw + dx * ORBIT_YAW),
-            pitch: clampPitch(this.drag.camera.pitch - dy * ORBIT_PITCH),
-          },
-        }), { coalesce: 'orbit' });
+        this.store.setCamera({
+          yaw: normaliseYaw(this.drag.camera.yaw + dx * ORBIT_YAW),
+          pitch: clampPitch(this.drag.camera.pitch - dy * ORBIT_PITCH),
+        });
         return;
       }
       // Pan lives upstream of the zoom in the projection, so the on-screen
@@ -270,8 +274,6 @@ export class Viewport {
         const sel = this.drag.pick;
         if (sel?.type === 'building') this.store.setActiveBuilding(sel.id);
         this.store.select(sel);
-      } else if (this.drag?.mode === 'orbit' || this.drag?.mode === 'roll') {
-        this.store.commit();
       }
       this.drag = null;
     };
@@ -381,14 +383,10 @@ export class Viewport {
    * on screen tells you.
    */
   nudge(dYaw, dPitch) {
-    this.store.update((m) => ({
-      ...m,
-      camera: {
-        ...m.camera,
-        yaw: normaliseYaw(m.camera.yaw + dYaw),
-        pitch: clampPitch(m.camera.pitch + dPitch),
-      },
-    }), { coalesce: 'orbit' });
+    this.store.setCamera((c) => ({
+      yaw: normaliseYaw(c.yaw + dYaw),
+      pitch: clampPitch(c.pitch + dPitch),
+    }));
   }
 
   /** Slide the view, as the pad's arrows do in « déplacer » mode. */

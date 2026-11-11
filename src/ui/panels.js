@@ -8,8 +8,8 @@ import {
 } from '../core/iso.js';
 import { ROOF_TYPES, STEP } from '../core/roof.js';
 import {
-  withCellSize, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
-  storeyHeightOf, DEFAULT_FOCUS, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
+  withCellSize, withTheme, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
+  storeyHeightOf, DEFAULT_FOCUS, PROP_DEFAULTS, OPENING_DEFAULTS, fitOpening, overlappingOpenings, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
 } from '../core/model.js';
 import { bounds, edgeRunExtent } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
@@ -489,7 +489,7 @@ export class Inspector {
     });
     s.append(
       field('Palette', select(m.theme, Object.entries(THEMES).map(([k, v]) => [k, v.label]),
-        (v) => this.applyTheme(v)), 'certaines palettes règlent aussi contours et matières'),
+        (v) => this.store.update((mm) => withTheme(mm, v))), 'certaines palettes règlent aussi contours et matières'),
       field('Contours', toggle(m.style.outline, (v) => this.setIn('style', { outline: v }))),
       field('Ombre portée', toggle(m.style.shadow, (v) => this.setIn('style', { shadow: v }))),
       field('Croisillons des fenêtres', toggle(m.style.windowBars !== false,
@@ -590,23 +590,23 @@ export class Inspector {
       field('Orientation', slider(Math.round(m.camera.yaw), {
         min: 0, max: 359, step: 1,
         format: (v) => `${deg(v)} — ${viewpointLabel(v)}`,
-        onInput: (v) => this.setIn('camera', { yaw: normaliseYaw(v) }, 'camera'),
+        onInput: (v) => this.store.setCamera({ yaw: normaliseYaw(v) }),
       }), 'ou glissez directement dans le rendu'),
       field('Hauteur de vue', slider(Math.round(m.camera.pitch), {
         min: PITCH_RANGE[0], max: PITCH_RANGE[1], step: 1, format: deg,
-        onInput: (v) => this.setIn('camera', { pitch: v }, 'camera'),
+        onInput: (v) => this.store.setCamera({ pitch: v }),
       }), 'de rasante à quasi verticale'),
       field('Inclinaison de l’image', slider(Math.round(m.camera.roll), {
         min: ROLL_RANGE[0], max: ROLL_RANGE[1], step: 1, format: deg,
-        onInput: (v) => this.setIn('camera', { roll: v }, 'camera'),
+        onInput: (v) => this.store.setCamera({ roll: v }),
       }), 'fait pivoter le dessin dans son cadre — ou Alt + glisser dans le rendu'),
       field('Projection', select(m.camera.projection,
         Object.entries(PROJECTIONS).map(([k, v]) => [k, v.label]),
-        (v) => this.setIn('camera', { projection: v }))),
+        (v) => this.store.setCamera({ projection: v }))),
     );
 
     const reset = h('button', 'subtle', 'Revenir à la vue isométrique');
-    reset.addEventListener('click', () => this.setIn('camera', {
+    reset.addEventListener('click', () => this.store.setCamera({
       yaw: Math.round(m.camera.yaw / 90) % 4 * 90, pitch: DEFAULT_PITCH, roll: 0,
     }));
     s.appendChild(reset);
@@ -643,7 +643,7 @@ export class Inspector {
       if (!name) return;
       this.set({
         views: [...m.views, {
-          id: newId('v'), name,
+          id: newId('v', m), name,
           camera: { ...m.camera }, focus: { ...m.focus },
         }],
       });
@@ -731,7 +731,15 @@ export class Inspector {
       const host = buildingOfEdge(m, item.edge) || this.store.activeBuilding;
       const storeys = host ? host.storeys : 1;
       const level = item.storey || 0;
-      s.appendChild(field('Type', select(item.kind, Object.entries(OPENING_LABELS), (v) => patch({ kind: v }))));
+      // A window turned into a door goes down to the floor: the sill and the
+      // height follow the new kind wherever they were still the old kind's
+      // defaults. A value set by hand is a choice, and is kept.
+      s.appendChild(field('Type', select(item.kind, Object.entries(OPENING_LABELS), (v) => patch((it, mm) => {
+        const was = OPENING_DEFAULTS[it.kind] || {}, now = OPENING_DEFAULTS[v] || {};
+        const next = { ...it, kind: v };
+        for (const k of ['sill', 'height']) if (it[k] === was[k]) next[k] = now[k];
+        return fitOpening(mm, next);
+      }))));
       // Also shown when the opening sits on a level since taken away: it is
       // not drawn any more, and this is the one place it can be brought down.
       if (storeys > 1 || level >= storeys) {
@@ -741,19 +749,26 @@ export class Inspector {
           (v) => patch({ storey: Number(v) })),
         level >= storeys ? 'ce niveau n’existe plus : l’ouverture n’est pas dessinée' : undefined));
       }
+      // Height and sill share the level between them: together they never
+      // reach past the floor above.
+      const levelH = host ? storeyHeightOf(host, level) : 2.7;
+      const room = (v) => Math.floor((levelH - v) * 20 + 1e-6) / 20;
+      const overlaps = overlappingOpenings(m, item).length;
       s.append(
         positionField(m, item, patch),
         field('Largeur', slider(item.width, {
           min: 0.4, max: 5, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
-          onInput: (v) => patch({ width: v }, 'w'),
-        })),
+          onInput: (v) => patch((it, mm) => fitOpening(mm, { ...it, width: v }), 'w'),
+        }), overlaps ? `chevauche ${overlaps > 1 ? `${overlaps} autres ouvertures` : 'une autre ouverture'} sur ce mur` : undefined),
         field('Hauteur', slider(item.height, {
-          min: 0.4, max: 3, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
-          onInput: (v) => patch({ height: v }, 'h'),
+          min: 0.4, max: Math.max(0.4, Math.min(3, room(item.sill ?? 0))), step: 0.05,
+          format: (v) => `${v.toFixed(2)} m`,
+          onInput: (v) => patch((it) => ({ height: Math.min(v, Math.max(0.4, levelH - (it.sill ?? 0))) }), 'h'),
         })),
         field('Allège', slider(item.sill ?? 0.95, {
-          min: 0, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
-          onInput: (v) => patch({ sill: v }, 'sill'),
+          min: 0, max: Math.max(0, Math.min(2, room(item.height))), step: 0.05,
+          format: (v) => `${v.toFixed(2)} m`,
+          onInput: (v) => patch((it) => ({ sill: Math.max(0, Math.min(v, levelH - it.height)) }), 'sill'),
         }), 'hauteur du bas de l’ouverture'),
         field('Renfoncement', slider(item.depth ?? 0, {
           min: 0, max: 0.8, step: 0.05,
@@ -782,15 +797,26 @@ export class Inspector {
         field('Type', select(item.kind, Object.entries(ROOF_ITEM_LABELS), (v) => patch({ kind: v }))),
         field('X', number(item.x, { min: 0, max: 60, step: 0.25, onChange: (v) => patch({ x: v }) })),
         field('Y', number(item.y, { min: 0, max: 60, step: 0.25, onChange: (v) => patch({ y: v }) })),
-        field('Largeur', slider(item.w ?? 2, {
-          min: 0.4, max: 10, step: 0.2, format: (v) => `${v.toFixed(1)} m`,
-          onInput: (v) => patch({ w: v }, 'w'),
-        })),
-        field('Profondeur', slider(item.d ?? 1.5, {
-          min: 0.4, max: 8, step: 0.2, format: (v) => `${v.toFixed(1)} m`,
-          onInput: (v) => patch({ d: v }, 'd'),
-        })),
       );
+      if (item.kind === 'dish') {
+        // A dish is round, drawn from the larger of its two sides: a width and
+        // a depth meant one of the two sliders did nothing.
+        s.appendChild(field('Diamètre', slider(Math.max(item.w ?? 0.8, item.d ?? 0.8), {
+          min: 0.4, max: 2, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          onInput: (v) => patch({ w: v, d: v }, 'w'),
+        })));
+      } else {
+        s.append(
+          field('Largeur', slider(item.w ?? 2, {
+            min: 0.4, max: 10, step: 0.2, format: (v) => `${v.toFixed(1)} m`,
+            onInput: (v) => patch({ w: v }, 'w'),
+          })),
+          field('Profondeur', slider(item.d ?? 1.5, {
+            min: 0.4, max: 8, step: 0.2, format: (v) => `${v.toFixed(1)} m`,
+            onInput: (v) => patch({ d: v }, 'd'),
+          })),
+        );
+      }
       if (item.kind === 'chimney') {
         s.appendChild(field('Hauteur', slider(item.h ?? 1.1, {
           min: 0.3, max: 3, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
@@ -802,8 +828,10 @@ export class Inspector {
         field('X', number(item.x, { min: -20, max: 80, step: 0.25, onChange: (v) => patch({ x: v }) })),
         field('Y', number(item.y, { min: -20, max: 80, step: 0.25, onChange: (v) => patch({ y: v }) })),
       );
-      if (item.kind === 'tree') {
-        s.appendChild(field('Taille', slider(item.r ?? 1.4, {
+      // A tree and a bush are drawn from their radius alone: offering them a
+      // width and a depth gave the bush two sliders that did nothing.
+      if (item.kind === 'tree' || item.kind === 'bush') {
+        s.appendChild(field('Taille', slider(item.r ?? PROP_DEFAULTS[item.kind].r, {
           min: 0.5, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
           onInput: (v) => patch({ r: v }, 'r'),
         })));

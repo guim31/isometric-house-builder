@@ -611,3 +611,6 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12px; }
   font-size: 13px;
 }
 .app-link:hover { background: var(--bg); color: var(--ink); }
+
+/* An unexpected error: the same toast, in the danger colour, held longer. */
+.toast.error { background: var(--danger); }

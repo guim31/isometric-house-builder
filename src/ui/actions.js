@@ -8,17 +8,13 @@
  * two had already begun to drift.
  */
 
-import { newId, OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, stairsRun } from '../core/model.js';
+import {
+  newId, fitOpening, OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, stairsRun,
+} from '../core/model.js';
 
 // Defined in the model, which fills them into files that leave them out.
-export { OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS };
+export { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS };
 
-export const ROOF_ITEM_DEFAULTS = {
-  solar: { w: 4, d: 2.4 },
-  chimney: { w: 0.8, d: 0.8, h: 1.1 },
-  velux: { w: 1, d: 1.2 },
-  dish: { w: 0.8, d: 0.8 },
-};
 
 
 
@@ -31,19 +27,20 @@ const LINEAR_THICKNESS = { muret: 0.24, fence: 0.2, hedge: 0.6 };
 const snap = (v) => Math.round(v * 4) / 4;
 
 export function placeOpening(store, kind, edgeId, storey, offsetMetres) {
-  const id = newId('o');
+  const id = newId('o', store.model);
+  // Whole on its wall: a click near a corner put half a window round it.
   store.update((m) => ({
     ...m,
-    openings: [...m.openings, {
+    openings: [...m.openings, fitOpening(m, {
       id, edge: edgeId, storey: storey || 0, kind,
-      offset: Math.max(0.05, Math.round(offsetMetres * 20) / 20), ...OPENING_DEFAULTS[kind],
-    }],
+      offset: Math.round(offsetMetres * 20) / 20, ...OPENING_DEFAULTS[kind],
+    })],
   }));
   store.select({ type: 'opening', id });
 }
 
 export function placeRoofItem(store, kind, pt) {
-  const id = newId('r');
+  const id = newId('r', store.model);
   store.update((m) => ({
     ...m,
     roofItems: [...m.roofItems, { id, kind, x: snap(pt[0]), y: snap(pt[1]), ...ROOF_ITEM_DEFAULTS[kind] }],
@@ -52,7 +49,7 @@ export function placeRoofItem(store, kind, pt) {
 }
 
 export function placeProp(store, kind, pt) {
-  const id = newId('p');
+  const id = newId('p', store.model);
   let def = PROP_DEFAULTS[kind];
   let extra = {};
   if (kind === 'stairs') {
@@ -155,9 +152,13 @@ export function runShape(kind, from, to) {
   return { len, shape: horiz ? { x: a0, y: c, w: len, d: t } : { x: c, y: a0, w: t, d: len } };
 }
 
-/** Create a linear prop from a dragged run. */
+/**
+ * Create a linear prop from a dragged run. A click without a drag lays
+ * nothing: it used to leave a half-metre stub where one meant to select.
+ */
 export function placeRun(store, kind, from, to) {
-  const id = newId('p');
+  if (Math.max(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1])) < 0.25) return;
+  const id = newId('p', store.model);
   const def = PROP_DEFAULTS[kind] || {};
   const { shape } = runShape(kind, from, to);
   store.update((m) => ({ ...m, props: [...m.props, { id, kind, ...def, ...shape }] }));

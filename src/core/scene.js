@@ -6,7 +6,7 @@
 import { Mesh } from './mesh.js';
 import { boundaryEdges, decomposeRects, bounds, parseKey, runExtents } from './grid.js';
 import { buildRoof, heightField, undersideAt, STEP } from './roof.js';
-import { cellSet, wallTop, storeyBase, cellSizeOf, buildingCells, propFootprint, openingShown } from './model.js';
+import { cellSet, wallTop, cellSizeOf, buildingCells, propFootprint, openingShown, openingSpan } from './model.js';
 import { focusRect } from './focus.js';
 import { buildProps, roundedRect } from './props.js';
 
@@ -43,17 +43,17 @@ function wallRect(mesh, g, s0, s1, z0, z1, mat, lift, after) {
 function recessOf(op, b, zTopAt, run) {
   const depth = Math.min(1, op.depth || 0);
   if (depth < 0.01) return null;
-  const zBase = storeyBase(b, op.storey || 0);
   const w = op.width ?? 1.2;
   const c = op.offset ?? 0.5;
-  const z0 = zBase + (op.sill ?? 0.95);
+  const span = openingSpan(op, b);
+  const z0 = span.z0;
   // The recess may be wider and taller than what stands in it — a doorway set
   // back into a porch, which is what a user described: eighty centimetres of
   // wall either side of his door. The leaf, its frame and its glass keep the
   // opening's own dimensions; only the hole grows.
   const side = Math.max(0, Math.min(2, op.sides || 0));
   const head = Math.max(0, Math.min(1, op.head || 0));
-  const z1 = z0 + (op.height ?? 1.25) + head;
+  const z1 = span.z1 + head;
   // A niche must sit wholly inside its wall. Where the opening pokes past the
   // roof underside — a user mid-adjustment — it falls back to flush rather
   // than carving a hole open to the sky. Measured at the widened edges, which
@@ -67,13 +67,12 @@ function recessOf(op, b, zTopAt, run) {
 
 /** Draw one opening (window, door, garage door...) onto its wall. */
 function buildOpening(mesh, op, g, b, m, rec) {
-  const zBase = storeyBase(b, op.storey || 0);
   const w = op.width ?? 1.2;
-  const h = op.height ?? 1.25;
-  const sill = op.sill ?? 0.95;
   const c = op.offset ?? 0.5;
   const s0 = c - w / 2, s1 = c + w / 2;
-  const z0 = zBase + sill, z1 = zBase + sill + h;
+  // Within its level: the joinery never runs up into the floor above.
+  const { z0, z1 } = openingSpan(op, b);
+  const h = z1 - z0;
   // Anchored to this building's own wall material, which may be recoloured.
   const own = (b.overrides && Object.keys(b.overrides).length) || b.texture;
   const wallMat = own ? `wall#${b.id}` : 'wall';
