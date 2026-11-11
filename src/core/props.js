@@ -90,6 +90,50 @@ function blob(mesh, cx, cy, z0, r, h, mat, anchor, sides = 12) {
 }
 
 /**
+ * A conifer: three tiers, each a cone cut short where the next one starts,
+ * flat-shaded like the broad-leaved tree.
+ *
+ * Cut rather than left whole and overlapping: the part of a lower cone inside
+ * the one above would be faces with depths of their own, and nothing in a
+ * painter's sort guarantees they stay hidden. Each tier ends narrower than
+ * the next one begins, so its top edge is tucked under that tier's skirt —
+ * and each tier sits above a horizontal plane, which is what lets the
+ * renderer order the stack exactly (see stackObjects in svg.js).
+ */
+function conifer(mesh, cx, cy, r, tag, sides = 10) {
+  const trunkH = r * 0.45;
+  mesh.box([cx - 0.1, cy - 0.1, 0], [cx + 0.1, cy + 0.1, trunkH], 'trunk', `${tag}:0`, ['bottom'], anchor);
+  const H = r * 2.7;
+  const tiers = [
+    { z: 0, h: 0.5, s: 1 }, { z: 0.3, h: 0.5, s: 0.78 }, { z: 0.55, h: 0.45, s: 0.55 },
+  ];
+  const ring = (rad, z) => {
+    const pts = [];
+    for (let k = 0; k < sides; k++) {
+      const a = (k / sides) * Math.PI * 2 + Math.PI / sides;
+      pts.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, z]);
+    }
+    return pts;
+  };
+  tiers.forEach((t, i) => {
+    const z0 = trunkH + t.z * H, apex = z0 + t.h * H;
+    const top = i + 1 < tiers.length ? trunkH + tiers[i + 1].z * H : apex;
+    const base = ring(r * t.s, z0);
+    const group = `${tag}:${i + 1}`;
+    if (i === 0) mesh.poly([...base].reverse(), 'foliage', group, anchor);
+    if (top >= apex) {
+      for (let k = 0; k < sides; k++) mesh.tri(base[k], base[(k + 1) % sides], [cx, cy, apex], 'foliage', group, anchor);
+      return;
+    }
+    const cut = ring(r * t.s * (apex - top) / (apex - z0), top);
+    for (let k = 0; k < sides; k++) {
+      const k2 = (k + 1) % sides;
+      mesh.quad(base[k], base[k2], cut[k2], cut[k], 'foliage', group, anchor);
+    }
+  });
+}
+
+/**
  * A garden wall, in the material of the house so a boundary wall reads as
  * belonging to it, capped with a slightly proud coping.
  */
@@ -169,6 +213,171 @@ function segmentedBox(mesh, min, max, mat, group, anchor, target = 2.5) {
   }
 }
 
+/**
+ * The group a car's faces go in. Plain `car` — what every car has always
+ * been drawn as — unless something stands over it: see buildProps.
+ */
+function carGroup(p, m) {
+  // Under a carport, a car joins the exact ordering pass along with the
+  // carport itself: a roof over a car is the case centres get wrong, the
+  // car's side coming out nearer than the middle of the cover above it.
+  const sheltered = m.props.some((c) => c.kind === 'carport'
+    && p.x > c.x && p.x < c.x + (c.w ?? 3) && p.y > c.y && p.y < c.y + (c.d ?? 5.5));
+  return sheltered ? `parked:${p.id}` : 'car';
+}
+
+/*
+ * --- Equipment -------------------------------------------------------------
+ *
+ * What a home dashboard puts a badge on. Each piece is a few axis-aligned
+ * boxes that touch or stack but never interpenetrate, in a group of its own
+ * that the renderer's exact ordering pass takes in: two such boxes always
+ * have a world axis between them, so their order is decided, not guessed —
+ * against each other and against the walls, roofs and slabs they stand by.
+ */
+
+/** A box given by its corners in a frame along a wall: s along, o out, z up. */
+function wallBox(mesh, g, s0, s1, o0, o1, z0, z1, mat, group) {
+  const p = (sv, ov) => [g.a[0] + g.u[0] * sv + g.n[0] * ov, g.a[1] + g.u[1] * sv + g.n[1] * ov];
+  const a = p(s0, o0), b = p(s1, o1);
+  mesh.box([Math.min(a[0], b[0]), Math.min(a[1], b[1]), z0], [Math.max(a[0], b[0]), Math.max(a[1], b[1]), z1],
+    mat, group, ['bottom']);
+}
+
+/**
+ * A wall fixture, on the wall frame `g` (start, along, outward normal), its
+ * centre `s` metres along and `z` metres up.
+ */
+export function buildFixture(mesh, f, g, s, z) {
+  const group = `equip:${f.id}`;
+  const B = (s0, s1, o0, o1, z0, z1, mat) => wallBox(mesh, g, s + s0, s + s1, o0, o1, z + z0, z + z1, mat, group);
+  switch (f.kind) {
+    // A little larger than life, as the windows are: at the size a picture
+    // has on a dashboard, a lamp of true size is a speck.
+    case 'wallLight':
+      // Back plate, the lantern in front of it, a cap over the lantern.
+      B(-0.1, 0.1, 0, 0.05, -0.22, 0.22, 'lampPost');
+      B(-0.11, 0.11, 0.05, 0.28, -0.17, 0.14, 'lampGlass');
+      B(-0.14, 0.14, 0.05, 0.31, 0.14, 0.21, 'lampPost');
+      break;
+    case 'camera':
+      // A bracket, and the body pointing out from the wall, lens at its end.
+      B(-0.04, 0.04, 0, 0.16, -0.04, 0.04, 'camBody');
+      B(-0.1, 0.1, 0.16, 0.56, -0.13, 0.07, 'camBody');
+      B(-0.065, 0.065, 0.56, 0.575, -0.095, 0.035, 'camLens');
+      break;
+    case 'charger':
+      // The box, its status light, the socket below it.
+      B(-0.22, 0.22, 0, 0.16, -0.3, 0.3, 'chargerBody');
+      B(-0.13, 0.13, 0.16, 0.172, 0.1, 0.16, 'chargerLight');
+      B(-0.08, 0.08, 0.16, 0.18, -0.17, -0.03, 'chargerSocket');
+      break;
+    default:
+      break;
+  }
+}
+
+/**
+ * A frame for a ground item facing `dir`: `t` from its back to its front,
+ * `u` across it, as world boxes. The front is the side named by `dir`.
+ */
+function facing(p, dir) {
+  const x0 = p.x, y0 = p.y, x1 = p.x + p.w, y1 = p.y + p.d;
+  const alongX = dir === 'E' || dir === 'W';
+  const depth = alongX ? p.w : p.d, width = alongX ? p.d : p.w;
+  const back = { N: y0, S: y1, E: x0, W: x1 }[dir];
+  const sign = dir === 'N' || dir === 'E' ? 1 : -1;
+  return {
+    depth, width,
+    box(mesh, t0, t1, u0, u1, z0, z1, mat, group) {
+      const a = back + sign * t0, b = back + sign * t1;
+      const lo = Math.min(a, b), hi = Math.max(a, b);
+      if (alongX) mesh.box([lo, y0 + u0, z0], [hi, y0 + u1, z1], mat, group, ['bottom']);
+      else mesh.box([x0 + u0, lo, z0], [x0 + u1, hi, z1], mat, group, ['bottom']);
+    },
+  };
+}
+
+function lamppost(mesh, p) {
+  const group = `equip:${p.id}`;
+  const cx = p.x + p.w / 2, cy = p.y + p.d / 2;
+  const h = Math.max(0.8, p.h ?? 2.2);
+  const sq = (r, z0, z1, mat) => mesh.box([cx - r, cy - r, z0], [cx + r, cy + r, z1], mat, group, ['bottom']);
+  sq(0.11, 0, 0.12, 'lampPost');
+  sq(0.045, 0.12, h - 0.46, 'lampPost');
+  sq(0.06, h - 0.46, h - 0.42, 'lampPost');
+  sq(0.15, h - 0.42, h - 0.1, 'lampGlass');
+  sq(0.19, h - 0.1, h, 'lampPost');
+}
+
+function heatpump(mesh, p) {
+  const group = `equip:${p.id}`;
+  const f = facing(p, p.dir || 'S');
+  const h = Math.max(0.3, p.h ?? 0.8);
+  const { depth, width } = f;
+  // Feet, then the cabinet on them, then on its front the round fan grille —
+  // a disc of bars reads at sixty pixels where a real grille would not.
+  f.box(mesh, depth * 0.15, depth * 0.85, 0.08, 0.2, 0, 0.06, 'hpGrille', group);
+  f.box(mesh, depth * 0.15, depth * 0.85, width - 0.2, width - 0.08, 0, 0.06, 'hpGrille', group);
+  f.box(mesh, 0, depth, 0, width, 0.06, h, 'hpBody', group);
+  const r = Math.min((h - 0.06) * 0.36, width * 0.28);
+  const uc = width * 0.38, zc = 0.06 + (h - 0.06) / 2;
+  f.box(mesh, depth, depth + 0.012, uc - r, uc + r, zc - r, zc + r, 'hpGrille', group);
+  for (const dz of [-r * 0.5, 0, r * 0.5]) {
+    f.box(mesh, depth + 0.012, depth + 0.02, uc - r, uc + r, zc + dz - 0.012, zc + dz + 0.012, 'hpBody', group);
+  }
+  // The control box on the side of the fan, as the real units have.
+  f.box(mesh, depth, depth + 0.012, width * 0.74, width * 0.9, zc - r * 0.6, zc + r * 0.6, 'hpGrille', group);
+}
+
+function mailbox(mesh, p) {
+  const group = `equip:${p.id}`;
+  const f = facing(p, p.dir || 'S');
+  const h = Math.max(0.6, p.h ?? 1.15);
+  const { depth, width } = f;
+  const boxH = Math.min(0.42, h * 0.4);
+  f.box(mesh, depth / 2 - 0.04, depth / 2 + 0.04, width / 2 - 0.04, width / 2 + 0.04, 0, h - boxH, 'mailPost', group);
+  f.box(mesh, 0, depth, 0, width, h - boxH, h, 'mailBox', group);
+  f.box(mesh, depth, depth + 0.012, width * 0.22, width * 0.78, h - boxH * 0.38, h - boxH * 0.26, 'mailSlot', group);
+}
+
+/**
+ * A carport or pergola: four posts, two beams along its length, and a cover —
+ * a flat roof, or slats across with daylight between them. Under it a car
+ * parks, which is why the car beneath joins the exact ordering too.
+ */
+function carport(mesh, p) {
+  const group = `equip:${p.id}`;
+  const x0 = p.x, y0 = p.y, x1 = p.x + p.w, y1 = p.y + p.d;
+  const h = Math.max(1.8, p.h ?? 2.3);
+  const post = 0.12, beam = 0.12, cover = 0.1;
+  const zb = h - cover - beam;
+  for (const [px, py] of [[x0, y0], [x1 - post, y0], [x0, y1 - post], [x1 - post, y1 - post]]) {
+    mesh.box([px, py, 0], [px + post, py + post, zb], 'carportFrame', group, ['bottom']);
+  }
+  const alongY = p.d >= p.w;
+  if (alongY) {
+    mesh.box([x0, y0, zb], [x0 + beam, y1, zb + beam], 'carportFrame', group, ['bottom']);
+    mesh.box([x1 - beam, y0, zb], [x1, y1, zb + beam], 'carportFrame', group, ['bottom']);
+  } else {
+    mesh.box([x0, y0, zb], [x1, y0 + beam, zb + beam], 'carportFrame', group, ['bottom']);
+    mesh.box([x0, y1 - beam, zb], [x1, y1, zb + beam], 'carportFrame', group, ['bottom']);
+  }
+  const zc = zb + beam;
+  if (p.cover === 'slats') {
+    const len = alongY ? p.d : p.w;
+    const n = Math.max(2, Math.round(len / 0.3));
+    const slat = 0.1;
+    for (let k = 0; k < n; k++) {
+      const a = (len - slat) * (k / (n - 1));
+      if (alongY) mesh.box([x0, y0 + a, zc], [x1, y0 + a + slat, zc + cover], 'carportFrame', group, ['bottom']);
+      else mesh.box([x0 + a, y0, zc], [x0 + a + slat, y1, zc + cover], 'carportFrame', group, ['bottom']);
+    }
+  } else {
+    mesh.box([x0, y0, zc], [x1, y1, zc + cover], 'carportRoof', group);
+  }
+}
+
 /** Extent of a prop along and across a given axis. */
 function extent(p, horiz) {
   const w = p.w ?? 2, d = p.d ?? 0.2;
@@ -231,6 +440,10 @@ export function buildProps(mesh, m) {
       }
       case 'tree': {
         const r = p.r ?? 1.4;
+        if (p.style === 'conifer') {
+          conifer(mesh, p.x, p.y, r, `stack:${p.id}`);
+          break;
+        }
         const trunkH = r * 0.75;
         mesh.box([p.x - 0.11, p.y - 0.11, 0], [p.x + 0.11, p.y + 0.11, trunkH], 'trunk', 'trunk', ['bottom'], anchor);
         blob(mesh, p.x, p.y, trunkH, r, r * 1.9, 'foliage', anchor);
@@ -338,13 +551,50 @@ export function buildProps(mesh, m) {
       case 'car': {
         const w = p.w ?? 1.8, d = p.d ?? 4.2;
         const x0 = p.x - w / 2, x1 = p.x + w / 2, y0 = p.y - d / 2, y1 = p.y + d / 2;
-        mesh.box([x0, y0, 0.22], [x1, y1, 0.78], 'carBody', 'car', ['bottom'], anchor);
-        mesh.box([x0 + 0.16, y0 + d * 0.22, 0.78], [x1 - 0.16, y1 - d * 0.28, 1.22], 'carGlass', 'car', ['bottom'], anchor);
-        for (const [wx, wy] of [[x0, y0 + d * 0.2], [x1 - 0.22, y0 + d * 0.2], [x0, y1 - d * 0.3], [x1 - 0.22, y1 - d * 0.3]]) {
-          mesh.box([wx, wy, 0], [wx + 0.22, wy + 0.7, 0.34], 'carTyre', 'car', ['bottom'], anchor);
+        const group = carGroup(p, m);
+        mesh.box([x0, y0, 0.22], [x1, y1, 0.78], 'carBody', group, ['bottom'], anchor);
+        const dir = p.dir || 'N';
+        if (dir === 'N') {
+          // Facing north, as every car was before it had a direction: kept
+          // to the letter, so those files draw to the same pixel.
+          mesh.box([x0 + 0.16, y0 + d * 0.22, 0.78], [x1 - 0.16, y1 - d * 0.28, 1.22], 'carGlass', group, ['bottom'], anchor);
+          for (const [wx, wy] of [[x0, y0 + d * 0.2], [x1 - 0.22, y0 + d * 0.2], [x0, y1 - d * 0.3], [x1 - 0.22, y1 - d * 0.3]]) {
+            mesh.box([wx, wy, 0], [wx + 0.22, wy + 0.7, 0.34], 'carTyre', group, ['bottom'], anchor);
+          }
+          break;
+        }
+        // Any other way, through a frame along the car: `t` from the rear
+        // bumper, `u` across. The bonnet is the longer end, as facing north.
+        const alongX = dir === 'E' || dir === 'W';
+        const L = alongX ? w : d;
+        const rear = { S: y1, E: x0, W: x1 }[dir];
+        const sign = dir === 'E' ? 1 : -1;
+        const box = (t0, t1, u0, u1, z0, z1, mat) => {
+          const a = rear + sign * t0, b = rear + sign * t1;
+          const [lo, hi] = [Math.min(a, b), Math.max(a, b)];
+          if (alongX) mesh.box([lo, y0 + u0, z0], [hi, y0 + u1, z1], mat, group, ['bottom'], anchor);
+          else mesh.box([x0 + u0, lo, z0], [x0 + u1, hi, z1], mat, group, ['bottom'], anchor);
+        };
+        const W = alongX ? d : w;
+        box(L * 0.22, L * 0.72, 0.16, W - 0.16, 0.78, 1.22, 'carGlass');
+        for (const t of [L * 0.2, L * 0.7]) {
+          box(t, t + 0.7, 0, 0.22, 0, 0.34, 'carTyre');
+          box(t, t + 0.7, W - 0.22, W, 0, 0.34, 'carTyre');
         }
         break;
       }
+      case 'lamppost':
+        lamppost(mesh, p);
+        break;
+      case 'heatpump':
+        heatpump(mesh, p);
+        break;
+      case 'mailbox':
+        mailbox(mesh, p);
+        break;
+      case 'carport':
+        carport(mesh, p);
+        break;
       default:
         break;
     }

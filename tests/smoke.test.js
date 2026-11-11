@@ -46,7 +46,7 @@ async function watch(win, fn) {
   return seen;
 }
 
-const LIST = { opening: 'openings', roofItem: 'roofItems', prop: 'props' };
+const LIST = { opening: 'openings', roofItem: 'roofItems', prop: 'props', fixture: 'fixtures' };
 
 /**
  * Work every control of a part of the inspector, as a hand would: each option
@@ -126,7 +126,7 @@ await checkAsync('chaque contrôle de l’inspecteur, pour chaque type d’objet
   const doc = frame.contentDocument;
   const store = await appStore();
   const before = store.model;
-  const items = { openings: [], roofItems: [], props: [] };
+  const items = { openings: [], roofItems: [], props: [], fixtures: [] };
   for (const [type, list] of Object.entries(FIXTURE_ITEMS)) {
     list.forEach((it, i) => items[LIST[type]].push({ ...it, id: `smoke${type}${i}` }));
   }

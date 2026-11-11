@@ -6,6 +6,7 @@
  *
  *   node dev/run-tests.mjs            run the suite once
  *   CHROME=/path/to/chrome node ...   use that browser
+ *   ONLY=roof,viewport node ...       run those test files alone
  *
  * It waits for the suite to say it is done, in real time, rather than giving
  * Chrome a virtual-time budget: the virtual clock jumped straight over the
@@ -168,7 +169,9 @@ async function main() {
     await s('Runtime.enable');
     await s('Log.enable');
     await s('Page.enable');
-    await s('Page.navigate', { url: `http://127.0.0.1:${port}/tests/index.html` });
+    // ONLY=roof,rendu-gestes runs those test files alone.
+    const only = process.env.ONLY ? `?only=${encodeURIComponent(process.env.ONLY)}` : '';
+    await s('Page.navigate', { url: `http://127.0.0.1:${port}/tests/index.html${only}` });
 
     const started = Date.now();
     let shown = 0;

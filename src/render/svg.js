@@ -73,8 +73,13 @@ const SHELL = new Set(['wall', 'roof', 'roofEdge', 'niche']);
  * own house, a terrace at 2.50 m was drawn behind the wall it stands against at
  * 19 of 36 orientations, by up to twelve metres; put the same terrace back on
  * the ground and the fault goes with it.
+ *
+ * Equipment joins it — a lamp on a wall, a heat pump against one, a carport
+ * and the car under it: small solids standing against large ones, which is
+ * where a centre is least to be trusted. Being boxes, they are exactly what
+ * the axis test settles.
  */
-const SOLID = new Set([...SHELL, 'slab', 'stairs']);
+const SOLID = new Set([...SHELL, 'slab', 'stairs', 'equip', 'parked']);
 
 /**
  * A group name without its per-item tag: `slab:p5shoa` -> `slab`.
@@ -371,6 +376,41 @@ function repairSolids(all, camera) {
   out.forEach((i, k) => { faces[i].sortDepth = pool[k]; });
 }
 
+/**
+ * Compact objects built as a stack of tiers: a conifer's cones, one above the
+ * other.
+ *
+ * Each tier lies wholly above the one below, a horizontal plane between them,
+ * and the camera is always above the ground: so a higher tier is never hidden
+ * by a lower one, whatever the angle. Sorted face by face on their centres,
+ * the broad skirt of a lower cone came out nearer than the narrow tier on top
+ * of it at a low camera, and was painted over it. The object is placed by its
+ * own centre among everything else, and drawn tier after tier within itself.
+ *
+ * Groups read `stack:<object>:<tier>`.
+ */
+function stackObjects(faces) {
+  const stacks = new Map();
+  for (const f of faces) {
+    if (!f.group.startsWith('stack:')) continue;
+    const cut = f.group.lastIndexOf(':');
+    const key = f.group.slice(0, cut);
+    if (!stacks.has(key)) stacks.set(key, []);
+    stacks.get(key).push(f);
+  }
+  for (const list of stacks.values()) {
+    let sum = 0;
+    for (const f of list) sum += f.depth;
+    const centre = sum / list.length;
+    for (const f of list) {
+      const tier = Number(f.group.slice(f.group.lastIndexOf(':') + 1)) || 0;
+      // Far smaller than any gap between two objects, far larger than a
+      // rounding error.
+      f.sortDepth = centre + tier * 1e-4;
+    }
+  }
+}
+
 /** Resolve `after` anchors and return faces in draw order. */
 function orderFaces(faces, camera) {
   faces.forEach((f, i) => {
@@ -489,6 +529,7 @@ function orderFaces(faces, camera) {
     }
   }
 
+  stackObjects(faces);
   repairSolids(faces, camera);
 
   /*

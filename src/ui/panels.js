@@ -10,6 +10,7 @@ import { ROOF_TYPES, STEP } from '../core/roof.js';
 import {
   withCellSize, withTheme, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
   storeyHeightOf, DEFAULT_FOCUS, PROP_DEFAULTS, OPENING_DEFAULTS, fitOpening, overlappingOpenings, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
+  TURNABLE_KINDS, quarterTurn, FIXTURE_DEFAULTS, fixtureZRange,
 } from '../core/model.js';
 import { bounds, edgeRunExtent } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
@@ -92,6 +93,7 @@ const COLOUR_GROUPS = [
 ];
 
 const ROOF_LABELS = { hip: 'Croupe (4 pans)', gable: 'Deux pans', flat: 'Plat', shed: 'Appentis (1 pan)' };
+const RIDGE_LABELS = { auto: 'Automatique', ew: 'Est-ouest', ns: 'Nord-sud' };
 const DIR_LABELS = { S: 'vers le sud', N: 'vers le nord', W: "vers l'ouest", E: "vers l'est" };
 const GROUND_LABELS = { grass: 'Pelouse', paving: 'Dallage', gravel: 'Gravier' };
 const OPENING_LABELS = { window: 'Fenêtre', shutter: 'Fenêtre à volets', door: 'Porte', garage: 'Porte de garage' };
@@ -100,7 +102,12 @@ const PROP_LABELS = {
   pool: 'Piscine', terrace: 'Terrasse', path: 'Allée', deck: 'Terrasse bois', bush: 'Buisson',
   muret: 'Muret', gate: 'Portillon / portail', stairs: 'Escalier',
   tree: 'Arbre', hedge: 'Haie', fence: 'Clôture', car: 'Voiture',
+  lamppost: 'Lampadaire', heatpump: 'Pompe à chaleur', mailbox: 'Boîte aux lettres', carport: 'Carport / pergola',
 };
+const FIXTURE_LABELS = { wallLight: 'Applique', camera: 'Caméra', charger: 'Borne de recharge' };
+const FACE_LABELS = [['S', 'le sud'], ['N', 'le nord'], ['E', "l'est"], ['W', "l'ouest"]];
+/** Ground equipment drawn to a fixed shape: no width and depth to offer. */
+const FIXED_SHAPE = new Set(['lamppost', 'mailbox']);
 
 /**
  * Where an opening sits along its wall, counted the way a person would.
@@ -119,7 +126,7 @@ function positionField(m, item, patch) {
   const cs = cellSizeOf(m);
   const host = buildingOfEdge(m, item.edge);
   const run = host ? edgeRunExtent(new Set(host.cells), item.edge, cs) : null;
-  const w = item.width ?? 1.2;
+  const w = item.width ?? FIXTURE_DEFAULTS[item.kind]?.width ?? 1.2;
   if (!run) {
     // The wall has been erased under it; fall back rather than show nothing.
     return field('Position', slider(item.offset ?? 0.5, {
@@ -134,12 +141,13 @@ function positionField(m, item, patch) {
   const max = Math.max(0, run.hi - run.lo - w, from);
   const min = Math.min(0, from);
   const outside = from < -1e-6 || from > run.hi - run.lo - w + 1e-6;
+  const what = FIXTURE_DEFAULTS[item.kind] ? 'l’équipement' : 'l’ouverture';
   return field('Position', slider(Math.round(from * 100) / 100, {
     min, max, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
     onInput: (v) => patch({ offset: v + run.lo + w / 2 }, 'offset'),
   }), outside
-    ? 'l’ouverture dépasse de son pan de mur'
-    : 'depuis l’angle du mur, jusqu’au bord de l’ouverture');
+    ? `${what} dépasse de son pan de mur`
+    : `depuis l’angle du mur, jusqu’au bord de ${what}`);
 }
 
 export class Inspector {
@@ -229,6 +237,29 @@ export class Inspector {
       this.focusSection(),
     );
     this.restoreFocus(focus, caret);
+  }
+
+  /**
+   * Bring what shows the camera up to date, without rebuilding anything.
+   *
+   * An orbit changes the camera sixty times a second, and nothing in the panel
+   * but the « Vue » section reads it: rebuilding the whole inspector for each
+   * frame was most of what a turn cost. A control in the middle of its own
+   * gesture is left alone — it is the one setting the value.
+   */
+  syncCamera() {
+    const c = this.cameraControls;
+    if (!c || !this.root.contains(c.projection)) { this.render(); return; }
+    const cam = this.store.model.camera;
+    if (c.badge) c.badge.textContent = `${Math.round(cam.yaw)}° — ${viewpointLabel(cam.yaw)}${c.views}`;
+    for (const k of ['yaw', 'pitch', 'roll']) {
+      const { input, out, format } = c[k];
+      if (input === this.busy) continue;
+      const v = Math.round(cam[k]);
+      input.value = v;
+      out.textContent = format(v);
+    }
+    if (c.projection.value !== cam.projection) c.projection.value = cam.projection;
   }
 
   /** Stands in for the selection panel, so the group is never a bare title. */
@@ -475,6 +506,10 @@ export class Inspector {
     const s = h('div', 'roof-fields');
     s.appendChild(field('Forme', select(b.roof.type, ROOF_TYPES.map((t) => [t, ROOF_LABELS[t]]),
       (v) => this.store.patchRoof({ type: v }))));
+    if (b.roof.type === 'gable') {
+      s.appendChild(field('Faîtage', select(b.roof.ridge || 'auto', Object.entries(RIDGE_LABELS),
+        (v) => this.store.patchRoof({ ridge: v })), 'automatique : le long du grand côté'));
+    }
     if (b.roof.type === 'shed') {
       s.appendChild(field('Pente', select(b.roof.shedDir, Object.entries(DIR_LABELS),
         (v) => this.store.patchRoof({ shedDir: v }))));
@@ -600,30 +635,44 @@ export class Inspector {
         + (nv ? ` · ${nv} vue${nv > 1 ? 's' : ''}` : ''),
     });
     const deg = (v) => `${Math.round(v)}°`;
+    const yawFormat = (v) => `${deg(v)} — ${viewpointLabel(v)}`;
+    const yaw = slider(Math.round(m.camera.yaw), {
+      min: 0, max: 359, step: 1, format: yawFormat,
+      onInput: (v) => this.store.setCamera({ yaw: normaliseYaw(v) }),
+    });
+    const pitch = slider(Math.round(m.camera.pitch), {
+      min: PITCH_RANGE[0], max: PITCH_RANGE[1], step: 1, format: deg,
+      onInput: (v) => this.store.setCamera({ pitch: v }),
+    });
+    const roll = slider(Math.round(m.camera.roll), {
+      min: ROLL_RANGE[0], max: ROLL_RANGE[1], step: 1, format: deg,
+      onInput: (v) => this.store.setCamera({ roll: v }),
+    });
+    const projection = select(m.camera.projection,
+      Object.entries(PROJECTIONS).map(([k, v]) => [k, v.label]),
+      (v) => this.store.setCamera({ projection: v }));
     s.append(
       // Free orbit, in numbers as well as by dragging: a saved view is worth
       // little if it cannot be reproduced, and "37°" can be typed back in.
-      field('Orientation', slider(Math.round(m.camera.yaw), {
-        min: 0, max: 359, step: 1,
-        format: (v) => `${deg(v)} — ${viewpointLabel(v)}`,
-        onInput: (v) => this.store.setCamera({ yaw: normaliseYaw(v) }),
-      }), 'ou glissez directement dans le rendu'),
-      field('Hauteur de vue', slider(Math.round(m.camera.pitch), {
-        min: PITCH_RANGE[0], max: PITCH_RANGE[1], step: 1, format: deg,
-        onInput: (v) => this.store.setCamera({ pitch: v }),
-      }), 'de rasante à quasi verticale'),
-      field('Inclinaison de l’image', slider(Math.round(m.camera.roll), {
-        min: ROLL_RANGE[0], max: ROLL_RANGE[1], step: 1, format: deg,
-        onInput: (v) => this.store.setCamera({ roll: v }),
-      }), 'fait pivoter le dessin dans son cadre — ou Alt + glisser dans le rendu'),
-      field('Projection', select(m.camera.projection,
-        Object.entries(PROJECTIONS).map(([k, v]) => [k, v.label]),
-        (v) => this.store.setCamera({ projection: v }))),
+      field('Orientation', yaw, 'ou glissez directement dans le rendu'),
+      field('Hauteur de vue', pitch, 'de rasante à quasi verticale'),
+      field('Inclinaison de l’image', roll,
+        'fait pivoter le dessin dans son cadre — ou Alt + glisser dans le rendu'),
+      field('Projection', projection),
     );
+    // What syncCamera updates in place when only the camera has moved.
+    const ctl = (wrap, format) => ({ input: wrap.querySelector('input'), out: wrap.querySelector('output'), format });
+    this.cameraControls = {
+      badge: s.panel.querySelector('.panel-badge'),
+      views: nv ? ` · ${nv} vue${nv > 1 ? 's' : ''}` : '',
+      yaw: ctl(yaw, yawFormat), pitch: ctl(pitch, deg), roll: ctl(roll, deg), projection,
+    };
 
     const reset = h('button', 'subtle', 'Revenir à la vue isométrique');
     reset.addEventListener('click', () => this.store.setCamera({
-      yaw: Math.round(m.camera.yaw / 90) % 4 * 90, pitch: DEFAULT_PITCH, roll: 0,
+      // Read at the click: the section is no longer rebuilt as the camera
+      // turns, so the camera it was drawn with may be minutes old.
+      yaw: Math.round(this.store.model.camera.yaw / 90) % 4 * 90, pitch: DEFAULT_PITCH, roll: 0,
     }));
     s.appendChild(reset);
 
@@ -660,7 +709,7 @@ export class Inspector {
       this.set({
         views: [...m.views, {
           id: newId('v', m), name,
-          camera: { ...m.camera }, focus: { ...m.focus },
+          camera: { ...this.store.model.camera }, focus: { ...m.focus },
         }],
       });
     });
@@ -737,7 +786,9 @@ export class Inspector {
 
   selectionSection(item) {
     const type = this.store.selection.type;
-    const label = { opening: OPENING_LABELS, roofItem: ROOF_ITEM_LABELS, prop: PROP_LABELS }[type][item.kind]
+    const label = {
+      opening: OPENING_LABELS, roofItem: ROOF_ITEM_LABELS, prop: PROP_LABELS, fixture: FIXTURE_LABELS,
+    }[type][item.kind]
       || item.kind;
     const s = this.block(label);
     const patch = (p, c) => this.store.patchSelected(p, c);
@@ -808,6 +859,28 @@ export class Inspector {
           }), 'au-dessus de l’ouverture'),
         );
       }
+    } else if (type === 'fixture') {
+      const m = this.store.model;
+      const host = buildingOfEdge(m, item.edge) || this.store.activeBuilding;
+      const storeys = host ? host.storeys : 1;
+      const level = item.storey || 0;
+      s.appendChild(field('Type', select(item.kind, Object.entries(FIXTURE_LABELS),
+        (v) => patch((it, mm) => fitOpening(mm, { ...it, kind: v })))));
+      if (storeys > 1 || level >= storeys) {
+        s.appendChild(field('Étage', select(String(level),
+          Array.from({ length: Math.max(storeys, level + 1) }, (_, i) => [String(i),
+            (i === 0 ? 'Rez-de-chaussée' : `Étage ${i}`) + (i >= storeys ? ' (supprimé)' : '')]),
+          (v) => patch({ storey: Number(v) })),
+        level >= storeys ? 'ce niveau n’existe plus : l’équipement n’est pas dessiné' : undefined));
+      }
+      const [lo, hi] = fixtureZRange(host ? storeyHeightOf(host, level) : 2.7);
+      s.append(
+        positionField(m, item, patch),
+        field('Hauteur', slider(Math.max(lo, Math.min(hi, item.z ?? FIXTURE_DEFAULTS[item.kind].z)), {
+          min: lo, max: hi, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+          onInput: (v) => patch({ z: v }, 'z'),
+        }), 'du centre, au-dessus du plancher de son niveau'),
+      );
     } else if (type === 'roofItem') {
       s.append(
         field('Type', select(item.kind, Object.entries(ROOF_ITEM_LABELS), (v) => patch({ kind: v }))),
@@ -846,7 +919,10 @@ export class Inspector {
       );
       // A tree and a bush are drawn from their radius alone: offering them a
       // width and a depth gave the bush two sliders that did nothing.
-      if (item.kind === 'tree' || item.kind === 'bush') {
+      if (FIXED_SHAPE.has(item.kind)) {
+        // Drawn to one shape: a width and a depth would be sliders that
+        // stretch a lamp into a wall.
+      } else if (item.kind === 'tree' || item.kind === 'bush') {
         s.appendChild(field('Taille', slider(item.r ?? PROP_DEFAULTS[item.kind].r, {
           min: 0.5, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
           onInput: (v) => patch({ r: v }, 'r'),
@@ -901,6 +977,43 @@ export class Inspector {
           onInput: (v) => patch({ z: v }, 'z'),
         }), 'la dalle reçoit ses joues — et masque ce qui reste au sol dessous'));
       }
+      if (item.kind === 'heatpump' || item.kind === 'mailbox') {
+        // The side it faces; width and depth trade places when it turns
+        // across, as the quarter-turn button does.
+        const across = (d) => d === 'E' || d === 'W';
+        s.appendChild(field(item.kind === 'heatpump' ? 'Ventilateur vers' : 'Fente vers',
+          select(item.dir || 'S', FACE_LABELS, (v) => patch((it) => (across(it.dir || 'S') === across(v)
+            ? { dir: v } : { dir: v, w: it.d, d: it.w })))));
+      }
+      if (item.kind === 'lamppost') {
+        s.appendChild(field('Hauteur', slider(item.h ?? 2.2, {
+          min: 0.8, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          onInput: (v) => patch({ h: v }, 'h'),
+        }), 'une borne basse ou un lampadaire'));
+      }
+      if (item.kind === 'carport') {
+        s.append(
+          field('Hauteur', slider(item.h ?? 2.3, {
+            min: 1.8, max: 3.5, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+            onInput: (v) => patch({ h: v }, 'h'),
+          }), 'sous la couverture'),
+          field('Couverture', select(item.cover || 'flat',
+            [['flat', 'Toit plat'], ['slats', 'Lames (pergola)']], (v) => patch({ cover: v }))),
+        );
+      }
+      if (item.kind === 'car') {
+        // Width and depth are the footprint on the ground, so a car turned
+        // across trades them: what stays is the car, not the numbers.
+        const across = (d) => d === 'E' || d === 'W';
+        s.appendChild(field('Sens', select(item.dir || 'N',
+          [['N', 'vers le nord'], ['E', "vers l'est"], ['S', 'vers le sud'], ['W', "vers l'ouest"]],
+          (v) => patch((it) => (across(it.dir || 'N') === across(v) ? { dir: v }
+            : { dir: v, w: it.d, d: it.w }))), 'le côté où pointe le capot'));
+      }
+      if (item.kind === 'tree') {
+        s.appendChild(field('Silhouette', select(item.style || 'leafy',
+          [['leafy', 'Feuillu'], ['conifer', 'Conifère']], (v) => patch({ style: v }))));
+      }
       if (item.kind === 'gate') {
         s.appendChild(field('Type', select(item.style || 'swing',
           [['swing', 'Portillon battant'], ['sliding', 'Portail coulissant']],
@@ -914,6 +1027,13 @@ export class Inspector {
       }
     }
 
+    if (type === 'prop' && TURNABLE_KINDS.has(item.kind)) {
+      const turn = h('button', 'subtle', 'Tourner d’un quart de tour');
+      turn.type = 'button';
+      turn.title = 'Dans le sens des aiguilles d’une montre, autour de son centre';
+      turn.addEventListener('click', () => this.store.patchSelected((it) => quarterTurn(it)));
+      s.appendChild(turn);
+    }
     const dup = h('button', 'subtle', 'Dupliquer (Ctrl+D)');
     dup.addEventListener('click', () => this.store.duplicateSelected());
     s.appendChild(dup);

@@ -6,9 +6,11 @@
 import { Mesh } from './mesh.js';
 import { boundaryEdges, decomposeRects, bounds, parseKey, runExtents } from './grid.js';
 import { buildRoof, heightField, undersideAt, STEP } from './roof.js';
-import { cellSet, wallTop, cellSizeOf, buildingCells, propFootprint, openingShown, openingSpan } from './model.js';
+import {
+  cellSet, wallTop, cellSizeOf, buildingCells, propFootprint, openingShown, openingSpan, fixtureHeight,
+} from './model.js';
 import { focusRect } from './focus.js';
-import { buildProps, roundedRect } from './props.js';
+import { buildProps, buildFixture, roundedRect } from './props.js';
 
 const LIFT = 0.015; // how far detail quads float off the surface they decorate
 const GROUND_ROUND = 2.5; // corner radius of the ground pad, in metres
@@ -386,6 +388,14 @@ function buildOne(mesh, m, b, cs, roofItems) {
   for (const op of openings) {
     const g = geoms.get(op.edge);
     if (g) buildOpening(mesh, op, g, b, m, recessOf(op, b, zTopFor(g), runs.get(op.edge)));
+  }
+
+  // Wall fixtures, as openings: on their own volume's edges, on a level it
+  // still has.
+  for (const f of m.fixtures || []) {
+    const g = geoms.get(f.edge);
+    if (!g || !openingShown(f, b)) continue;
+    buildFixture(mesh, f, g, f.offset ?? 0.5, fixtureHeight(f, b));
   }
 
   const roof = buildRoof(mesh, field, b.roof, top, mat);

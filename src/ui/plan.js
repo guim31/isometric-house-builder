@@ -18,8 +18,8 @@ import {
 import { moveBody } from '../core/bodies.js';
 import { focusFrame } from '../core/focus.js';
 import {
-  OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS,
-  placeOpening, placeRoofItem, placeProp, placeRun, runShape, propAt, roofItemAt, roofAt,
+  OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS, FIXTURE_DEFAULTS,
+  placeOpening, placeRoofItem, placeProp, placeRun, runShape, propAt, roofItemAt, roofAt, placeFixture,
 } from './actions.js';
 import {
   cellsAlong, snapLines, snapMove, handlesOf, resizeTo, boxOf, handleShape,
@@ -263,7 +263,7 @@ export class PlanView {
       const py = centred ? p.y - pd / 2 : p.y;
       const a = this.toPx(px, py + pd);
       const selected = this.store.selection?.id === p.id;
-      const shape = p.kind === 'tree' || p.kind === 'bush'
+      const shape = p.kind === 'tree' || p.kind === 'bush' || p.kind === 'lamppost'
         ? el('circle', { cx: a[0] + (pw * map.scale) / 2, cy: a[1] + (pd * map.scale) / 2, r: (pw * map.scale) / 2 })
         : el('rect', {
           x: a[0], y: a[1],
@@ -343,6 +343,22 @@ export class PlanView {
       line.dataset.id = op.id;
       line.dataset.type = 'opening';
       gOpen.appendChild(line);
+    }
+
+    // Wall fixtures, as a dot on their wall.
+    for (const f of m.fixtures || []) {
+      const e = byId.get(f.edge);
+      if (!e) continue;
+      const { a, u } = edgeFrame(f.edge, cs);
+      const c = f.offset ?? 0.5;
+      const pt = this.toPx(a[0] + u[0] * c, a[1] + u[1] * c);
+      const dot = el('circle', {
+        cx: pt[0], cy: pt[1], r: 5,
+        class: `fixture fixture-${f.kind}${this.store.selection?.id === f.id ? ' selected' : ''}`,
+      });
+      dot.dataset.id = f.id;
+      dot.dataset.type = 'fixture';
+      gOpen.appendChild(dot);
     }
 
     // Roof items.
@@ -500,7 +516,8 @@ export class PlanView {
     }
     if (!sel || s.tool !== 'select') return;
     const it = s.selected;
-    if (!it) return;
+    // A fixture has no box: it slides along its wall like an opening.
+    if (!it || sel.type === 'fixture') return;
     if (sel.type === 'opening') {
       const ctx = this.openingContext(it);
       if (ctx) {
@@ -832,10 +849,10 @@ export class PlanView {
       if (target.dataset?.type) {
         s.select({ type: target.dataset.type, id: target.dataset.id });
         const it = s.selected;
-        if (target.dataset.type === 'opening') {
-          // An opening has no free x/y — it lives on a wall. Dragging slides
-          // it along the walls (and across corners) instead of writing
-          // meaningless coordinates onto it.
+        if (target.dataset.type === 'opening' || target.dataset.type === 'fixture') {
+          // An opening has no free x/y — it lives on a wall, and so does a
+          // fixture. Dragging slides it along the walls (and across corners)
+          // instead of writing meaningless coordinates onto it.
           this.drag = { mode: 'slide' };
         } else if (it) {
           this.drag = {
@@ -864,6 +881,12 @@ export class PlanView {
       const hit = this.nearestEdge(pt);
       if (hit) placeOpening(s, tool, hit.edge.id, 0, hit.offset);
       else s.notify('Cliquez près d’un mur pour y poser l’ouverture');
+      return;
+    }
+    if (FIXTURE_DEFAULTS[tool]) {
+      const hit = this.nearestEdge(pt);
+      if (hit) placeFixture(s, tool, hit.edge.id, 0, hit.offset);
+      else s.notify('Cliquez près d’un mur pour y fixer l’équipement');
       return;
     }
     if (ROOF_ITEM_DEFAULTS[tool]) { placeRoofItem(s, tool, pt); return; }

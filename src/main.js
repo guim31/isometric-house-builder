@@ -56,6 +56,19 @@ const TOOL_GROUPS = [
     ],
   },
   {
+    // What a home dashboard puts a badge on: the lights, the camera, the
+    // charger, the heat pump, the letter box, where the car sleeps.
+    title: 'Équipements', folded: true, tools: [
+      ['wallLight', 'Applique'],
+      ['camera', 'Caméra'],
+      ['charger', 'Borne de recharge'],
+      ['lamppost', 'Lampadaire'],
+      ['heatpump', 'Pompe à chaleur'],
+      ['mailbox', 'Boîte aux lettres'],
+      ['carport', 'Carport / pergola'],
+    ],
+  },
+  {
     title: 'Cadrage', folded: true, tools: [
       ['frame', 'Zone de cadrage'],
     ],
@@ -63,7 +76,7 @@ const TOOL_GROUPS = [
 ];
 
 const HINTS = {
-  select: 'Cliquez un élément pour le régler, glissez pour le déplacer — une ouverture coulisse le long des murs. Dans le rendu, glisser fait tourner la maison où qu’on la prenne ; le pavé en bas à droite fait de même, et bascule entre pivoter et déplacer.',
+  select: 'Cliquez un élément pour le régler, glissez pour le déplacer — une ouverture coulisse le long des murs. Dans le rendu, l’élément sélectionné se déplace aussi au glisser ; ailleurs, glisser fait tourner la maison. Le pavé en bas à droite bascule entre pivoter et déplacer.',
   paint: 'Dessinez l’emprise de la maison. Alt efface.',
   rect: 'Glissez pour ajouter un volume rectangulaire. Alt retire.',
   erase: 'Glissez pour retirer des cases.',
@@ -71,10 +84,10 @@ const HINTS = {
   shutter: 'Cliquez près d’un mur pour poser une fenêtre à volets.',
   door: 'Cliquez près d’un mur pour poser une porte.',
   garage: 'Cliquez près d’un mur pour poser une porte de garage.',
-  solar: 'Cliquez sur le toit pour poser des panneaux.',
-  chimney: 'Cliquez sur le toit pour poser une cheminée.',
-  velux: 'Cliquez sur le toit pour poser une fenêtre de toit.',
-  dish: 'Cliquez sur le toit pour poser une parabole.',
+  solar: 'Cliquez sur le toit, dans le plan ou sur le rendu, pour poser des panneaux.',
+  chimney: 'Cliquez sur le toit, dans le plan ou sur le rendu, pour poser une cheminée.',
+  velux: 'Cliquez sur le toit, dans le plan ou sur le rendu, pour poser une fenêtre de toit.',
+  dish: 'Cliquez sur le toit, dans le plan ou sur le rendu, pour poser une parabole.',
   pool: 'Cliquez dans le plan — ou directement sur le rendu — pour poser la piscine.',
   terrace: 'Cliquez dans le plan ou sur le rendu pour poser la terrasse.',
   path: 'Cliquez dans le plan ou sur le rendu pour poser l’allée.',
@@ -87,6 +100,13 @@ const HINTS = {
   muret: 'Glissez dans le plan pour tracer le muret — sa longueur s’affiche pendant le tracé.',
   frame: 'Glissez dans le plan pour délimiter la zone à montrer : le rendu se recadre dessus et le reste disparaît.',
   gate: 'Cliquez près d’un muret : le portail s’y aligne et l’ouvre automatiquement.',
+  wallLight: 'Cliquez un mur, dans le plan ou sur le rendu — à la hauteur voulue — pour fixer une applique. Elle s’allume en vue de nuit.',
+  camera: 'Cliquez un mur, dans le plan ou sur le rendu, pour fixer une caméra de surveillance.',
+  charger: 'Cliquez un mur, près du garage, pour fixer une borne de recharge.',
+  lamppost: 'Cliquez dans le plan ou sur le rendu pour planter un lampadaire. Il s’allume en vue de nuit.',
+  heatpump: 'Cliquez près d’un mur, dans le plan ou sur le rendu, pour poser la pompe à chaleur.',
+  mailbox: 'Cliquez dans le plan ou sur le rendu pour planter la boîte aux lettres, près du portail.',
+  carport: 'Cliquez dans le plan ou sur le rendu pour poser un carport ; une voiture se gare dessous.',
 };
 
 const $ = (id) => document.getElementById(id);
@@ -529,12 +549,28 @@ function renderAll() {
   if (nameInput.value !== store.model.name) nameInput.value = store.model.name;
 }
 
+/**
+ * What a camera move changes: the drawing, and what reads the camera back —
+ * the bearing in the toolbar and the « Vue » section. Nothing else looks at it,
+ * so an orbit no longer redraws the plan nor rebuilds the inspector at every
+ * frame.
+ */
+function renderCamera() {
+  viewport.render();
+  inspector.syncCamera();
+  $('rot-label').textContent = viewpointLabel(store.model.camera.yaw);
+}
+
 let frame = null;
-function scheduleRender() {
+let full = false;
+function scheduleRender(_store, reason) {
+  if (reason !== 'camera') full = true;
   if (frame) return;
   frame = requestAnimationFrame(() => {
     frame = null;
-    renderAll();
+    const all = full;
+    full = false;
+    if (all) renderAll(); else renderCamera();
   });
 }
 
@@ -583,7 +619,7 @@ if (boot.rejected) {
 }
 
 // For the test bench and the console: the running store, nothing else.
-window.__app = { store, viewport, plan, render: renderAll };
+window.__app = { store, viewport, plan, inspector, render: renderAll, renderCamera };
 
 // On a genuinely first visit, offer the gallery rather than leaving someone to
 // guess what the tool is for — over the first preset, which beats an empty

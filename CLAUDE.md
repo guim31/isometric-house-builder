@@ -44,13 +44,14 @@ src/core/          le modèle et la géométrie, sans DOM
   grid.js          emprise, murs extérieurs, décomposition en rectangles
   roof.js          champ de hauteur et maillage de la toiture
   scene.js         assemblage du maillage : sol, murs, ouvertures, toit, objets
-  props.js         objets extérieurs
+  props.js         objets extérieurs et équipements (muraux compris)
   bodies.js        déplacer, tourner, retourner, dupliquer un corps entier
   mesh.js          fusion des faces coplanaires
   iso.js           projection, orbite, profondeur
   focus.js         zone de cadrage
   palette.js       palettes et éclairage
-src/render/        SVG (svg.js), matières (texture.js), calque de sélection (hit.js)
+src/render/        SVG (svg.js), matières (texture.js), sélection (hit.js) : calque de
+                   cibles, et choix sur le dessin même (roofAt, rayon de vue)
 src/ui/            plan, rendu, inspecteur, galerie, magasin (store.js), actions
   plan.js          la vue de dessus : vue, gestes, calque d'aperçus
   plan-edit.js     géométrie des gestes, sans DOM : trait, aimantation, poignées
@@ -77,7 +78,11 @@ l'application au banc d'essai.
 python3 -m http.server 8000      # puis http://localhost:8000/ (ou tests/)
 node dev/run-tests.mjs           # la suite en ligne de commande (Node 22+, Chrome)
 CHROME=/chemin/vers/chrome node dev/run-tests.mjs
+ONLY=equipements,moteur node dev/run-tests.mjs   # quelques fichiers seulement
 ```
+
+`ONLY` (ou `tests/?only=…` dans le navigateur) sert à itérer ; la suite
+complète passe toujours avant un push.
 
 Le lanceur cherche Chrome dans `CHROME`, puis `google-chrome`, `chromium`,
 `chromium-browser`, puis sous `/opt/pw-browsers/`. Il échoue sur un test en
@@ -87,6 +92,9 @@ de plus de trois secondes. `dev/run-tests.sh` n'en est qu'un relais.
 
 La CI (`.github/workflows/tests.yml`) lance la même commande sur chaque push et
 chaque pull request.
+
+`dev/equipment-shot.html` produit `assets/equipment.png` (capture de la
+grille, 1280 px de large).
 
 `dev/reference-svg.html` affiche les empreintes de référence des modèles de
 départ, à recopier dans `tests/fixtures/reference-svg.json` après un changement
@@ -110,7 +118,25 @@ de rendu voulu.
   `store.notify`.
 - La caméra est hors de l'historique : on la change par `store.setCamera`,
   jamais par `store.update`. Le cadrage et les vues enregistrées, eux, sont du
-  contenu.
+  contenu. `setCamera` émet la raison `'camera'` : `main.js` ne redessine
+  alors que le rendu et appelle `inspector.syncCamera()`, qui met la section
+  Vue à jour sur place. Un contrôle qui lit la caméra au clic doit la lire
+  dans `store.model` à ce moment, pas dans la fermeture du dernier rendu.
+- Les équipements muraux sont dans `model.fixtures` : `{ id, kind, edge,
+  storey, offset, z }`, ancrés exactement comme les ouvertures (`edge` =
+  `"i,j,côté"` d'une case du corps, `offset` = mètres depuis le début de
+  l'arête, `z` = hauteur du centre au-dessus du plancher du niveau). Toute
+  transformation qui réancre les ouvertures (`withCellSize`, et les
+  transformations de corps à venir) doit réancrer `fixtures` de la même
+  façon ; `fitOpening` les garde entiers sur leur pan, leur largeur venant
+  de `FIXTURE_DEFAULTS`. Supprimer un corps les supprime (`removeBuilding`),
+  le cadrage les garde avec leur corps (`focus.js`).
+- Les objets qui doivent être rangés exactement contre la coque (murs, toits)
+  sont faits de boîtes qui ne s'interpénètrent pas, dans un groupe
+  `equip:<id>` (ou `parked:<id>` pour une voiture sous carport), que
+  `repairSolids` (`svg.js`) prend avec la coque. Un objet fait d'étages
+  séparés par des plans horizontaux peut aussi se ranger « d'un bloc » :
+  groupe `stack:<id>:<étage>` (le conifère).
 - Toute valeur venue d'un fichier ou d'un lien passe par `normalise` ;
   `svg.js` n'écrit encore dans un attribut qu'un nombre ou une couleur vérifiés.
 - Les plafonds (`LIMITS`) valent à l'ouverture comme à l'édition : `Store.update`
@@ -151,5 +177,21 @@ de rendu voulu.
 - Le coloriage d'une face dépend de sa normale, au bruit d'arrondi près : comparer
   deux rendus « identiques » par géométries différentes tolère une unité de
   couleur (`sameColour` dans `plan-edit.test.js`).
+- **Le calque de sélection n'a pas de toit** : ses cibles sont triées sur leur
+  centre, et le mur du fond ressortait au travers du toit. Le rendu choisit
+  donc d'abord sur le dessin (`roofAt` dans `hit.js` : la face dessinée en
+  dernier, puis le plan de cette face) ; le calque ne répond que si ce qui
+  est dessiné n'est pas un toit.
+- **La caméra suit le dessin** (`camera.fit` à chaque rendu) : déplacer un
+  objet vers le bord décale tout. Pendant un glisser de la sélection, la
+  vue fige `scale` et `offset` (`viewport.frozen`) et recadre au relâcher.
+- Un objet tout juste posé reste sélectionné avec son outil actif : l'appui
+  sur la sélection doit passer avant l'outil, sinon le saisir en repose un.
+- **La voiture se trie mal contre elle-même** (roues enfoncées dans la
+  carrosserie) depuis toujours ; la corriger change le SVG des modèles de
+  départ. Les tests de recouvrement l'excluent explicitement.
+- `tests/fixtures/model-v2.js` est le `model.js` du lot 1 figé : il vérifie
+  qu'un fichier écrit aujourd'hui s'ouvre dans la version précédente. Ne pas
+  le mettre à jour ; en figer un nouveau à la prochaine montée de version.
 - Le fragment `#m=…` d'un lien de partage est retiré de l'adresse par
   `history.replaceState`, qui ne déclenche pas `hashchange`.
