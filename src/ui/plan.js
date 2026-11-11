@@ -7,7 +7,7 @@
  */
 
 import { key, parseKey, boundaryEdges, boundaryRuns } from '../core/grid.js';
-import { cellSet, cellSizeOf, fmtMetres, buildingCells, setBuildingCells } from '../core/model.js';
+import { cellSet, cellSizeOf, fmtMetres, buildingCells, setBuildingCells, fitOpening } from '../core/model.js';
 import { focusFrame } from '../core/focus.js';
 import {
   OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS,
@@ -397,7 +397,11 @@ export class PlanView {
         this.previewRun();
       } else if (this.drag.mode === 'slide') {
         const hit = this.nearestEdge(pt, 3);
-        if (hit) s.patchSelected({ edge: hit.edge.id, offset: Math.round(hit.offset * 20) / 20 }, 'move');
+        if (hit) {
+          s.patchSelected((it, m) => fitOpening(m, {
+            ...it, edge: hit.edge.id, offset: Math.round(hit.offset * 20) / 20,
+          }), 'move');
+        }
       } else if (this.drag.mode === 'move' && this.drag.origin) {
         const dx = pt[0] - this.drag.from[0];
         const dy = pt[1] - this.drag.from[1];

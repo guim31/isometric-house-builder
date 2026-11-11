@@ -5,7 +5,7 @@
 import { renderScene } from '../render/svg.js';
 import { hitLayer, screenToGround, roofItemCorners } from '../render/hit.js';
 import { boundaryEdges } from '../core/grid.js';
-import { cellSizeOf, buildingOfEdge, storeyBase } from '../core/model.js';
+import { cellSizeOf, buildingOfEdge, storeyBase, openingSpan } from '../core/model.js';
 import { buildMesh } from '../core/scene.js';
 import { mergeCoplanar } from '../core/mesh.js';
 import { rotateDir, project, clampPitch, clampRoll, normaliseYaw } from '../core/iso.js';
@@ -152,10 +152,10 @@ export class Viewport {
       const a = [e.a[0] * cs, e.a[1] * cs];
       const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
       const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
-      const zb = storeyBase(host, item.storey || 0) + (item.sill ?? 0.95);
-      const w = item.width ?? 1.2, h = item.height ?? 1.25, c = item.offset ?? 0.5;
+      const { z0, z1 } = openingSpan(item, host);
+      const w = item.width ?? 1.2, c = item.offset ?? 0.5;
       const p = (s, z) => [a[0] + u[0] * s + e.n[0] * 0.06, a[1] + u[1] * s + e.n[1] * 0.06, z];
-      pts.push(p(c - w / 2, zb), p(c + w / 2, zb), p(c + w / 2, zb + h), p(c - w / 2, zb + h));
+      pts.push(p(c - w / 2, z0), p(c + w / 2, z0), p(c + w / 2, z1), p(c - w / 2, z1));
     }
     if (!pts.length) return '';
     const d = pts.map((p, i) => {

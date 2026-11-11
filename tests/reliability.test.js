@@ -3,12 +3,16 @@
 import { check, checkAsync } from './harness.js';
 import { app } from './app-frame.js';
 import { appStore, frames } from './app.test.js';
-import { defaultModel, normalise, withTheme, makeBuilding, emptyModel } from '../src/core/model.js';
+import {
+  defaultModel, normalise, withTheme, makeBuilding, emptyModel, openingRun, fitOpening, openingSpan,
+  overlappingOpenings,
+} from '../src/core/model.js';
+import { placeOpening } from '../src/ui/actions.js';
 import { THEMES } from '../src/core/palette.js';
 import { rectCells } from '../src/core/grid.js';
 import { Store } from '../src/ui/store.js';
 import { PlanView } from '../src/ui/plan.js';
-import { pointer, stageViewport, stripIds } from './helpers.js';
+import { pointer, stageViewport, stripIds, near } from './helpers.js';
 import { Inspector } from '../src/ui/panels.js';
 import { renderScene } from '../src/render/svg.js';
 import { buildMesh } from '../src/core/scene.js';
@@ -411,4 +415,156 @@ check('la clôture est dessinée au milieu de son emprise, comme dans le plan', 
   const v = mid(fence({ x: 2, y: 0, w: 0.6, d: 6 }), 0);
   if (Math.abs(h - 4.3) > 1e-6) return `clôture est-ouest centrée sur y = ${h}`;
   return Math.abs(v - 2.3) < 1e-6 || `clôture nord-sud centrée sur x = ${v}`;
+});
+
+/* ---------------- B8 / D4 / D5: openings stay on their wall ---------------- */
+
+/** A 10 m north wall from x = 0 to 10, its edges `i,6,N`; the run is the whole wall. */
+function wallStore(openings = []) {
+  const m = fixtureHouse();
+  const s = new Store({ ...m, openings });
+  s.setTool('select');
+  return s;
+}
+
+/** Ends of an opening along its run, measured from the run's start. */
+function onRun(m, op) {
+  const run = openingRun(m, op);
+  const c = op.offset - run.lo;
+  return { a: c - op.width / 2, b: c + op.width / 2, len: run.hi - run.lo };
+}
+const whole = (m, op) => {
+  const r = onRun(m, op);
+  return r.a >= -1e-6 && r.b <= r.len + 1e-6;
+};
+
+check('une ouverture posée près d’un angle reste entière sur son mur', () => {
+  const s = wallStore();
+  placeOpening(s, 'garage', '0,6,N', 0, 0.9); // last cell of the wall, seen from its own edge
+  const op = s.model.openings[0];
+  return whole(s.model, op) || `déborde : ${JSON.stringify(onRun(s.model, op))}`;
+});
+
+check('glisser une ouverture dans le plan la garde entière sur son mur', () => {
+  const s = wallStore([{ id: 'o1', kind: 'window', edge: '5,6,N', storey: 0, offset: 0.5, ...OPENING_DEFAULTS.window }]);
+  const view = new PlanView(document.getElementById('plan'), s);
+  view.render();
+  const target = view.svg.querySelector('[data-id="o1"]');
+  const r = view.svg.getBoundingClientRect();
+  const [px, py] = view.toPx(5, 7);
+  const [qx] = view.toPx(-0.2, 7);
+  target.dispatchEvent(new PointerEvent('pointerdown', { clientX: r.left + px, clientY: r.top + py, bubbles: true, pointerId: 1, button: 0 }));
+  view.svg.dispatchEvent(new PointerEvent('pointermove', { clientX: r.left + qx, clientY: r.top + py, bubbles: true, pointerId: 1, button: 0 }));
+  view.svg.dispatchEvent(new PointerEvent('pointerup', { clientX: r.left + qx, clientY: r.top + py, bubbles: true, pointerId: 1, button: 0 }));
+  view.svg.remove();
+  const op = s.model.openings[0];
+  return whole(s.model, op) || `déborde : ${JSON.stringify(onRun(s.model, op))}`;
+});
+
+check('élargir une ouverture la garde sur son mur, centrée s’il est trop court', () => {
+  const s = wallStore([{ id: 'o1', kind: 'window', edge: '9,6,N', storey: 0, offset: 0.5, ...OPENING_DEFAULTS.window }]);
+  s.select({ type: 'opening', id: 'o1' });
+  const root = document.createElement('div');
+  document.getElementById('stage').appendChild(root);
+  new Inspector(root, s).render();
+  const width = [...root.querySelectorAll('.panel-selected .field')]
+    .find((f) => f.querySelector('.field-label').textContent === 'Largeur').querySelector('input');
+  width.value = '4';
+  width.dispatchEvent(new Event('input', { bubbles: true }));
+  root.remove();
+  const op = s.model.openings[0];
+  if (!whole(s.model, op)) return `déborde : ${JSON.stringify(onRun(s.model, op))}`;
+  // A wall shorter than the opening: centred on it.
+  const short = normalise({ ...emptyModel(), buildings: [makeBuilding({ cells: ['0,0', '1,0'] })] });
+  const c = fitOpening(short, { kind: 'garage', edge: '0,0,N', offset: 0, width: 3, height: 2, sill: 0 });
+  return near(onRun(short, c).a + onRun(short, c).b, 2) || `non centrée : ${JSON.stringify(onRun(short, c))}`;
+});
+
+check('la copie d’une ouverture reste entière sur son mur', () => {
+  const s = wallStore([{ id: 'o1', kind: 'garage', edge: '1,6,N', storey: 0, offset: 0.5, ...OPENING_DEFAULTS.garage }]);
+  s.select({ type: 'opening', id: 'o1' });
+  s.duplicateSelected();
+  return s.model.openings.every((op) => whole(s.model, op)) || 'la copie déborde';
+});
+
+check('hauteur et allège ne dépassent pas la hauteur du niveau', () => {
+  const s = wallStore([{ id: 'o1', kind: 'window', edge: '5,6,N', storey: 0, offset: 0.5, ...OPENING_DEFAULTS.window }]);
+  s.select({ type: 'opening', id: 'o1' });
+  const root = document.createElement('div');
+  document.getElementById('stage').appendChild(root);
+  const ins = new Inspector(root, s);
+  const set = (label) => {
+    ins.render();
+    const el = [...root.querySelectorAll('.panel-selected .field')]
+      .find((f) => f.querySelector('.field-label').textContent === label).querySelector('input');
+    el.value = el.max;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  set('Hauteur');
+  set('Allège');
+  set('Hauteur');
+  root.remove();
+  const op = s.model.openings[0];
+  return op.height + op.sill <= 2.7 + 1e-6 || `hauteur ${op.height} + allège ${op.sill} > 2,70`;
+});
+
+check('une menuiserie trop haute n’est jamais dessinée au-dessus de son niveau', () => {
+  const m = normalise({
+    ...emptyModel(),
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 5, 4)], storeyHeight: 2.6 })],
+    openings: [{ id: 'o1', kind: 'window', edge: '2,4,N', offset: 0.5, width: 1.2, height: 3, sill: 0.95 }],
+  });
+  const tris = buildMesh(m).mesh.tris.filter((t) => ['trim', 'glass'].includes(t.mat));
+  const top = Math.max(...tris.flatMap((t) => [t.a[2], t.b[2], t.c[2]]));
+  if (top > 2.6 + 1e-6) return `menuiserie jusqu’à ${top.toFixed(2)} m`;
+  // And the pick target and the selection outline agree with it.
+  const span = openingSpan(m.openings[0], m.buildings[0]);
+  return span.z1 <= 2.6 + 1e-6 || `contour jusqu’à ${span.z1}`;
+});
+
+check('l’inspecteur signale deux ouvertures qui se chevauchent', () => {
+  const s = wallStore([
+    { id: 'o1', kind: 'window', edge: '5,6,N', storey: 0, offset: 0.5, ...OPENING_DEFAULTS.window },
+    { id: 'o2', kind: 'door', edge: '4,6,N', storey: 0, offset: 0.2, ...OPENING_DEFAULTS.door },
+    { id: 'o3', kind: 'window', edge: '5,6,N', storey: 1, offset: 0.5, ...OPENING_DEFAULTS.window },
+  ]);
+  if (overlappingOpenings(s.model, s.model.openings[2]).length) return 'un autre étage compte comme chevauchement';
+  s.select({ type: 'opening', id: 'o1' });
+  const root = document.createElement('div');
+  document.getElementById('stage').appendChild(root);
+  new Inspector(root, s).render();
+  const text = root.querySelector('.panel-selected').textContent;
+  root.remove();
+  return /chevauche/.test(text) || 'aucun avertissement';
+});
+
+check('une ouverture qui dépassait déjà s’ouvre où elle était', () => {
+  const raw = {
+    ...fixtureHouse(),
+    openings: [{ id: 'o1', kind: 'window', edge: '0,6,N', offset: 1.4, width: 1.3, height: 1.3, sill: 0.95 }],
+  };
+  return normalise(raw).openings[0].offset === 1.4 || 'le fichier a été réécrit';
+});
+
+check('changer le type d’une ouverture reprend l’allège et la hauteur du nouveau type, sauf réglage manuel', () => {
+  const s = wallStore([
+    { id: 'o1', kind: 'window', edge: '5,6,N', storey: 0, offset: 0.5, ...OPENING_DEFAULTS.window },
+    { id: 'o2', kind: 'window', edge: '2,6,N', storey: 0, offset: 0.5, ...OPENING_DEFAULTS.window, sill: 0.6 },
+  ]);
+  const retype = (id) => {
+    s.select({ type: 'opening', id });
+    const root = document.createElement('div');
+    document.getElementById('stage').appendChild(root);
+    new Inspector(root, s).render();
+    const sel = root.querySelector('.panel-selected select');
+    sel.value = 'door';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    root.remove();
+    return s.model.openings.find((o) => o.id === id);
+  };
+  const a = retype('o1');
+  if (a.sill !== 0 || a.height !== OPENING_DEFAULTS.door.height) return `porte à ${a.sill} m, haute de ${a.height} m`;
+  const b = retype('o2');
+  return b.sill === 0.6 || `allège réglée à la main perdue : ${b.sill}`;
 });

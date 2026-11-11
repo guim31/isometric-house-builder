@@ -3,7 +3,7 @@
  * save file, the undo stack and the shareable URL all carry.
  */
 
-import { key, rectCells, connectedComponents, SIDES } from './grid.js';
+import { key, rectCells, connectedComponents, SIDES, runExtents } from './grid.js';
 import { DEFAULT_PROJECTION, DEFAULT_PITCH, clampPitch, clampRoll, normaliseYaw } from './iso.js';
 import { THEMES } from './palette.js';
 import { PRESETS } from '../data/presets.js';
@@ -391,6 +391,87 @@ export const buildingCells = (b) => new Set(b.cells);
 export function buildingOfEdge(m, edgeId) {
   const cell = edgeId.split(',').slice(0, 2).join(',');
   return m.buildings.find((b) => b.cells.includes(cell)) || null;
+}
+
+/**
+ * The straight wall an opening stands on, in its edge's own frame:
+ * `{ host, lo, hi }`, metres along the edge, or null for a wall since erased.
+ */
+export function openingRun(m, op) {
+  const host = buildingOfEdge(m, op.edge);
+  if (!host) return null;
+  const run = runExtents(new Set(host.cells), cellSizeOf(m)).get(op.edge);
+  return run ? { host, lo: run.lo, hi: run.hi } : null;
+}
+
+/**
+ * An offset that keeps an opening of `width` whole on its run of wall —
+ * centred on it when the wall is the shorter of the two.
+ */
+export function fitOffset(offset, width, run) {
+  if (!run) return offset;
+  if (run.hi - run.lo <= width) return (run.lo + run.hi) / 2;
+  return Math.min(run.hi - width / 2, Math.max(run.lo + width / 2, offset));
+}
+
+/**
+ * The opening moved back onto its wall, as placing, sliding, widening and
+ * duplicating it do. Only ever applied to an edit: a file whose opening
+ * already ran past a corner opens with it where it was.
+ */
+export function fitOpening(m, op) {
+  const run = openingRun(m, op);
+  if (!run) return op;
+  const offset = fitOffset(op.offset ?? 0.5, op.width ?? OPENING_DEFAULTS[op.kind]?.width ?? 1.2, run);
+  return offset === op.offset ? op : { ...op, offset };
+}
+
+/**
+ * Bottom and top of an opening, in metres above the ground, kept within its
+ * level: a window taller than its storey stops at the floor above instead of
+ * running through it — and through the roof, outline and all.
+ */
+export function openingSpan(op, b) {
+  const base = storeyBase(b, op.storey || 0);
+  const level = storeyHeightOf(b, op.storey || 0);
+  const sill = Math.max(0, Math.min(op.sill ?? 0.95, level - 0.1));
+  const z0 = base + sill;
+  return { z0, z1: Math.min(z0 + (op.height ?? 1.25), base + level) };
+}
+
+/**
+ * Other openings sharing this one's stretch of wall and level, in metres of
+ * overlap — what the inspector warns about. Positions are compared along the
+ * run, since two openings may hang off different edges of the same wall.
+ */
+export function overlappingOpenings(m, op) {
+  const mine = openingRun(m, op);
+  if (!mine) return [];
+  const span = (o, r) => {
+    const c = (o.offset ?? 0.5) - r.lo, w = o.width ?? 1.2;
+    return [c - w / 2, c + w / 2];
+  };
+  const corner = (o, r) => {
+    const [i, j, side] = o.edge.split(',');
+    const s = SIDES[side];
+    const a = s.a(Number(i), Number(j)), b = s.b(Number(i), Number(j));
+    const cs = cellSizeOf(m);
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const u = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+    return `${side}:${(a[0] * cs + u[0] * r.lo).toFixed(3)},${(a[1] * cs + u[1] * r.lo).toFixed(3)}`;
+  };
+  const here = corner(op, mine);
+  const [a0, a1] = span(op, mine);
+  const out = [];
+  for (const o of m.openings) {
+    if (o.id === op.id || (o.storey || 0) !== (op.storey || 0)) continue;
+    const r = openingRun(m, o);
+    if (!r || r.host !== mine.host || corner(o, r) !== here) continue;
+    const [b0, b1] = span(o, r);
+    const overlap = Math.min(a1, b1) - Math.max(a0, b0);
+    if (overlap > 1e-6) out.push(o);
+  }
+  return out;
 }
 
 export const cellSet = (m) => (m.buildings ? allCells(m) : new Set(m.cells || []));

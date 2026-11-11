@@ -9,7 +9,7 @@
  */
 
 import { boundaryEdges, parseKey } from '../core/grid.js';
-import { wallTop, storeyBase, cellSizeOf, openingShown, CENTRED_KINDS } from '../core/model.js';
+import { wallTop, storeyBase, cellSizeOf, openingShown, openingSpan, CENTRED_KINDS } from '../core/model.js';
 import { unrotatePoint } from '../core/iso.js';
 
 // The layer is parsed as markup, and ids come from files and share links.
@@ -76,10 +76,9 @@ export function hitLayer(model, camera, built = null) {
     const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
     const o = 0.05;
     const p = (s, z) => [a[0] + u[0] * s + e.n[0] * o, a[1] + u[1] * s + e.n[1] * o, z];
-    const w = op.width ?? 1.2, h = op.height ?? 1.25;
-    const c = op.offset ?? 0.5, sill = op.sill ?? 0.95;
-    const zb = storeyBase(b, op.storey || 0) + sill;
-    add([p(c - w / 2, zb), p(c + w / 2, zb), p(c + w / 2, zb + h), p(c - w / 2, zb + h)],
+    const w = op.width ?? 1.2, c = op.offset ?? 0.5;
+    const { z0, z1 } = openingSpan(op, b);
+    add([p(c - w / 2, z0), p(c + w / 2, z0), p(c + w / 2, z1), p(c - w / 2, z1)],
       { 'data-pick': 'opening', 'data-id': op.id });
   }
 

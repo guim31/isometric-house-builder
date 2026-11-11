@@ -6,7 +6,7 @@
  * references.
  */
 
-import { normalise, newId, makeBuilding } from '../core/model.js';
+import { normalise, newId, makeBuilding, fitOpening } from '../core/model.js';
 import { saveLocal } from '../io/project.js';
 
 const HISTORY_LIMIT = 80;
@@ -216,7 +216,11 @@ export class Store {
     return (this.model[list] || []).find((it) => it.id === this.selection.id) || null;
   }
 
-  /** Patch the selected item. */
+  /**
+   * Patch the selected item. `patch` may be a function of the item and the
+   * model as they stand, for an edit that depends on them — an opening put
+   * back on its wall after being widened, for one.
+   */
   patchSelected(patch, coalesce) {
     const sel = this.selection;
     if (!sel) return;
@@ -224,7 +228,8 @@ export class Store {
     if (!list) return;
     this.update((m) => ({
       ...m,
-      [list]: m[list].map((it) => (it.id === sel.id ? { ...it, ...patch } : it)),
+      [list]: m[list].map((it) => (it.id !== sel.id ? it
+        : { ...it, ...(typeof patch === 'function' ? patch(it, m) : patch) })),
     }), { coalesce });
   }
 
@@ -236,9 +241,11 @@ export class Store {
     if (!list) return;
     const src = (this.model[list] || []).find((it) => it.id === sel.id);
     if (!src) return;
-    const copy = { ...src, id: newId(sel.type[0]) };
-    if (sel.type === 'opening') copy.offset = (src.offset ?? 0.5) + 1;
-    else copy.x = (src.x ?? 0) + 1.5;
+    let copy = { ...src, id: newId(sel.type[0]) };
+    if (sel.type === 'opening') {
+      // Beside the original, and still whole on the same wall.
+      copy = fitOpening(this.model, { ...copy, offset: (src.offset ?? 0.5) + (src.width ?? 1.2) + 0.2 });
+    } else copy.x = (src.x ?? 0) + 1.5;
     this.update((m) => ({ ...m, [list]: [...m[list], copy] }));
     this.select({ type: sel.type, id: copy.id });
   }

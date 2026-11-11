@@ -9,7 +9,7 @@ import {
 import { ROOF_TYPES, STEP } from '../core/roof.js';
 import {
   withCellSize, withTheme, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
-  storeyHeightOf, DEFAULT_FOCUS, PROP_DEFAULTS, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
+  storeyHeightOf, DEFAULT_FOCUS, PROP_DEFAULTS, OPENING_DEFAULTS, fitOpening, overlappingOpenings, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
 } from '../core/model.js';
 import { bounds, edgeRunExtent } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
@@ -731,7 +731,15 @@ export class Inspector {
       const host = buildingOfEdge(m, item.edge) || this.store.activeBuilding;
       const storeys = host ? host.storeys : 1;
       const level = item.storey || 0;
-      s.appendChild(field('Type', select(item.kind, Object.entries(OPENING_LABELS), (v) => patch({ kind: v }))));
+      // A window turned into a door goes down to the floor: the sill and the
+      // height follow the new kind wherever they were still the old kind's
+      // defaults. A value set by hand is a choice, and is kept.
+      s.appendChild(field('Type', select(item.kind, Object.entries(OPENING_LABELS), (v) => patch((it, mm) => {
+        const was = OPENING_DEFAULTS[it.kind] || {}, now = OPENING_DEFAULTS[v] || {};
+        const next = { ...it, kind: v };
+        for (const k of ['sill', 'height']) if (it[k] === was[k]) next[k] = now[k];
+        return fitOpening(mm, next);
+      }))));
       // Also shown when the opening sits on a level since taken away: it is
       // not drawn any more, and this is the one place it can be brought down.
       if (storeys > 1 || level >= storeys) {
@@ -741,19 +749,26 @@ export class Inspector {
           (v) => patch({ storey: Number(v) })),
         level >= storeys ? 'ce niveau n’existe plus : l’ouverture n’est pas dessinée' : undefined));
       }
+      // Height and sill share the level between them: together they never
+      // reach past the floor above.
+      const levelH = host ? storeyHeightOf(host, level) : 2.7;
+      const room = (v) => Math.floor((levelH - v) * 20 + 1e-6) / 20;
+      const overlaps = overlappingOpenings(m, item).length;
       s.append(
         positionField(m, item, patch),
         field('Largeur', slider(item.width, {
           min: 0.4, max: 5, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
-          onInput: (v) => patch({ width: v }, 'w'),
-        })),
+          onInput: (v) => patch((it, mm) => fitOpening(mm, { ...it, width: v }), 'w'),
+        }), overlaps ? `chevauche ${overlaps > 1 ? `${overlaps} autres ouvertures` : 'une autre ouverture'} sur ce mur` : undefined),
         field('Hauteur', slider(item.height, {
-          min: 0.4, max: 3, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
-          onInput: (v) => patch({ height: v }, 'h'),
+          min: 0.4, max: Math.max(0.4, Math.min(3, room(item.sill ?? 0))), step: 0.05,
+          format: (v) => `${v.toFixed(2)} m`,
+          onInput: (v) => patch((it) => ({ height: Math.min(v, Math.max(0.4, levelH - (it.sill ?? 0))) }), 'h'),
         })),
         field('Allège', slider(item.sill ?? 0.95, {
-          min: 0, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
-          onInput: (v) => patch({ sill: v }, 'sill'),
+          min: 0, max: Math.max(0, Math.min(2, room(item.height))), step: 0.05,
+          format: (v) => `${v.toFixed(2)} m`,
+          onInput: (v) => patch((it) => ({ sill: Math.max(0, Math.min(v, levelH - it.height)) }), 'sill'),
         }), 'hauteur du bas de l’ouverture'),
         field('Renfoncement', slider(item.depth ?? 0, {
           min: 0, max: 0.8, step: 0.05,

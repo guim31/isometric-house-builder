@@ -8,7 +8,7 @@
  * two had already begun to drift.
  */
 
-import { newId, OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, stairsRun } from '../core/model.js';
+import { newId, fitOpening, OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, stairsRun } from '../core/model.js';
 
 // Defined in the model, which fills them into files that leave them out.
 export { OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS };
@@ -32,12 +32,13 @@ const snap = (v) => Math.round(v * 4) / 4;
 
 export function placeOpening(store, kind, edgeId, storey, offsetMetres) {
   const id = newId('o');
+  // Whole on its wall: a click near a corner put half a window round it.
   store.update((m) => ({
     ...m,
-    openings: [...m.openings, {
+    openings: [...m.openings, fitOpening(m, {
       id, edge: edgeId, storey: storey || 0, kind,
-      offset: Math.max(0.05, Math.round(offsetMetres * 20) / 20), ...OPENING_DEFAULTS[kind],
-    }],
+      offset: Math.round(offsetMetres * 20) / 20, ...OPENING_DEFAULTS[kind],
+    })],
   }));
   store.select({ type: 'opening', id });
 }
