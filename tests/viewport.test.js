@@ -1,6 +1,6 @@
 /** Rendu interactif. */
 
-import { check } from './harness.js';
+import { check, uncaught } from './harness.js';
 import { near, stripIds, pointer, stageViewport, dragOn } from './helpers.js';
 import { Camera, normaliseYaw, ROLL_RANGE } from '../src/core/iso.js';
 import { defaultModel, normalise } from '../src/core/model.js';
@@ -248,4 +248,18 @@ check('pivoter ne reconstruit pas le maillage', () => {
   }));
   vp.render();
   return vp.cache.built !== built || 'le maillage n’a pas suivi la modification';
+});
+
+check('un appui que le navigateur refuse de capturer ne lève rien', () => {
+  const { div, vp } = stageViewport();
+  const r = div.getBoundingClientRect();
+  const errors = uncaught(() => {
+    for (const type of ['pointerdown', 'pointerup']) {
+      vp.root.dispatchEvent(new PointerEvent(type, {
+        clientX: r.left + 20, clientY: r.top + 20, bubbles: true, pointerId: 77, button: 0,
+      }));
+    }
+  });
+  div.remove();
+  return !errors.length || errors.join(' ; ');
 });

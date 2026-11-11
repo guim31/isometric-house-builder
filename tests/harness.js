@@ -59,3 +59,20 @@ export function finish() {
   document.title = failed === 0 ? `OK ${passed}/${passed}` : `ECHEC ${failed}`;
   report.done = true;
 }
+
+/**
+ * Run `fn` and collect what it let escape to the window: an exception thrown
+ * in an event handler does not reach the caller of dispatchEvent, it is
+ * reported instead — and a check around it would pass regardless.
+ */
+export function uncaught(fn) {
+  const seen = [];
+  const onError = (e) => seen.push(e.message || String(e.error));
+  window.addEventListener('error', onError);
+  try {
+    fn();
+  } finally {
+    window.removeEventListener('error', onError);
+  }
+  return seen;
+}

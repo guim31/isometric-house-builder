@@ -213,7 +213,10 @@ export class Viewport {
         pick: pickTarget(pick, ev.target.dataset),
         moved: false,
       };
-      this.root.setPointerCapture?.(ev.pointerId);
+      // Capture is a convenience, not a requirement: a pointer the browser
+      // did not issue — a synthetic one, or a pen some drivers report late —
+      // is refused with an exception that would abort the whole gesture.
+      try { this.root.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
     });
 
     this.root.addEventListener('pointermove', (ev) => {
