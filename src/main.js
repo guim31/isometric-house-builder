@@ -437,10 +437,18 @@ nameInput.addEventListener('input', () => {
 /* ---------- keyboard ---------- */
 
 document.addEventListener('keydown', (ev) => {
-  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName);
+  // Only a field one types into keeps the keyboard. A slider, a checkbox or a
+  // button that merely has the focus after a click did too, and the shortcuts
+  // went dead — Suppr, [ ], Échap — until one clicked somewhere else. A list
+  // keeps the keys it uses itself: arrows, letters for type-ahead, Enter.
+  const t = ev.target;
+  const textEntry = t.tagName === 'TEXTAREA' || t.isContentEditable
+    || (t.tagName === 'INPUT' && /^(text|search|number|email|url|tel|password|)$/.test(t.type || ''));
+  const listKey = t.tagName === 'SELECT' && !ev.ctrlKey && !ev.metaKey
+    && (ev.key.length === 1 || /^(Arrow|Page|Home|End|Enter)/.test(ev.key));
+  const typing = textEntry || listKey;
   // In a text field, undo is the field's own: taking it over rewound the last
-  // model change — a camera turn, as likely as not — instead of the typing.
-  const textEntry = typing && /^(text|search|number|)$/.test(ev.target.type || '');
+  // model change instead of the typing.
   if (textEntry && (ev.ctrlKey || ev.metaKey) && /^[zy]$/i.test(ev.key)) return;
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') {
     ev.preventDefault();
