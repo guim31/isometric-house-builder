@@ -312,11 +312,27 @@ python3 -m http.server 8000
 ```
 
 La suite de tests s'exécute dans le navigateur — ouvrez
-<http://localhost:8000/tests/> — ou en ligne de commande avec Chrome :
+<http://localhost:8000/tests/> — ou en ligne de commande, avec Node 22 ou plus
+et Chrome, sans rien installer d'autre :
 
 ```bash
-./dev/run-tests.sh
+node dev/run-tests.mjs        # ou ./dev/run-tests.sh
 ```
+
+Le lanceur sert le dépôt, pilote Chrome sans fenêtre par le protocole DevTools
+et attend la fin réelle de la suite. Il échoue sur un test en échec, mais aussi
+sur **toute exception non rattrapée ou erreur de console** de la page : un
+gestionnaire de clic qui lève ne fait échouer aucun test, et c'est ainsi qu'un
+défaut peut rester des mois en production. La variable `CHROME` désigne le
+navigateur à utiliser. La même commande tourne en intégration continue sur
+chaque push et chaque pull request.
+
+Outre les tests de modules, la suite charge l'application réelle dans une
+iframe et en actionne chaque contrôle et chaque outil, rend un corpus de
+fichiers hostiles (balisage injecté, emprises démesurées, valeurs de tout type
+à chaque champ), et compare le SVG des dix modèles de départ à une référence.
+`CLAUDE.md` décrit l'organisation du code et des tests pour qui veut y
+contribuer.
 
 ### Comment c'est construit
 
@@ -421,6 +437,7 @@ modifier le moteur :
 
 | Fichier | Rôle |
 |---|---|
+| `src/core/model.js` | Format du projet, validation des fichiers et des liens, plafonds |
 | `src/core/iso.js` | Projection, orbite, profondeur, ajustement de la caméra |
 | `src/core/focus.js` | Zone de cadrage : ce qui est montré, ce qui est retiré |
 | `src/core/grid.js` | Emprise, murs extérieurs, décomposition en rectangles |
@@ -438,7 +455,7 @@ modifier le moteur :
 
 Un point de méthode, puisqu'il a fait ses preuves : les défauts de
 recouvrement se cherchent avec un **détecteur**, pas à l'œil. Pour chaque pixel
-échantillonné, `tests/run.js` résout l'intersection du rayon de vue avec le
+échantillonné, `tests/helpers.js` (`occlusionErrors`) résout l'intersection du rayon de vue avec le
 *plan* de chaque face qui le couvre, et signale celles dessinées par-dessus
 quelque chose de plus proche — en mètres de dépassement, ce qui sépare une vraie
 inversion d'une égalité sur une arête commune. Les deux derniers défauts
@@ -447,7 +464,7 @@ orientations *et* les hauteurs de caméra : la première version ne balayait que
 les hauteurs et passait pendant qu'un mur traversait manifestement un débord.
 
 Les contributions sont bienvenues : ouvrez une issue ou une pull request.
-Merci de faire passer `./dev/run-tests.sh` avant de proposer un changement.
+Merci de faire passer `node dev/run-tests.mjs` avant de proposer un changement.
 
 ## Licence
 
@@ -480,6 +497,6 @@ preset (2560 px): the app downscales anything larger.
 
 No dependencies, no bundler, no account: clone it, serve the folder, open
 `index.html`. Roof and wall materials are generated in world space and projected, so courses follow each slope. Tests live in `tests/` and run in the browser, or headlessly via
-`./dev/run-tests.sh`. MIT licensed.
+`node dev/run-tests.mjs`. MIT licensed.
 
 </details>
