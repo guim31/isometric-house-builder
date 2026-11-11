@@ -169,6 +169,9 @@ export class Viewport {
     const s = this.store;
 
     this.root.addEventListener('pointerdown', (ev) => {
+      // As in the plan: the main button acts, the middle one pans, and the
+      // others are left to the browser.
+      if (ev.button !== 0 && ev.button !== 1) return;
       this.pointers.set(ev.pointerId, [ev.clientX, ev.clientY]);
       if (this.pointers.size === 2) { this.startPinch(); return; }
       if (this.pinch) return;

@@ -304,6 +304,9 @@ export class PlanView {
     this.pointers = new Map();
 
     this.svg.addEventListener('pointerdown', (ev) => {
+      // Only the main button draws, and the middle one pans. A right click
+      // painted cells, and opened the browser's menu over them as well.
+      if (ev.button !== 0 && ev.button !== 1) return;
       // Capture is a convenience, not a requirement: synthetic pointers (and
       // some browsers) reject an id they never issued.
       try { this.svg.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
