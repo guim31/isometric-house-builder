@@ -231,6 +231,29 @@ export class Inspector {
     this.restoreFocus(focus, caret);
   }
 
+  /**
+   * Bring what shows the camera up to date, without rebuilding anything.
+   *
+   * An orbit changes the camera sixty times a second, and nothing in the panel
+   * but the « Vue » section reads it: rebuilding the whole inspector for each
+   * frame was most of what a turn cost. A control in the middle of its own
+   * gesture is left alone — it is the one setting the value.
+   */
+  syncCamera() {
+    const c = this.cameraControls;
+    if (!c || !this.root.contains(c.projection)) { this.render(); return; }
+    const cam = this.store.model.camera;
+    if (c.badge) c.badge.textContent = `${Math.round(cam.yaw)}° — ${viewpointLabel(cam.yaw)}${c.views}`;
+    for (const k of ['yaw', 'pitch', 'roll']) {
+      const { input, out, format } = c[k];
+      if (input === this.busy) continue;
+      const v = Math.round(cam[k]);
+      input.value = v;
+      out.textContent = format(v);
+    }
+    if (c.projection.value !== cam.projection) c.projection.value = cam.projection;
+  }
+
   /** Stands in for the selection panel, so the group is never a bare title. */
   emptySelection() {
     return h('p', 'panel-empty',
@@ -584,30 +607,44 @@ export class Inspector {
         + (nv ? ` · ${nv} vue${nv > 1 ? 's' : ''}` : ''),
     });
     const deg = (v) => `${Math.round(v)}°`;
+    const yawFormat = (v) => `${deg(v)} — ${viewpointLabel(v)}`;
+    const yaw = slider(Math.round(m.camera.yaw), {
+      min: 0, max: 359, step: 1, format: yawFormat,
+      onInput: (v) => this.store.setCamera({ yaw: normaliseYaw(v) }),
+    });
+    const pitch = slider(Math.round(m.camera.pitch), {
+      min: PITCH_RANGE[0], max: PITCH_RANGE[1], step: 1, format: deg,
+      onInput: (v) => this.store.setCamera({ pitch: v }),
+    });
+    const roll = slider(Math.round(m.camera.roll), {
+      min: ROLL_RANGE[0], max: ROLL_RANGE[1], step: 1, format: deg,
+      onInput: (v) => this.store.setCamera({ roll: v }),
+    });
+    const projection = select(m.camera.projection,
+      Object.entries(PROJECTIONS).map(([k, v]) => [k, v.label]),
+      (v) => this.store.setCamera({ projection: v }));
     s.append(
       // Free orbit, in numbers as well as by dragging: a saved view is worth
       // little if it cannot be reproduced, and "37°" can be typed back in.
-      field('Orientation', slider(Math.round(m.camera.yaw), {
-        min: 0, max: 359, step: 1,
-        format: (v) => `${deg(v)} — ${viewpointLabel(v)}`,
-        onInput: (v) => this.store.setCamera({ yaw: normaliseYaw(v) }),
-      }), 'ou glissez directement dans le rendu'),
-      field('Hauteur de vue', slider(Math.round(m.camera.pitch), {
-        min: PITCH_RANGE[0], max: PITCH_RANGE[1], step: 1, format: deg,
-        onInput: (v) => this.store.setCamera({ pitch: v }),
-      }), 'de rasante à quasi verticale'),
-      field('Inclinaison de l’image', slider(Math.round(m.camera.roll), {
-        min: ROLL_RANGE[0], max: ROLL_RANGE[1], step: 1, format: deg,
-        onInput: (v) => this.store.setCamera({ roll: v }),
-      }), 'fait pivoter le dessin dans son cadre — ou Alt + glisser dans le rendu'),
-      field('Projection', select(m.camera.projection,
-        Object.entries(PROJECTIONS).map(([k, v]) => [k, v.label]),
-        (v) => this.store.setCamera({ projection: v }))),
+      field('Orientation', yaw, 'ou glissez directement dans le rendu'),
+      field('Hauteur de vue', pitch, 'de rasante à quasi verticale'),
+      field('Inclinaison de l’image', roll,
+        'fait pivoter le dessin dans son cadre — ou Alt + glisser dans le rendu'),
+      field('Projection', projection),
     );
+    // What syncCamera updates in place when only the camera has moved.
+    const ctl = (wrap, format) => ({ input: wrap.querySelector('input'), out: wrap.querySelector('output'), format });
+    this.cameraControls = {
+      badge: s.panel.querySelector('.panel-badge'),
+      views: nv ? ` · ${nv} vue${nv > 1 ? 's' : ''}` : '',
+      yaw: ctl(yaw, yawFormat), pitch: ctl(pitch, deg), roll: ctl(roll, deg), projection,
+    };
 
     const reset = h('button', 'subtle', 'Revenir à la vue isométrique');
     reset.addEventListener('click', () => this.store.setCamera({
-      yaw: Math.round(m.camera.yaw / 90) % 4 * 90, pitch: DEFAULT_PITCH, roll: 0,
+      // Read at the click: the section is no longer rebuilt as the camera
+      // turns, so the camera it was drawn with may be minutes old.
+      yaw: Math.round(this.store.model.camera.yaw / 90) % 4 * 90, pitch: DEFAULT_PITCH, roll: 0,
     }));
     s.appendChild(reset);
 
@@ -644,7 +681,7 @@ export class Inspector {
       this.set({
         views: [...m.views, {
           id: newId('v', m), name,
-          camera: { ...m.camera }, focus: { ...m.focus },
+          camera: { ...this.store.model.camera }, focus: { ...m.focus },
         }],
       });
     });

@@ -67,7 +67,7 @@ export class Store {
    * entry, so dragging a slider or painting a stroke undoes as a single step
    * rather than fifty.
    */
-  update(fn, { coalesce = null, silent = false } = {}) {
+  update(fn, { coalesce = null, silent = false, reason = 'model' } = {}) {
     const next = typeof fn === 'function' ? fn(this.model) : fn;
     if (!next || next === this.model) return;
     // The ceilings a file is cut down to on opening apply to editing too: the
@@ -99,7 +99,7 @@ export class Store {
       this.lastEditAt = now;
     }
     this.model = next;
-    this.emit('model');
+    this.emit(reason);
   }
 
   /**
@@ -116,7 +116,10 @@ export class Store {
     const cur = this.model.camera;
     const next = { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) };
     if (Object.keys(next).every((k) => next[k] === cur[k])) return;
-    this.update({ ...this.model, camera: next }, { silent: true });
+    // Said as such, so the page redraws only what shows the camera: rebuilding
+    // the plan and the whole inspector at every frame of an orbit is what a
+    // turn used to cost.
+    this.update({ ...this.model, camera: next }, { silent: true, reason: 'camera' });
   }
 
   /** Start over on `model`, with an empty history: nothing to undo back into. */

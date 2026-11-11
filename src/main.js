@@ -516,12 +516,28 @@ function renderAll() {
   if (nameInput.value !== store.model.name) nameInput.value = store.model.name;
 }
 
+/**
+ * What a camera move changes: the drawing, and what reads the camera back —
+ * the bearing in the toolbar and the « Vue » section. Nothing else looks at it,
+ * so an orbit no longer redraws the plan nor rebuilds the inspector at every
+ * frame.
+ */
+function renderCamera() {
+  viewport.render();
+  inspector.syncCamera();
+  $('rot-label').textContent = viewpointLabel(store.model.camera.yaw);
+}
+
 let frame = null;
-function scheduleRender() {
+let full = false;
+function scheduleRender(_store, reason) {
+  if (reason !== 'camera') full = true;
   if (frame) return;
   frame = requestAnimationFrame(() => {
     frame = null;
-    renderAll();
+    const all = full;
+    full = false;
+    if (all) renderAll(); else renderCamera();
   });
 }
 
@@ -569,7 +585,7 @@ if (boot.rejected) {
 }
 
 // For the test bench and the console: the running store, nothing else.
-window.__app = { store, viewport, plan, render: renderAll };
+window.__app = { store, viewport, plan, inspector, render: renderAll, renderCamera };
 
 // On a genuinely first visit, offer the gallery rather than leaving someone to
 // guess what the tool is for — over the first preset, which beats an empty
