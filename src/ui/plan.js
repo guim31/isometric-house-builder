@@ -14,12 +14,13 @@
 import { key, parseKey, boundaryEdges, boundaryRuns, SIDES } from '../core/grid.js';
 import {
   cellSet, cellSizeOf, fmtMetres, buildingCells, setBuildingCells, fitOpening, openingRun, propFootprint,
+  wallSpan, buildingOfEdge, storeyHeightOf, fixtureZRange, offsetOnRun,
 } from '../core/model.js';
 import { moveBody } from '../core/bodies.js';
 import { focusFrame } from '../core/focus.js';
 import {
   OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS, FIXTURE_DEFAULTS,
-  placeOpening, placeRoofItem, placeProp, placeRun, runShape, propAt, roofItemAt, roofAt, placeFixture,
+  placeOpening, placeRoofItem, placeProp, placeRun, runShape, propAt, roofItemAt, roofAt, placeFixture, OFF_ROOF,
 } from './actions.js';
 import {
   cellsAlong, snapLines, snapMove, handlesOf, resizeTo, boxOf, handleShape,
@@ -475,25 +476,29 @@ export class PlanView {
     add('text', { x: side[0] + 8, y: side[1] + 4, class: 'rect-size plan-dim side' }, `${fmtMetres(y1 - y0)} m`);
   }
 
-  /** Where an opening stands on the plan: its two ends in pixels. */
+  /** Where an opening or a fixture stands on the plan: its two ends in pixels. */
   openingEnds(op) {
     const cs = cellSizeOf(this.store.model);
     const { a, u } = edgeFrame(op.edge, cs);
-    const c = op.offset ?? 0.5, w = (op.width ?? 1.2) / 2;
+    const c = op.offset ?? 0.5, w = wallSpan(op) / 2;
     return [
       this.toPx(a[0] + u[0] * (c - w), a[1] + u[1] * (c - w)),
       this.toPx(a[0] + u[0] * (c + w), a[1] + u[1] * (c + w)),
     ];
   }
 
-  /** The straight wall an opening stands on, and its distance to the nearer corner. */
+  /**
+   * The straight wall an opening or a fixture stands on, and its distance to
+   * the nearer corner — from its edge for an opening, from its centre for a
+   * fixture, which is a point on the wall rather than a hole in it.
+   */
   openingContext(op) {
     const m = this.store.model;
     const run = openingRun(m, op);
     if (!run) return null;
     const cs = cellSizeOf(m);
     const { a, u, n } = edgeFrame(op.edge, cs);
-    const c = op.offset ?? 0.5, w = op.width ?? 1.2;
+    const c = op.offset ?? 0.5, w = FIXTURE_DEFAULTS[op.kind] ? 0 : wallSpan(op);
     return {
       p0: this.toPx(a[0] + u[0] * run.lo, a[1] + u[1] * run.lo),
       p1: this.toPx(a[0] + u[0] * run.hi, a[1] + u[1] * run.hi),
@@ -516,13 +521,18 @@ export class PlanView {
     }
     if (!sel || s.tool !== 'select') return;
     const it = s.selected;
-    // A fixture has no box: it slides along its wall like an opening.
-    if (!it || sel.type === 'fixture') return;
-    if (sel.type === 'opening') {
+    if (!it) return;
+    if (sel.type === 'opening' || sel.type === 'fixture') {
       const ctx = this.openingContext(it);
       if (ctx) {
         add('text', { x: ctx.label[0], y: ctx.label[1] + 4, class: 'rect-size plan-dim' },
           `${fmtMetres(Math.round(ctx.corner * 100) / 100)} m de l’angle`);
+        // A fixture's other dimension is its height, which the plan cannot
+        // show otherwise.
+        if (sel.type === 'fixture') {
+          add('text', { x: ctx.label[0], y: ctx.label[1] + 18, class: 'rect-size plan-dim' },
+            `à ${fmtMetres(Math.round(this.fixtureZ(it) * 100) / 100)} m du plancher`);
+        }
       }
       return;
     }
@@ -558,6 +568,13 @@ export class PlanView {
     }
   }
 
+  /** A fixture's height above its level's floor, as its wall draws it. */
+  fixtureZ(f) {
+    const host = buildingOfEdge(this.store.model, f.edge);
+    const [lo, hi] = fixtureZRange(host ? storeyHeightOf(host, f.storey || 0) : 2.7);
+    return Math.max(lo, Math.min(hi, f.z ?? FIXTURE_DEFAULTS[f.kind]?.z ?? 2));
+  }
+
   /** What a click with the current tool would make, where it would make it. */
   drawHover(add, pt) {
     const s = this.store;
@@ -591,6 +608,24 @@ export class PlanView {
       add('line', { x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1], class: `opening opening-${tool} ghost` });
       return;
     }
+    if (FIXTURE_DEFAULTS[tool]) {
+      // As for an opening: the wall it would hang on, and where along it.
+      const hit = this.nearestEdge(pt);
+      if (!hit) return;
+      const f = fitOpening(m, {
+        kind: tool, edge: hit.edge.id, storey: 0, offset: Math.round(hit.offset * 20) / 20,
+      });
+      const ctx = this.openingContext(f);
+      if (ctx) {
+        add('line', { x1: ctx.p0[0], y1: ctx.p0[1], x2: ctx.p1[0], y2: ctx.p1[1], class: 'plan-wall-hover' });
+        add('text', { x: ctx.label[0], y: ctx.label[1] + 4, class: 'rect-size plan-dim' },
+          `${fmtMetres(Math.round(ctx.corner * 100) / 100)} m de l’angle`);
+      }
+      const { a, u } = edgeFrame(f.edge, cs);
+      const c = this.toPx(a[0] + u[0] * f.offset, a[1] + u[1] * f.offset);
+      add('circle', { cx: c[0], cy: c[1], r: 5, class: `fixture fixture-${tool} ghost` });
+      return;
+    }
     if (ROOF_ITEM_DEFAULTS[tool]) {
       const it = roofItemAt(tool, pt);
       const on = roofAt(m, [it.x, it.y]);
@@ -617,6 +652,10 @@ export class PlanView {
       if (tool === 'tree' || tool === 'bush') {
         const c = this.toPx(prop.x, prop.y);
         add('circle', { cx: c[0], cy: c[1], r: (prop.r ?? 1) * this.map.scale, class: `prop prop-${tool} ghost` });
+      } else if (tool === 'lamppost') {
+        // Drawn round, as the plan draws it once placed.
+        const c = this.toPx((box[0] + box[2]) / 2, (box[1] + box[3]) / 2);
+        add('circle', { cx: c[0], cy: c[1], r: ((box[2] - box[0]) / 2) * this.map.scale, class: `prop prop-${tool} ghost` });
       } else {
         add('rect', { ...this.boxAttrs(box), class: `prop prop-${tool} ghost` });
       }
@@ -927,9 +966,11 @@ export class PlanView {
       case 'slide': {
         const hit = this.nearestEdge(pt, 3);
         if (hit) {
-          s.patchSelected((it, m) => fitOpening(m, {
-            ...it, edge: hit.edge.id, offset: Math.round(hit.offset * 20) / 20,
-          }));
+          s.patchSelected((it, m) => {
+            const along = offsetOnRun(m, it, hit.edge.id, hit.offset);
+            const at = along === null ? { edge: hit.edge.id, offset: hit.offset } : { offset: along };
+            return fitOpening(m, { ...it, ...at, offset: Math.round(at.offset * 20) / 20 });
+          });
         }
         this.render();
         return;
@@ -938,10 +979,17 @@ export class PlanView {
         const box = boxOf(d.type, d.base);
         const r = snapMove(box, [d.base.x, d.base.y], pt[0] - d.from[0], pt[1] - d.from[1], d.lines, { magnet });
         d.guides = r.guides;
-        s.patchSelected({
-          x: Math.round((d.base.x + r.dx) * 1000) / 1000,
-          y: Math.round((d.base.y + r.dy) * 1000) / 1000,
-        });
+        const x = Math.round((d.base.x + r.dx) * 1000) / 1000;
+        const y = Math.round((d.base.y + r.dy) * 1000) / 1000;
+        if (d.type === 'roofItem' && !roofAt(s.model, [x, y])) {
+          // Held on the last roof it was over, as the render holds it: let
+          // go past the eaves it was never drawn again.
+          if (!d.warned) s.notify(OFF_ROOF);
+          d.warned = true;
+          this.renderOverlay();
+          return;
+        }
+        s.patchSelected({ x, y });
         this.render();
         return;
       }

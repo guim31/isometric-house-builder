@@ -182,3 +182,240 @@ check('dupliquer un corps qui ferait passer les équipements muraux au-delà du 
   return (roomy.model.buildings.length === 3 && roomy.model.fixtures.length === LIMITS.fixtures)
     || `${roomy.model.fixtures.length} équipements après la copie`;
 });
+
+/* ---------------- 2. le plan sait faire avec les équipements ---------------- */
+
+const house = () => equippedHouse({ fixtures: [] });
+
+/** Centre of a plan circle, in pixels. */
+const centreOf = (n) => [Number(n.getAttribute('cx')), Number(n.getAttribute('cy'))];
+
+check('chaque équipement mural a son aperçu dans le plan, là où le clic le pose', () => {
+  const out = [];
+  for (const kind of Object.keys(FIXTURE_DEFAULTS)) {
+    const { s, view } = stagePlan(house());
+    s.setTool(kind);
+    // Just outside the north wall (y = 7), 0,70 m along edge 5,6,N.
+    fire(view, 5.3, 7.4, 'pointermove');
+    const ghost = view.svg.querySelector('.plan-overlay .fixture.ghost');
+    const wall = view.svg.querySelector('.plan-overlay .plan-wall-hover');
+    const label = [...view.svg.querySelectorAll('.plan-overlay text')].find((t) => /de l’angle/.test(t.textContent));
+    if (!ghost || !wall || !label) { out.push(`${kind} : aperçu incomplet`); continue; }
+    const at = centreOf(ghost);
+    fire(view, 5.3, 7.4, 'pointerdown');
+    fire(view, 5.3, 7.4, 'pointerup');
+    const f = s.model.fixtures[0];
+    if (!f || f.kind !== kind || f.edge !== '5,6,N' || !near(f.offset, 0.7) || f.z !== FIXTURE_DEFAULTS[kind].z) {
+      out.push(`${kind} posé : ${JSON.stringify(f)}`);
+      continue;
+    }
+    const dot = view.svg.querySelector(`circle.fixture[data-id="${f.id}"]`);
+    const d = centreOf(dot);
+    if (Math.hypot(d[0] - at[0], d[1] - at[1]) > 0.5) out.push(`${kind} : aperçu à ${at}, posé à ${d}`);
+  }
+  return !out.length || out.join(' ; ');
+});
+
+check('loin de tout mur, un outil d’équipement mural n’a pas d’aperçu, et le clic le dit', () => {
+  const { s, view } = stagePlan(house());
+  const said = [];
+  s.onNotice = (x) => said.push(x);
+  s.setTool('camera');
+  fire(view, 20, 20, 'pointermove');
+  if (view.svg.querySelector('.plan-overlay .fixture.ghost')) return 'un aperçu loin des murs';
+  fire(view, 20, 20, 'pointerdown');
+  fire(view, 20, 20, 'pointerup');
+  return (s.model.fixtures.length === 0 && said.length === 1) || `${s.model.fixtures.length} posé(s), ${said.length} message(s)`;
+});
+
+/** Pixel box of a plan rect or circle. */
+function boxPx(n) {
+  if (n.tagName === 'circle') {
+    const [cx, cy] = centreOf(n), r = Number(n.getAttribute('r'));
+    return [cx - r, cy - r, cx + r, cy + r];
+  }
+  const x = Number(n.getAttribute('x')), y = Number(n.getAttribute('y'));
+  return [x, y, x + Number(n.getAttribute('width')), y + Number(n.getAttribute('height'))];
+}
+
+check('chaque équipement au sol a son emprise fantôme, égale à ce que le clic pose', () => {
+  const out = [];
+  for (const kind of ['lamppost', 'heatpump', 'mailbox', 'carport']) {
+    const { s, view } = stagePlan(house());
+    s.setTool(kind);
+    fire(view, 15.1, 3.1, 'pointermove');
+    const ghost = view.svg.querySelector(`.plan-overlay .prop-${kind}.ghost`);
+    if (!ghost) { out.push(`${kind} sans aperçu`); continue; }
+    const g = boxPx(ghost);
+    fire(view, 15.1, 3.1, 'pointerdown');
+    fire(view, 15.1, 3.1, 'pointerup');
+    const p = s.model.props.at(-1);
+    const drawn = view.svg.querySelector(`.plan-props [data-id="${p?.id}"]`);
+    if (!drawn || drawn.tagName !== ghost.tagName) { out.push(`${kind} : dessiné autrement que son aperçu`); continue; }
+    const d = boxPx(drawn);
+    if (d.some((v, k) => Math.abs(v - g[k]) > 0.5)) out.push(`${kind} : aperçu ${g.map(Math.round)}, posé ${d.map(Math.round)}`);
+  }
+  return !out.length || out.join(' ; ');
+});
+
+check('poignées : là où l’inspecteur règle une dimension, et nulle part ailleurs', () => {
+  const m = equippedHouse();
+  const out = [];
+  const want = { cp: 8, perg: 8, pac: 8, lamp: 0, bal: 0 };
+  for (const [id, n] of Object.entries(want)) {
+    const { s, view } = stagePlan(m);
+    s.setTool('select');
+    s.select({ type: 'prop', id });
+    view.render();
+    const got = view.svg.querySelectorAll('.plan-overlay .plan-handle').length;
+    if (got !== n) out.push(`${id} : ${got} poignées au lieu de ${n}`);
+  }
+  const { s, view } = stagePlan(m);
+  s.setTool('select');
+  s.select({ type: 'fixture', id: 'ap' });
+  view.render();
+  if (view.svg.querySelectorAll('.plan-overlay .plan-handle').length) out.push('des poignées sur une applique');
+  return !out.length || out.join(' ; ');
+});
+
+check('un équipement mural sélectionné a ses cotes : distance à l’angle et hauteur', () => {
+  const { s, view } = stagePlan(equippedHouse());
+  s.setTool('select');
+  s.select({ type: 'fixture', id: 'bo' });
+  view.render();
+  const texts = [...view.svg.querySelectorAll('.plan-overlay text')].map((t) => t.textContent);
+  // The charger is 2,5 m from the south-east corner, 1,10 m above the floor.
+  const ok = texts.some((t) => t === '2,5 m de l’angle') && texts.some((t) => t === 'à 1,1 m du plancher');
+  return ok || texts.join(' | ');
+});
+
+/** Pull handle `handle` of a selected prop to (x, y). */
+function pullHandle(s, view, id, handle, x, y) {
+  s.setTool('select');
+  s.select({ type: 'prop', id });
+  view.render();
+  const h = view.svg.querySelector(`.plan-handle[data-handle="${handle}"]`);
+  if (!h) throw new Error(`poignée ${handle} absente`);
+  const [wx, wy] = view.toWorld(Number(h.getAttribute('x')) + 4.5, Number(h.getAttribute('y')) + 4.5);
+  fireOn(view, `.plan-handle[data-handle="${handle}"]`, wx, wy, 'pointerdown', { altKey: true });
+  fire(view, x, y, 'pointermove', { altKey: true });
+  fire(view, x, y, 'pointerup', { altKey: true });
+}
+
+check('un carport se redimensionne par ses poignées, au quart de mètre, en une étape', () => {
+  const { s, view } = stagePlan(equippedHouse());
+  const before = s.model;
+  pullHandle(s, view, 'perg', 'e', 21.1, 7);
+  const p = s.model.props.find((x) => x.id === 'perg');
+  if (p.w !== 7 || p.x !== 14 || p.d !== 3) return `pergola ${p.x} + ${p.w} × ${p.d}`;
+  s.undo();
+  return canon(s.model) === canon(before) || 'plus d’une étape';
+});
+
+check('le quart de tour d’un objet et ses poignées s’accordent', () => {
+  const out = [];
+  for (const id of ['cp', 'pac', 'auto']) {
+    const { s, view } = stagePlan(equippedHouse());
+    s.setTool('select');
+    s.select({ type: 'prop', id });
+    s.patchSelected((it) => quarterTurn(it));
+    view.render();
+    const it = s.selected;
+    const [x0, y0, x1, y1] = propFootprint(it);
+    const hs = handlesOf('prop', it);
+    const xs = hs.map((h) => h.x), ys = hs.map((h) => h.y);
+    if (Math.min(...xs) !== x0 || Math.max(...xs) !== x1 || Math.min(...ys) !== y0 || Math.max(...ys) !== y1) {
+      out.push(`${id} : poignées hors de son emprise tournée`);
+    }
+    const drawn = boxPx(view.svg.querySelector(`.plan-props [data-id="${id}"]`));
+    const [a, b] = [view.toPx(x0, y1), view.toPx(x1, y0)];
+    if ([a[0], a[1], b[0], b[1]].some((v, k) => Math.abs(v - drawn[k]) > 0.5)) out.push(`${id} : dessin et emprise diffèrent`);
+  }
+  // A car turned across is long along x: its handles keep it a car, but no
+  // longer force two metres of width onto it.
+  const { s, view } = stagePlan(equippedHouse());
+  s.setTool('select');
+  s.select({ type: 'prop', id: 'auto' });
+  s.patchSelected((it) => quarterTurn(it));
+  const turned = s.selected;
+  const [, y0] = propFootprint(turned);
+  pullHandle(s, view, 'auto', 'n', turned.x, y0 + 0.4);
+  const car = s.model.props.find((x) => x.id === 'auto');
+  if (car.dir !== 'E' || car.d !== 1) out.push(`voiture tournée réduite à ${car.w} × ${car.d}, sens ${car.dir}`);
+  return !out.length || out.join(' ; ');
+});
+
+check('flèches : un équipement mural coulisse sur son mur, un équipement au sol avance de 0,25 m', () => {
+  const s = new Store(equippedHouse());
+  const out = [];
+  s.select({ type: 'fixture', id: 'bo' }); // east wall: arrows up and down run along it
+  nudgeSelection(s, 0, 1);
+  nudgeSelection(s, 0, 1);
+  nudgeSelection(s, 1, 0); // across the wall: nothing
+  if (!near(s.selected.offset, 0.6) || s.selected.edge !== '9,2,E') out.push(`borne à ${s.selected.offset} sur ${s.selected.edge}`);
+  nudgeSelection(s, 0, -1, true);
+  if (!near(s.selected.offset, 0.35)) out.push(`borne (Maj) à ${s.selected.offset}`);
+  s.undo();
+  if (s.model.fixtures.find((f) => f.id === 'bo').offset !== 0.5) out.push('les pas de flèche ne sont pas groupés');
+  s.select({ type: 'prop', id: 'pac' });
+  nudgeSelection(s, 1, 0);
+  nudgeSelection(s, 0, -1);
+  if (!(s.selected.x === 4.25 && s.selected.y === 6.8)) out.push(`pompe à chaleur en ${s.selected.x}, ${s.selected.y}`);
+  return !out.length || out.join(' ; ');
+});
+
+check('dans le plan, un équipement mural glisse d’un mur à l’autre, et Échap le rend à sa place', () => {
+  const { s, view } = stagePlan(equippedHouse());
+  s.setTool('select');
+  const before = s.model;
+  // The charger on the east wall (x = 10, y = 2.5), dragged round the corner onto the south wall.
+  fireOn(view, 'circle.fixture[data-id="bo"]', 10, 2.5, 'pointerdown');
+  fire(view, 10, 1.2, 'pointermove');
+  fire(view, 8.4, -0.3, 'pointermove');
+  const moved = s.model.fixtures.find((f) => f.id === 'bo');
+  if (moved.edge !== '8,0,S' || !near(moved.offset, 0.4) || moved.z !== 1.1) return `borne en ${JSON.stringify(moved)}`;
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  fire(view, 8.4, -0.3, 'pointerup');
+  if (canon(s.model) !== canon(before) || s.canUndo) return 'Échap n’a pas tout rendu';
+  if (s.selection?.id !== 'bo') return 'Échap a désélectionné';
+  // Again, to the end: one step.
+  fireOn(view, 'circle.fixture[data-id="bo"]', 10, 2.5, 'pointerdown');
+  fire(view, 10, 1.2, 'pointermove');
+  fire(view, 8.4, -0.3, 'pointermove');
+  fire(view, 8.4, -0.3, 'pointerup');
+  s.undo();
+  return canon(s.model) === canon(before) || 'plus d’une étape';
+});
+
+check('un équipement au sol s’aimante aux murs, et Alt suspend l’aimant', () => {
+  const run = (alt) => {
+    const { s, view } = stagePlan(equippedHouse());
+    s.setTool('select');
+    // The heat pump's south side, from 7,05 m dragged to 7,2: the wall is at 7.
+    fireOn(view, '.plan-props [data-id="pac"]', 4.5, 7.25, 'pointerdown');
+    fire(view, 4.5, 7.4, 'pointermove', { altKey: alt });
+    const guides = view.svg.querySelectorAll('.plan-overlay .plan-guide').length;
+    fire(view, 4.5, 7.4, 'pointerup', { altKey: alt });
+    return { y: s.model.props.find((x) => x.id === 'pac').y, guides };
+  };
+  const on = run(false), off = run(true);
+  if (on.y !== 7 || !on.guides) return `aimanté en y = ${on.y}, ${on.guides} repère(s)`;
+  return (off.y === 7.25 && !off.guides) || `Alt : y = ${off.y}, ${off.guides} repère(s)`;
+});
+
+check('un objet de toit glissé ou poussé hors du toit dans le plan y reste, et le dit une fois', () => {
+  const m = equippedHouse({ roofItems: [{ id: 'ch', kind: 'chimney', x: 8.5, y: 3.5, w: 0.8, d: 0.6, h: 1.1 }] });
+  const { s, view } = stagePlan(m);
+  const said = [];
+  s.onNotice = (x) => said.push(x);
+  s.setTool('select');
+  fireOn(view, '[data-id="ch"]', 8.5, 3.5, 'pointerdown', { altKey: true });
+  fire(view, 9.5, 3.5, 'pointermove', { altKey: true });
+  fire(view, 11.5, 3.5, 'pointermove', { altKey: true });
+  fire(view, 12.5, 3.5, 'pointermove', { altKey: true });
+  fire(view, 12.5, 3.5, 'pointerup', { altKey: true });
+  const ch = s.model.roofItems[0];
+  if (ch.x !== 9.5 || said.length !== 1) return `cheminée en ${ch.x}, ${said.length} message(s)`;
+  nudgeSelection(s, 1, 0, true);
+  return (s.model.roofItems[0].x === 9.5 && said.length === 2) || `poussée en ${s.model.roofItems[0].x}`;
+});

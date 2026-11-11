@@ -10,7 +10,7 @@ import { ROOF_TYPES, STEP } from '../core/roof.js';
 import {
   withCellSize, withTheme, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
   storeyHeightOf, DEFAULT_FOCUS, PROP_DEFAULTS, OPENING_DEFAULTS, fitOpening, overlappingOpenings, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
-  TURNABLE_KINDS, quarterTurn, FIXTURE_DEFAULTS, fixtureZRange,
+  TURNABLE_KINDS, quarterTurn, FIXTURE_DEFAULTS, fixtureZRange, FIXED_SHAPE_KINDS,
 } from '../core/model.js';
 import { bounds, edgeRunExtent } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
@@ -106,8 +106,6 @@ const PROP_LABELS = {
 };
 const FIXTURE_LABELS = { wallLight: 'Applique', camera: 'Caméra', charger: 'Borne de recharge' };
 const FACE_LABELS = [['S', 'le sud'], ['N', 'le nord'], ['E', "l'est"], ['W', "l'ouest"]];
-/** Ground equipment drawn to a fixed shape: no width and depth to offer. */
-const FIXED_SHAPE = new Set(['lamppost', 'mailbox']);
 
 /**
  * Where an opening sits along its wall, counted the way a person would.
@@ -919,7 +917,7 @@ export class Inspector {
       );
       // A tree and a bush are drawn from their radius alone: offering them a
       // width and a depth gave the bush two sliders that did nothing.
-      if (FIXED_SHAPE.has(item.kind)) {
+      if (FIXED_SHAPE_KINDS.has(item.kind)) {
         // Drawn to one shape: a width and a depth would be sliders that
         // stretch a lamp into a wall.
       } else if (item.kind === 'tree' || item.kind === 'bush') {

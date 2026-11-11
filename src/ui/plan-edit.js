@@ -6,7 +6,7 @@
  */
 
 import { boundaryEdges } from '../core/grid.js';
-import { cellSizeOf, propFootprint, LIMITS, CENTRED_KINDS } from '../core/model.js';
+import { cellSizeOf, propFootprint, LIMITS, CENTRED_KINDS, FIXED_SHAPE_KINDS } from '../core/model.js';
 import { LINEAR_KINDS } from './actions.js';
 
 /** The quarter-metre trame everything outdoors is placed on. */
@@ -142,7 +142,8 @@ function minSize(type, it) {
   if (type === 'focus') return [2, 2];
   if (type === 'roofItem') return [0.4, 0.4];
   if (it.kind === 'pool') return [1, 1];
-  if (it.kind === 'car') return [1, 2];
+  // Long the way it points: a car turned across has its length along x.
+  if (it.kind === 'car') return it.dir === 'E' || it.dir === 'W' ? [2, 1] : [1, 2];
   if (it.kind === 'gate') return [0.1, 0.1];
   return [0.25, 0.25];
 }
@@ -154,8 +155,9 @@ function maxSize(type, it) {
   return [24, 24];
 }
 
-/** How an item is resized: its sides, its two ends, or its radius. */
+/** How an item is resized: its sides, its two ends, its radius, or not at all. */
 export function handleShape(type, it) {
+  if (type === 'prop' && FIXED_SHAPE_KINDS.has(it.kind)) return 'fixed';
   if (type === 'prop' && (it.kind === 'tree' || it.kind === 'bush')) return 'radius';
   if (type === 'prop' && LINEAR_KINDS.has(it.kind)) return 'ends';
   if (type === 'roofItem') return 'corners';
@@ -164,8 +166,9 @@ export function handleShape(type, it) {
 
 /** The handles of a selection, as `{ id, x, y }` in metres. */
 export function handlesOf(type, it) {
-  if (!it || type === 'opening' || type === 'building') return [];
+  if (!it || !boxOf(type, it)) return [];
   const shape = handleShape(type, it);
+  if (shape === 'fixed') return [];
   if (shape === 'radius') return [{ id: 'r', x: it.x + (it.r ?? 1), y: it.y }];
   const [x0, y0, x1, y1] = boxOf(type, it);
   if (shape === 'ends') {
@@ -188,6 +191,7 @@ export function handlesOf(type, it) {
 export function resizeTo(type, it, handle, pt, lines, { magnet = true } = {}) {
   const guides = [];
   const shape = handleShape(type, it);
+  if (shape === 'fixed') return { patch: {}, guides };
   if (shape === 'radius') {
     const r = Math.round(Math.hypot(pt[0] - it.x, pt[1] - it.y) * 10) / 10;
     return { patch: { r: Math.max(0.5, Math.min(4, r)) }, guides };

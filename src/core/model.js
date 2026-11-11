@@ -125,6 +125,15 @@ export const FIXTURE_DEFAULTS = {
   charger: { z: 1.1, width: 0.44 },
 };
 
+/**
+ * Ground equipment drawn to one shape: no width and depth to set, in the
+ * inspector or by a handle in the plan.
+ */
+export const FIXED_SHAPE_KINDS = new Set(['lamppost', 'mailbox']);
+
+/** What an opening or a fixture takes up along its wall, in metres. */
+export const wallSpan = (op) => op.width ?? OPENING_DEFAULTS[op.kind]?.width ?? FIXTURE_DEFAULTS[op.kind]?.width ?? 1.2;
+
 /** Range of a fixture's height above its level's floor, and how close to it. */
 export const fixtureZRange = (levelHeight) => [0.25, Math.max(0.25, levelHeight - 0.25)];
 
@@ -842,6 +851,31 @@ export function openingRun(m, op) {
 }
 
 /**
+ * Where a point `offset` metres along edge `edgeId` stands on the straight run
+ * of wall `op` hangs on, in metres from `op`'s own edge — or null when that
+ * edge is not on the same run. Sliding along a wall then keeps the edge, as
+ * the arrows and the render's drag already did; only crossing a corner
+ * changes it, and the same slide gives the same values from either view.
+ */
+export function offsetOnRun(m, op, edgeId, offset) {
+  if (edgeId === op.edge) return offset;
+  const run = openingRun(m, op);
+  if (!run) return null;
+  const [i0, j0, s0] = op.edge.split(',');
+  const [i1, j1, s1] = edgeId.split(',');
+  if (s0 !== s1 || !SIDES[s0]) return null;
+  const side = SIDES[s0];
+  const a0 = side.a(Number(i0), Number(j0)), a1 = side.a(Number(i1), Number(j1));
+  const b0 = side.b(Number(i0), Number(j0));
+  const u = [b0[0] - a0[0], b0[1] - a0[1]];
+  const d = [a1[0] - a0[0], a1[1] - a0[1]];
+  // Not on the same line: a parallel wall further in or out.
+  if (d[0] * u[1] - d[1] * u[0] !== 0) return null;
+  const s = (d[0] * u[0] + d[1] * u[1]) * cellSizeOf(m) + offset;
+  return s >= run.lo - 1e-9 && s <= run.hi + 1e-9 ? s : null;
+}
+
+/**
  * An offset that keeps an opening of `width` whole on its run of wall —
  * centred on it when the wall is the shorter of the two.
  */
@@ -859,8 +893,7 @@ export function fitOffset(offset, width, run) {
 export function fitOpening(m, op) {
   const run = openingRun(m, op);
   if (!run) return op;
-  const width = op.width ?? OPENING_DEFAULTS[op.kind]?.width ?? FIXTURE_DEFAULTS[op.kind]?.width ?? 1.2;
-  const offset = fitOffset(op.offset ?? 0.5, width, run);
+  const offset = fitOffset(op.offset ?? 0.5, wallSpan(op), run);
   return offset === op.offset ? op : { ...op, offset };
 }
 

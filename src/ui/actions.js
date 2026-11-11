@@ -76,10 +76,12 @@ export function roofItemAt(kind, pt) {
  * the same, and never drawn: an object nobody could see or find again.
  * Returns whether one was placed.
  */
+export const OFF_ROOF = 'Posez cet objet sur le toit d’un corps de bâtiment';
+
 export function placeRoofItem(store, kind, pt) {
   const item = roofItemAt(kind, pt);
   if (!roofAt(store.model, [item.x, item.y])) {
-    store.notify?.('Posez cet objet sur le toit d’un corps de bâtiment');
+    store.notify?.(OFF_ROOF);
     return false;
   }
   const id = newId('r', store.model);
@@ -234,7 +236,7 @@ export function nudgeSelection(store, dx, dy, big = false) {
   }
   const item = store.selected;
   if (!item) return false;
-  if (sel.type === 'opening') {
+  if (sel.type === 'opening' || sel.type === 'fixture') {
     // Along the wall only: an arrow across it has nowhere to send it.
     const side = item.edge.split(',')[2];
     const u = { S: [1, 0], N: [-1, 0], E: [0, 1], W: [0, -1] }[side];
@@ -247,6 +249,11 @@ export function nudgeSelection(store, dx, dy, big = false) {
     return true;
   }
   const step = big ? 1 : 0.25;
+  if (sel.type === 'roofItem') {
+    const to = [Math.round((item.x + dx * step) * 100) / 100, Math.round((item.y + dy * step) * 100) / 100];
+    // Kept on a roof: an arrow past the eaves would lose it.
+    if (!roofAt(store.model, to)) { store.notify(OFF_ROOF); return true; }
+  }
   store.patchSelected((it) => ({
     x: Math.round((it.x + dx * step) * 100) / 100,
     y: Math.round((it.y + dy * step) * 100) / 100,

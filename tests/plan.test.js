@@ -60,7 +60,11 @@ check('glisser une fenêtre la fait coulisser le long du mur', () => {
   line.dispatchEvent(pointer(view, 12.5, 9.9, 'pointerdown'));
   view.svg.dispatchEvent(pointer(view, 14.4, 9.9, 'pointermove'));
   view.svg.dispatchEvent(pointer(view, 14.4, 9.9, 'pointerup'));
-  if (op().edge !== '14,10,S') return `restée sur ${op().edge}`;
+  // Along the same wall it keeps its edge, the distance growing — as the
+  // arrows and the render's drag keep it; what counts is where it stands.
+  const [i, , side] = op().edge.split(',');
+  const centre = Number(i) + op().offset;
+  if (side !== 'S' || Math.abs(centre - 14.4) > 0.051) return `centre en x = ${centre} sur ${op().edge}`;
   // The old drag path wrote {x: NaN, y: NaN} onto the opening.
   return !('x' in op()) || 'des coordonnées x/y parasites ont été écrites';
 });
