@@ -3,7 +3,9 @@
  */
 
 import { renderScene } from '../render/svg.js';
-import { hitLayer, screenToGround, roofItemCorners } from '../render/hit.js';
+import {
+  hitLayer, screenToGround, roofItemCorners, roofAt, rayOnRoof, snapOntoBuilding,
+} from '../render/hit.js';
 import { boundaryEdges } from '../core/grid.js';
 import { cellSizeOf, buildingOfEdge, storeyBase, openingSpan } from '../core/model.js';
 import { buildMesh } from '../core/scene.js';
@@ -11,7 +13,8 @@ import { mergeCoplanar } from '../core/mesh.js';
 import { rotateDir, project, clampPitch, clampRoll, normaliseYaw } from '../core/iso.js';
 import { focusModel } from '../core/focus.js';
 import {
-  OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS, placeOpening, placeProp,
+  OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS,
+  placeOpening, placeProp, placeRoofItem,
 } from './actions.js';
 
 /** Degrees of orbit per pixel dragged. */
@@ -103,6 +106,12 @@ export class Viewport {
     this.svg = this.root.querySelector('svg');
   }
 
+  /** A pointer event's position in the drawing's own pixels. */
+  localPoint(ev) {
+    const rect = (this.svg || this.root).getBoundingClientRect();
+    return [ev.clientX - rect.left, ev.clientY - rect.top];
+  }
+
   /**
    * Small compass showing where north lands on screen for this rotation —
    * the direct answer to "why is my window not visible from here?".
@@ -180,20 +189,34 @@ export class Viewport {
 
       const pick = ev.target.dataset?.pick;
       const tool = s.tool;
+      const [sx, sy] = this.localPoint(ev);
+      // What is drawn under the pointer, when it is a roof: the pick layer has
+      // nothing there, and must not answer for it — a tree standing behind the
+      // house got selected through its roof.
+      const roof = this.lastRender ? roofAt(this.lastRender, sx, sy) : null;
+
+      // A roof item lands on the slope under the pointer, at the point the
+      // view ray meets it. Anywhere else, the tool places nothing.
+      if (ROOF_ITEM_DEFAULTS[tool] && ev.button === 0 && !ev.shiftKey && !ev.altKey && roof) {
+        const at = roof.item ? rayOnRoof(this.lastRender.camera, sx, sy, roof.part) || roof.point : roof.point;
+        const spot = snapOntoBuilding(roof.building, cellSizeOf(s.model), at[0], at[1]);
+        if (spot) placeRoofItem(s, tool, spot);
+        return;
+      }
 
       // Outdoor items can be dropped straight onto the render: the ground
       // plane is exactly invertible, so a click maps back to a grid position.
       // Not the runs — wall, fence, hedge: those are dragged out on the plan,
-      // and a click here dropped a default length nobody asked for.
-      if (!pick && ev.button === 0 && !ev.shiftKey && PROP_DEFAULTS[tool] && !LINEAR_KINDS.has(tool)
+      // and a click here dropped a default length nobody asked for. Nor onto
+      // a roof: what is under the pointer there is the house, not the lawn.
+      if (!pick && !roof && ev.button === 0 && !ev.shiftKey && PROP_DEFAULTS[tool] && !LINEAR_KINDS.has(tool)
         && this.lastRender) {
-        const rect = this.root.getBoundingClientRect();
-        placeProp(s, tool, screenToGround(this.lastRender.camera, ev.clientX - rect.left, ev.clientY - rect.top));
+        placeProp(s, tool, screenToGround(this.lastRender.camera, sx, sy));
         return;
       }
 
       // A tool that acts on a wall acts at once: it is a click, not a gesture.
-      if (pick === 'wall' && OPENING_DEFAULTS[tool]) {
+      if (pick === 'wall' && !roof && OPENING_DEFAULTS[tool]) {
         this.addOpening(tool, ev.target.dataset.edge, Number(ev.target.dataset.storey), ev);
         return;
       }
@@ -218,7 +241,8 @@ export class Viewport {
         from: [ev.clientX, ev.clientY],
         pan: [...this.pan],
         camera: { ...s.model.camera },
-        pick: pickTarget(pick, ev.target.dataset),
+        pick: roof ? (roof.item ? { type: 'roofItem', id: roof.item.id } : { type: 'building', id: roof.building.id })
+          : pickTarget(pick, ev.target.dataset),
         moved: false,
       };
       // Capture is a convenience, not a requirement: a pointer the browser

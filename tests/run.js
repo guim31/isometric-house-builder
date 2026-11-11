@@ -15,10 +15,15 @@ export const FILES = [
   'textures', 'presets', 'ordering', 'buildings', 'levels', 'garden', 'stacking',
   'palette', 'model', 'store', 'plan', 'viewport', 'inspector',
   'review-fixes', 'review-consistency', 'review-rest',
-  'export', 'night', 'occlusion', 'focus', 'page', 'app', 'reliability', 'hostile', 'smoke',
+  'export', 'night', 'occlusion', 'focus', 'rendu-gestes', 'page', 'app', 'reliability', 'hostile', 'smoke',
 ];
 
-for (const name of FILES) {
+// `?only=roof,rendu-gestes` runs those files alone — a quick loop while
+// working on one area. The whole suite still runs before every push.
+const only = new URLSearchParams(location.search).get('only');
+const chosen = only ? FILES.filter((f) => only.split(',').includes(f)) : FILES;
+
+for (const name of chosen) {
   try {
     await import(`./${name}.test.js`);
   } catch (e) {
