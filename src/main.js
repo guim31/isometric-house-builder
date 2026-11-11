@@ -184,10 +184,10 @@ function syncTools() {
  * the nearest quarter turn. The buttons always move the way they point.
  */
 function rotate(delta) {
-  store.update((m) => {
-    const q = m.camera.yaw / 90;
+  store.setCamera((c) => {
+    const q = c.yaw / 90;
     const next = delta > 0 ? Math.floor(q) + 1 : Math.ceil(q) - 1;
-    return { ...m, camera: { ...m.camera, yaw: normaliseYaw(next * 90) } };
+    return { yaw: normaliseYaw(next * 90) };
   });
 }
 

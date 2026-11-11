@@ -138,3 +138,73 @@ await checkAsync('une liste garde ses propres touches, mais pas Échap', async (
   if (!kept) return 'la liste a perdu sa touche ]';
   return cleared || 'Échap ignoré sur une liste';
 });
+
+/* ---------------- B5: the camera is not history ---------------- */
+
+check('tourner la vue après « Annuler » laisse « Rétablir » actif', () => {
+  const s = new Store(defaultModel());
+  s.update((m) => ({ ...m, name: 'retouché' }));
+  s.undo();
+  if (!s.canRedo) return 'rien à rétablir après annuler';
+  s.setCamera({ yaw: 123 });
+  s.setCamera((c) => ({ pitch: c.pitch + 5, roll: 4 }));
+  s.setCamera({ projection: 'dimetric' });
+  if (!s.canRedo) return 'la caméra a vidé la pile de rétablissement';
+  s.redo();
+  if (s.model.name !== 'retouché') return 'rétablir n’a pas rétabli';
+  if (s.model.camera.yaw !== 123 || s.model.camera.projection !== 'dimetric') return 'rétablir a ramené l’ancienne caméra';
+  s.undo();
+  return s.model.camera.yaw === 123 || 'annuler a ramené l’ancienne caméra';
+});
+
+check('aucun geste de caméra ne crée d’entrée d’historique', () => {
+  const { s, div, vp } = stageViewport();
+  vp.nudge(15, 6);
+  vp.nudge(-30, 0);
+  const r = div.getBoundingClientRect();
+  const at = (dx, type, extra = {}) => div.dispatchEvent(new PointerEvent(type, {
+    clientX: r.left + 200 + dx, clientY: r.top + 200, bubbles: true, pointerId: 12, button: 0, ...extra,
+  }));
+  at(0, 'pointerdown', { altKey: true }); at(50, 'pointermove', { altKey: true }); at(50, 'pointerup');
+  at(0, 'pointerdown'); at(80, 'pointermove'); at(80, 'pointerup');
+  div.remove();
+  return !s.canUndo || `${s.past.length} entrée(s)`;
+});
+
+await checkAsync('les réglages de la section Vue et les boutons de rotation restent hors de l’historique', async () => {
+  const frame = await app();
+  const doc = frame.contentDocument;
+  const win = frame.contentWindow;
+  const store = await appStore();
+  const depth = store.past.length;
+  doc.getElementById('btn-rot-right').click();
+  doc.getElementById('btn-rot-left').click();
+  await frames(win);
+  const view = doc.querySelector('#inspector details[data-section="Vue"]');
+  if (!view) return 'section Vue introuvable';
+  view.open = true;
+  for (const input of view.querySelectorAll('input[type="range"]')) {
+    input.value = input.max;
+    input.dispatchEvent(new win.Event('input', { bubbles: true }));
+    input.dispatchEvent(new win.Event('change', { bubbles: true }));
+    await frames(win);
+  }
+  const proj = view.querySelector('select');
+  proj.value = proj.options[proj.options.length - 1].value;
+  proj.dispatchEvent(new win.Event('change', { bubbles: true }));
+  await frames(win);
+  [...doc.querySelectorAll('#inspector details[data-section="Vue"] button')]
+    .find((b) => /isométrique/.test(b.textContent))?.click();
+  await frames(win);
+  return store.past.length === depth || `${store.past.length - depth} entrée(s) ajoutée(s)`;
+});
+
+check('après annuler, la modification suivante ne fusionne pas avec une entrée antérieure', () => {
+  const s = new Store(defaultModel());
+  s.update((m) => ({ ...m, name: 'a' }), { coalesce: 'name' });
+  s.update((m) => ({ ...m, theme: 'slate' }));
+  s.undo(); // back to name 'a', the 'name' entry on top
+  s.update((m) => ({ ...m, name: 'ab' }), { coalesce: 'name' });
+  s.undo();
+  return s.model.name === 'a' || `annuler ramène « ${s.model.name} »`;
+});

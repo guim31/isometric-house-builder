@@ -590,23 +590,23 @@ export class Inspector {
       field('Orientation', slider(Math.round(m.camera.yaw), {
         min: 0, max: 359, step: 1,
         format: (v) => `${deg(v)} — ${viewpointLabel(v)}`,
-        onInput: (v) => this.setIn('camera', { yaw: normaliseYaw(v) }, 'camera'),
+        onInput: (v) => this.store.setCamera({ yaw: normaliseYaw(v) }),
       }), 'ou glissez directement dans le rendu'),
       field('Hauteur de vue', slider(Math.round(m.camera.pitch), {
         min: PITCH_RANGE[0], max: PITCH_RANGE[1], step: 1, format: deg,
-        onInput: (v) => this.setIn('camera', { pitch: v }, 'camera'),
+        onInput: (v) => this.store.setCamera({ pitch: v }),
       }), 'de rasante à quasi verticale'),
       field('Inclinaison de l’image', slider(Math.round(m.camera.roll), {
         min: ROLL_RANGE[0], max: ROLL_RANGE[1], step: 1, format: deg,
-        onInput: (v) => this.setIn('camera', { roll: v }, 'camera'),
+        onInput: (v) => this.store.setCamera({ roll: v }),
       }), 'fait pivoter le dessin dans son cadre — ou Alt + glisser dans le rendu'),
       field('Projection', select(m.camera.projection,
         Object.entries(PROJECTIONS).map(([k, v]) => [k, v.label]),
-        (v) => this.setIn('camera', { projection: v }))),
+        (v) => this.store.setCamera({ projection: v }))),
     );
 
     const reset = h('button', 'subtle', 'Revenir à la vue isométrique');
-    reset.addEventListener('click', () => this.setIn('camera', {
+    reset.addEventListener('click', () => this.store.setCamera({
       yaw: Math.round(m.camera.yaw / 90) % 4 * 90, pitch: DEFAULT_PITCH, roll: 0,
     }));
     s.appendChild(reset);

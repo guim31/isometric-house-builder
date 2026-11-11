@@ -75,6 +75,23 @@ export class Store {
     this.emit('model');
   }
 
+  /**
+   * Move the camera, outside the history.
+   *
+   * Looking is not editing. With the camera in the history, undoing a change
+   * and then turning the house to check the result emptied « Rétablir » — the
+   * one moment it was wanted — and undo spent its steps rewinding orbits. The
+   * camera is still part of the model, so it is saved with the project and a
+   * saved view still carries one; it simply never makes an entry, and undo and
+   * redo leave it where it is.
+   */
+  setCamera(patch) {
+    const cur = this.model.camera;
+    const next = { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) };
+    if (Object.keys(next).every((k) => next[k] === cur[k])) return;
+    this.update({ ...this.model, camera: next }, { silent: true });
+  }
+
   /** End a coalescing run, so the next edit starts a fresh history entry. */
   commit() {
     const last = this.past[this.past.length - 1];
@@ -85,15 +102,26 @@ export class Store {
     const entry = this.past.pop();
     if (!entry) return;
     this.future.push({ model: this.model });
-    this.model = entry.model;
-    this.emit('model');
+    this.restore(entry.model);
   }
 
   redo() {
     const entry = this.future.pop();
     if (!entry) return;
     this.past.push({ model: this.model, coalesce: null });
-    this.model = entry.model;
+    this.restore(entry.model);
+  }
+
+  /**
+   * Bring back a model from the history, keeping the camera of the moment —
+   * and ending any coalescing run: the next edit after an undo is a new step,
+   * not a continuation of whichever entry of the same kind is now on top.
+   */
+  restore(model) {
+    this.model = { ...model, camera: this.model.camera };
+    const last = this.past[this.past.length - 1];
+    if (last) last.coalesce = null;
+    this.lastEditAt = 0;
     this.emit('model');
   }
 

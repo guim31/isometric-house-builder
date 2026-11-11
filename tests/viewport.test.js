@@ -202,9 +202,8 @@ check('glisser sur le rendu fait pivoter la maison', () => {
   const c = s.model.camera;
   if (c.yaw === yaw0) return 'le lacet n’a pas bougé';
   if (c.pitch <= pitch0) return 'monter la souris n’a pas levé la caméra';
-  // One gesture, one undo step — not sixty.
-  s.undo();
-  return (s.model.camera.yaw === yaw0) || `annuler laisse le lacet à ${s.model.camera.yaw}`;
+  // Looking is not editing: the gesture makes no undo step at all.
+  return !s.canUndo || 'pivoter a créé une entrée d’historique';
 });
 
 check('avec Maj, glisser déplace la vue sans la faire pivoter', () => {

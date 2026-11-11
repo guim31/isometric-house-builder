@@ -236,24 +236,17 @@ export class Viewport {
         this.drag.moved = true;
       }
       if (this.drag.mode === 'roll') {
-        this.store.update((mm) => ({
-          ...mm,
-          camera: { ...mm.camera, roll: clampRoll(this.drag.camera.roll + dx * ROLL_PER_PX) },
-        }), { coalesce: 'orbit' });
+        this.store.setCamera({ roll: clampRoll(this.drag.camera.roll + dx * ROLL_PER_PX) });
         return;
       }
       if (this.drag.mode === 'orbit') {
         // Dragging right turns the house to the right. That is the direction
         // increasing yaw moves it: at yaw 0 the east corner sits on the screen
         // left, and every added degree walks it back towards the centre.
-        this.store.update((mm) => ({
-          ...mm,
-          camera: {
-            ...mm.camera,
-            yaw: normaliseYaw(this.drag.camera.yaw + dx * ORBIT_YAW),
-            pitch: clampPitch(this.drag.camera.pitch - dy * ORBIT_PITCH),
-          },
-        }), { coalesce: 'orbit' });
+        this.store.setCamera({
+          yaw: normaliseYaw(this.drag.camera.yaw + dx * ORBIT_YAW),
+          pitch: clampPitch(this.drag.camera.pitch - dy * ORBIT_PITCH),
+        });
         return;
       }
       // Pan lives upstream of the zoom in the projection, so the on-screen
@@ -276,8 +269,6 @@ export class Viewport {
         const sel = this.drag.pick;
         if (sel?.type === 'building') this.store.setActiveBuilding(sel.id);
         this.store.select(sel);
-      } else if (this.drag?.mode === 'orbit' || this.drag?.mode === 'roll') {
-        this.store.commit();
       }
       this.drag = null;
     };
@@ -387,14 +378,10 @@ export class Viewport {
    * on screen tells you.
    */
   nudge(dYaw, dPitch) {
-    this.store.update((m) => ({
-      ...m,
-      camera: {
-        ...m.camera,
-        yaw: normaliseYaw(m.camera.yaw + dYaw),
-        pitch: clampPitch(m.camera.pitch + dPitch),
-      },
-    }), { coalesce: 'orbit' });
+    this.store.setCamera((c) => ({
+      yaw: normaliseYaw(c.yaw + dYaw),
+      pitch: clampPitch(c.pitch + dPitch),
+    }));
   }
 
   /** Slide the view, as the pad's arrows do in « déplacer » mode. */

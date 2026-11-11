@@ -215,7 +215,11 @@ ouvertures semblent absentes, elles sont probablement sur les deux façades
 opposées — tournez la vue avec `[` et `]`.
 
 Raccourcis : `Ctrl+Z` / `Ctrl+Maj+Z` annuler et rétablir (dans un champ texte,
-la saisie), `Ctrl+D` dupliquer la sélection, `[` et `]` tourner d'un quart de
+la saisie) — **regarder n'est pas modifier** : tourner, incliner ou changer de
+projection ne crée pas d'entrée d'historique, et annuler laisse la vue où elle
+est, si bien qu'on peut annuler, tourner la maison pour juger, puis rétablir ;
+la caméra reste enregistrée avec le projet, et le cadrage comme les vues
+enregistrées restent, eux, dans l'historique — `Ctrl+D` dupliquer la sélection, `[` et `]` tourner d'un quart de
 tour, `Suppr` supprimer l'élément sélectionné, `Échap` désélectionner. Le pavé
 de navigation se commande aussi au clavier.
 
