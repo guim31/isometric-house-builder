@@ -20,6 +20,16 @@ export const ROOF_TYPES = ['hip', 'gable', 'flat', 'shed'];
 
 const NEG = -1e9;
 
+/**
+ * Which way a gable's ridge runs. `auto` — the longer side, what every roof
+ * did before the choice existed — stays the default, so no house changes.
+ */
+export const RIDGES = {
+  auto: null,
+  ew: { alongX: true },
+  ns: { alongX: false },
+};
+
 /** Snap an overhang so that the roof outline stays on the lattice. */
 export function snapOverhang(v) {
   return Math.max(0, Math.round(v / STEP) * STEP);
@@ -30,7 +40,7 @@ export function snapOverhang(v) {
  * Returns { h(x, y), inside(x, y), bbox }.
  */
 export function heightField(rects, opts) {
-  const { type = 'hip', pitch = 30, overhang = 0, shedDir = 'S' } = opts;
+  const { type = 'hip', pitch = 30, overhang = 0, shedDir = 'S', ridge = 'auto' } = opts;
   const slope = type === 'flat' ? 0 : Math.tan((pitch * Math.PI) / 180);
   const o = snapOverhang(overhang);
   // The overhang is uniform on every side. Gable ends and the high side of a
@@ -38,9 +48,13 @@ export function heightField(rects, opts) {
   // those vertical triangles come out of the wall builder instead. Keeping the
   // expansion uniform is what stops two overlapping rectangles from ending at
   // different places and tearing a cliff into the surface between them.
+  // A gable's ridge runs along the longer side unless the roof says which
+  // way: east-west is along x, north-south along y. Forced, it holds for every
+  // rectangle of the footprint, so the wings of an L keep one direction.
+  const forced = RIDGES[ridge];
   const ex = rects.map((r) => ({
     x0: r.x0 - o, y0: r.y0 - o, x1: r.x1 + o, y1: r.y1 + o,
-    alongX: r.x1 - r.x0 >= r.y1 - r.y0,
+    alongX: forced ? forced.alongX : r.x1 - r.x0 >= r.y1 - r.y0,
   }));
 
   let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;

@@ -10,6 +10,7 @@ import { ROOF_TYPES, STEP } from '../core/roof.js';
 import {
   withCellSize, withTheme, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
   storeyHeightOf, DEFAULT_FOCUS, PROP_DEFAULTS, OPENING_DEFAULTS, fitOpening, overlappingOpenings, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
+  TURNABLE_KINDS, quarterTurn,
 } from '../core/model.js';
 import { bounds, edgeRunExtent } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
@@ -92,6 +93,7 @@ const COLOUR_GROUPS = [
 ];
 
 const ROOF_LABELS = { hip: 'Croupe (4 pans)', gable: 'Deux pans', flat: 'Plat', shed: 'Appentis (1 pan)' };
+const RIDGE_LABELS = { auto: 'Automatique', ew: 'Est-ouest', ns: 'Nord-sud' };
 const DIR_LABELS = { S: 'vers le sud', N: 'vers le nord', W: "vers l'ouest", E: "vers l'est" };
 const GROUND_LABELS = { grass: 'Pelouse', paving: 'Dallage', gravel: 'Gravier' };
 const OPENING_LABELS = { window: 'Fenêtre', shutter: 'Fenêtre à volets', door: 'Porte', garage: 'Porte de garage' };
@@ -482,6 +484,10 @@ export class Inspector {
     const s = h('div', 'roof-fields');
     s.appendChild(field('Forme', select(b.roof.type, ROOF_TYPES.map((t) => [t, ROOF_LABELS[t]]),
       (v) => this.store.patchRoof({ type: v }))));
+    if (b.roof.type === 'gable') {
+      s.appendChild(field('Faîtage', select(b.roof.ridge || 'auto', Object.entries(RIDGE_LABELS),
+        (v) => this.store.patchRoof({ ridge: v })), 'automatique : le long du grand côté'));
+    }
     if (b.roof.type === 'shed') {
       s.appendChild(field('Pente', select(b.roof.shedDir, Object.entries(DIR_LABELS),
         (v) => this.store.patchRoof({ shedDir: v }))));
@@ -922,6 +928,19 @@ export class Inspector {
           onInput: (v) => patch({ z: v }, 'z'),
         }), 'la dalle reçoit ses joues — et masque ce qui reste au sol dessous'));
       }
+      if (item.kind === 'car') {
+        // Width and depth are the footprint on the ground, so a car turned
+        // across trades them: what stays is the car, not the numbers.
+        const across = (d) => d === 'E' || d === 'W';
+        s.appendChild(field('Sens', select(item.dir || 'N',
+          [['N', 'vers le nord'], ['E', "vers l'est"], ['S', 'vers le sud'], ['W', "vers l'ouest"]],
+          (v) => patch((it) => (across(it.dir || 'N') === across(v) ? { dir: v }
+            : { dir: v, w: it.d, d: it.w }))), 'le côté où pointe le capot'));
+      }
+      if (item.kind === 'tree') {
+        s.appendChild(field('Silhouette', select(item.style || 'leafy',
+          [['leafy', 'Feuillu'], ['conifer', 'Conifère']], (v) => patch({ style: v }))));
+      }
       if (item.kind === 'gate') {
         s.appendChild(field('Type', select(item.style || 'swing',
           [['swing', 'Portillon battant'], ['sliding', 'Portail coulissant']],
@@ -935,6 +954,13 @@ export class Inspector {
       }
     }
 
+    if (type === 'prop' && TURNABLE_KINDS.has(item.kind)) {
+      const turn = h('button', 'subtle', 'Tourner d’un quart de tour');
+      turn.type = 'button';
+      turn.title = 'Dans le sens des aiguilles d’une montre, autour de son centre';
+      turn.addEventListener('click', () => this.store.patchSelected((it) => quarterTurn(it)));
+      s.appendChild(turn);
+    }
     const dup = h('button', 'subtle', 'Dupliquer (Ctrl+D)');
     dup.addEventListener('click', () => this.store.duplicateSelected());
     s.appendChild(dup);

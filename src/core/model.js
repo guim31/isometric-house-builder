@@ -7,7 +7,7 @@ import { key, rectCells, connectedComponents, SIDES, runExtents } from './grid.j
 import {
   DEFAULT_PROJECTION, DEFAULT_PITCH, PROJECTIONS, clampPitch, clampRoll, normaliseYaw,
 } from './iso.js';
-import { ROOF_TYPES } from './roof.js';
+import { ROOF_TYPES, RIDGES } from './roof.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
 import { THEMES } from './palette.js';
 import { PRESETS } from '../data/presets.js';
@@ -121,6 +121,31 @@ export const stairsSteps = (h) => Math.max(1, Math.min(24, Math.round(h / 0.18))
  */
 export const stairsRun = (h) => Math.max(1.25, Math.ceil((stairsSteps(h) * 0.28) * 4) / 4);
 
+/** Outdoor items a quarter turn makes sense for: rectangles, and the car. */
+export const TURNABLE_KINDS = new Set([
+  'terrace', 'path', 'deck', 'pool', 'stairs', 'gate', 'muret', 'hedge', 'fence', 'car',
+]);
+
+const NEXT_DIR = { N: 'E', E: 'S', S: 'W', W: 'N' };
+
+/**
+ * An outdoor item turned a quarter turn clockwise, seen from above, about the
+ * centre of its footprint. Width and depth trade places; what has a way of
+ * facing — the climb of a flight of steps, the front of a car — turns with
+ * it. Not snapped: two turns bring it back exactly where it was.
+ */
+export function quarterTurn(p) {
+  const def = PROP_DEFAULTS[p.kind] || {};
+  const w = p.w ?? def.w ?? 2, d = p.d ?? def.d ?? 2;
+  const out = { ...p, w: d, d: w };
+  if (!CENTRED_KINDS.has(p.kind)) {
+    out.x = p.x + w / 2 - d / 2;
+    out.y = p.y + d / 2 - w / 2;
+  }
+  if (p.kind === 'stairs' || p.kind === 'car' || p.dir) out.dir = NEXT_DIR[p.dir || 'N'];
+  return out;
+}
+
 /** An opening on a level its building no longer has is kept, but not built. */
 export const openingShown = (op, b) => (op.storey || 0) < b.storeys;
 
@@ -170,7 +195,7 @@ export function makeBuilding(patch = {}) {
     // the storey where the roof already begins.
     storeyHeights: null,
     plinth: 0,
-    roof: { type: 'hip', pitch: 30, overhang: 0.5, fascia: 0.18, shedDir: 'S' },
+    roof: { type: 'hip', pitch: 30, overhang: 0.5, fascia: 0.18, shedDir: 'S', ridge: 'auto' },
     overrides: {},
     texture: null, // null = follow the model's materials
     ...patch,
@@ -300,6 +325,7 @@ const KINDS = {
   slab: ['paving', 'gravel', 'deck'],
   shape: ['rounded', 'rect'],
   gate: ['swing', 'sliding'],
+  tree: ['leafy', 'conifer'],
 };
 
 /** Ids made safe, and unique within their list: a second item of the same id
@@ -518,7 +544,9 @@ function normaliseProps(input) {
       };
       pick('material', KINDS.slab);
       pick('shape', KINDS.shape);
-      pick('style', KINDS.gate);
+      // One field, a list of its own per kind: a gate swings or slides, a
+      // tree is broad-leaved or a conifer.
+      pick('style', KINDS[p.kind] || KINDS.gate);
       pick('dir', ['N', 'S', 'E', 'W']);
       return out;
     })
@@ -587,6 +615,7 @@ function normaliseBuildings(input, themePlinth, cs) {
         overhang: num(roof.overhang, R.overhang, proto.roof.overhang),
         fascia: num(roof.fascia, R.fascia, proto.roof.fascia),
         shedDir: SIDES_RE.test(roof.shedDir) ? roof.shedDir : proto.roof.shedDir,
+        ridge: oneOf(roof.ridge, Object.keys(RIDGES), proto.roof.ridge),
       },
       overrides: safeColours(b.overrides),
       texture: isRecord(b.texture) ? materials(b.texture, { roof: 'none', wall: 'none' }) : null,

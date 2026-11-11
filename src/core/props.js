@@ -90,6 +90,50 @@ function blob(mesh, cx, cy, z0, r, h, mat, anchor, sides = 12) {
 }
 
 /**
+ * A conifer: three tiers, each a cone cut short where the next one starts,
+ * flat-shaded like the broad-leaved tree.
+ *
+ * Cut rather than left whole and overlapping: the part of a lower cone inside
+ * the one above would be faces with depths of their own, and nothing in a
+ * painter's sort guarantees they stay hidden. Each tier ends narrower than
+ * the next one begins, so its top edge is tucked under that tier's skirt —
+ * and each tier sits above a horizontal plane, which is what lets the
+ * renderer order the stack exactly (see stackObjects in svg.js).
+ */
+function conifer(mesh, cx, cy, r, tag, sides = 10) {
+  const trunkH = r * 0.45;
+  mesh.box([cx - 0.1, cy - 0.1, 0], [cx + 0.1, cy + 0.1, trunkH], 'trunk', `${tag}:0`, ['bottom'], anchor);
+  const H = r * 2.7;
+  const tiers = [
+    { z: 0, h: 0.5, s: 1 }, { z: 0.3, h: 0.5, s: 0.78 }, { z: 0.55, h: 0.45, s: 0.55 },
+  ];
+  const ring = (rad, z) => {
+    const pts = [];
+    for (let k = 0; k < sides; k++) {
+      const a = (k / sides) * Math.PI * 2 + Math.PI / sides;
+      pts.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, z]);
+    }
+    return pts;
+  };
+  tiers.forEach((t, i) => {
+    const z0 = trunkH + t.z * H, apex = z0 + t.h * H;
+    const top = i + 1 < tiers.length ? trunkH + tiers[i + 1].z * H : apex;
+    const base = ring(r * t.s, z0);
+    const group = `${tag}:${i + 1}`;
+    if (i === 0) mesh.poly([...base].reverse(), 'foliage', group, anchor);
+    if (top >= apex) {
+      for (let k = 0; k < sides; k++) mesh.tri(base[k], base[(k + 1) % sides], [cx, cy, apex], 'foliage', group, anchor);
+      return;
+    }
+    const cut = ring(r * t.s * (apex - top) / (apex - z0), top);
+    for (let k = 0; k < sides; k++) {
+      const k2 = (k + 1) % sides;
+      mesh.quad(base[k], base[k2], cut[k2], cut[k], 'foliage', group, anchor);
+    }
+  });
+}
+
+/**
  * A garden wall, in the material of the house so a boundary wall reads as
  * belonging to it, capped with a slightly proud coping.
  */
@@ -169,6 +213,14 @@ function segmentedBox(mesh, min, max, mat, group, anchor, target = 2.5) {
   }
 }
 
+/**
+ * The group a car's faces go in. Plain `car` — what every car has always
+ * been drawn as — unless something stands over it: see buildProps.
+ */
+function carGroup(p, m) {
+  return 'car';
+}
+
 /** Extent of a prop along and across a given axis. */
 function extent(p, horiz) {
   const w = p.w ?? 2, d = p.d ?? 0.2;
@@ -231,6 +283,10 @@ export function buildProps(mesh, m) {
       }
       case 'tree': {
         const r = p.r ?? 1.4;
+        if (p.style === 'conifer') {
+          conifer(mesh, p.x, p.y, r, `stack:${p.id}`);
+          break;
+        }
         const trunkH = r * 0.75;
         mesh.box([p.x - 0.11, p.y - 0.11, 0], [p.x + 0.11, p.y + 0.11, trunkH], 'trunk', 'trunk', ['bottom'], anchor);
         blob(mesh, p.x, p.y, trunkH, r, r * 1.9, 'foliage', anchor);
@@ -338,10 +394,35 @@ export function buildProps(mesh, m) {
       case 'car': {
         const w = p.w ?? 1.8, d = p.d ?? 4.2;
         const x0 = p.x - w / 2, x1 = p.x + w / 2, y0 = p.y - d / 2, y1 = p.y + d / 2;
-        mesh.box([x0, y0, 0.22], [x1, y1, 0.78], 'carBody', 'car', ['bottom'], anchor);
-        mesh.box([x0 + 0.16, y0 + d * 0.22, 0.78], [x1 - 0.16, y1 - d * 0.28, 1.22], 'carGlass', 'car', ['bottom'], anchor);
-        for (const [wx, wy] of [[x0, y0 + d * 0.2], [x1 - 0.22, y0 + d * 0.2], [x0, y1 - d * 0.3], [x1 - 0.22, y1 - d * 0.3]]) {
-          mesh.box([wx, wy, 0], [wx + 0.22, wy + 0.7, 0.34], 'carTyre', 'car', ['bottom'], anchor);
+        const group = carGroup(p, m);
+        mesh.box([x0, y0, 0.22], [x1, y1, 0.78], 'carBody', group, ['bottom'], anchor);
+        const dir = p.dir || 'N';
+        if (dir === 'N') {
+          // Facing north, as every car was before it had a direction: kept
+          // to the letter, so those files draw to the same pixel.
+          mesh.box([x0 + 0.16, y0 + d * 0.22, 0.78], [x1 - 0.16, y1 - d * 0.28, 1.22], 'carGlass', group, ['bottom'], anchor);
+          for (const [wx, wy] of [[x0, y0 + d * 0.2], [x1 - 0.22, y0 + d * 0.2], [x0, y1 - d * 0.3], [x1 - 0.22, y1 - d * 0.3]]) {
+            mesh.box([wx, wy, 0], [wx + 0.22, wy + 0.7, 0.34], 'carTyre', group, ['bottom'], anchor);
+          }
+          break;
+        }
+        // Any other way, through a frame along the car: `t` from the rear
+        // bumper, `u` across. The bonnet is the longer end, as facing north.
+        const alongX = dir === 'E' || dir === 'W';
+        const L = alongX ? w : d;
+        const rear = { S: y1, E: x0, W: x1 }[dir];
+        const sign = dir === 'E' ? 1 : -1;
+        const box = (t0, t1, u0, u1, z0, z1, mat) => {
+          const a = rear + sign * t0, b = rear + sign * t1;
+          const [lo, hi] = [Math.min(a, b), Math.max(a, b)];
+          if (alongX) mesh.box([lo, y0 + u0, z0], [hi, y0 + u1, z1], mat, group, ['bottom'], anchor);
+          else mesh.box([x0 + u0, lo, z0], [x0 + u1, hi, z1], mat, group, ['bottom'], anchor);
+        };
+        const W = alongX ? d : w;
+        box(L * 0.22, L * 0.72, 0.16, W - 0.16, 0.78, 1.22, 'carGlass');
+        for (const t of [L * 0.2, L * 0.7]) {
+          box(t, t + 0.7, 0, 0.22, 0, 0.34, 'carTyre');
+          box(t, t + 0.7, W - 0.22, W, 0, 0.34, 'carTyre');
         }
         break;
       }
