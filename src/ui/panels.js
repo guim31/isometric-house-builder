@@ -10,7 +10,7 @@ import { ROOF_TYPES, STEP } from '../core/roof.js';
 import {
   withCellSize, withTheme, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
   storeyHeightOf, DEFAULT_FOCUS, PROP_DEFAULTS, OPENING_DEFAULTS, fitOpening, overlappingOpenings, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
-  TURNABLE_KINDS, quarterTurn,
+  TURNABLE_KINDS, quarterTurn, FIXTURE_DEFAULTS, fixtureZRange,
 } from '../core/model.js';
 import { bounds, edgeRunExtent } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
@@ -102,7 +102,12 @@ const PROP_LABELS = {
   pool: 'Piscine', terrace: 'Terrasse', path: 'Allée', deck: 'Terrasse bois', bush: 'Buisson',
   muret: 'Muret', gate: 'Portillon / portail', stairs: 'Escalier',
   tree: 'Arbre', hedge: 'Haie', fence: 'Clôture', car: 'Voiture',
+  lamppost: 'Lampadaire', heatpump: 'Pompe à chaleur', mailbox: 'Boîte aux lettres', carport: 'Carport / pergola',
 };
+const FIXTURE_LABELS = { wallLight: 'Applique', camera: 'Caméra', charger: 'Borne de recharge' };
+const FACE_LABELS = [['S', 'le sud'], ['N', 'le nord'], ['E', "l'est"], ['W', "l'ouest"]];
+/** Ground equipment drawn to a fixed shape: no width and depth to offer. */
+const FIXED_SHAPE = new Set(['lamppost', 'mailbox']);
 
 /**
  * Where an opening sits along its wall, counted the way a person would.
@@ -121,7 +126,7 @@ function positionField(m, item, patch) {
   const cs = cellSizeOf(m);
   const host = buildingOfEdge(m, item.edge);
   const run = host ? edgeRunExtent(new Set(host.cells), item.edge, cs) : null;
-  const w = item.width ?? 1.2;
+  const w = item.width ?? FIXTURE_DEFAULTS[item.kind]?.width ?? 1.2;
   if (!run) {
     // The wall has been erased under it; fall back rather than show nothing.
     return field('Position', slider(item.offset ?? 0.5, {
@@ -764,7 +769,9 @@ export class Inspector {
 
   selectionSection(item) {
     const type = this.store.selection.type;
-    const label = { opening: OPENING_LABELS, roofItem: ROOF_ITEM_LABELS, prop: PROP_LABELS }[type][item.kind]
+    const label = {
+      opening: OPENING_LABELS, roofItem: ROOF_ITEM_LABELS, prop: PROP_LABELS, fixture: FIXTURE_LABELS,
+    }[type][item.kind]
       || item.kind;
     const s = this.block(label);
     const patch = (p, c) => this.store.patchSelected(p, c);
@@ -835,6 +842,28 @@ export class Inspector {
           }), 'au-dessus de l’ouverture'),
         );
       }
+    } else if (type === 'fixture') {
+      const m = this.store.model;
+      const host = buildingOfEdge(m, item.edge) || this.store.activeBuilding;
+      const storeys = host ? host.storeys : 1;
+      const level = item.storey || 0;
+      s.appendChild(field('Type', select(item.kind, Object.entries(FIXTURE_LABELS),
+        (v) => patch((it, mm) => fitOpening(mm, { ...it, kind: v })))));
+      if (storeys > 1 || level >= storeys) {
+        s.appendChild(field('Étage', select(String(level),
+          Array.from({ length: Math.max(storeys, level + 1) }, (_, i) => [String(i),
+            (i === 0 ? 'Rez-de-chaussée' : `Étage ${i}`) + (i >= storeys ? ' (supprimé)' : '')]),
+          (v) => patch({ storey: Number(v) })),
+        level >= storeys ? 'ce niveau n’existe plus : l’équipement n’est pas dessiné' : undefined));
+      }
+      const [lo, hi] = fixtureZRange(host ? storeyHeightOf(host, level) : 2.7);
+      s.append(
+        positionField(m, item, patch),
+        field('Hauteur', slider(Math.max(lo, Math.min(hi, item.z ?? FIXTURE_DEFAULTS[item.kind].z)), {
+          min: lo, max: hi, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+          onInput: (v) => patch({ z: v }, 'z'),
+        }), 'du centre, au-dessus du plancher de son niveau'),
+      );
     } else if (type === 'roofItem') {
       s.append(
         field('Type', select(item.kind, Object.entries(ROOF_ITEM_LABELS), (v) => patch({ kind: v }))),
@@ -873,7 +902,10 @@ export class Inspector {
       );
       // A tree and a bush are drawn from their radius alone: offering them a
       // width and a depth gave the bush two sliders that did nothing.
-      if (item.kind === 'tree' || item.kind === 'bush') {
+      if (FIXED_SHAPE.has(item.kind)) {
+        // Drawn to one shape: a width and a depth would be sliders that
+        // stretch a lamp into a wall.
+      } else if (item.kind === 'tree' || item.kind === 'bush') {
         s.appendChild(field('Taille', slider(item.r ?? PROP_DEFAULTS[item.kind].r, {
           min: 0.5, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
           onInput: (v) => patch({ r: v }, 'r'),
@@ -927,6 +959,30 @@ export class Inspector {
           min: 0, max: 3, step: 0.05, format: (v) => (v > 0 ? `${v.toFixed(2)} m` : 'au sol'),
           onInput: (v) => patch({ z: v }, 'z'),
         }), 'la dalle reçoit ses joues — et masque ce qui reste au sol dessous'));
+      }
+      if (item.kind === 'heatpump' || item.kind === 'mailbox') {
+        // The side it faces; width and depth trade places when it turns
+        // across, as the quarter-turn button does.
+        const across = (d) => d === 'E' || d === 'W';
+        s.appendChild(field(item.kind === 'heatpump' ? 'Ventilateur vers' : 'Fente vers',
+          select(item.dir || 'S', FACE_LABELS, (v) => patch((it) => (across(it.dir || 'S') === across(v)
+            ? { dir: v } : { dir: v, w: it.d, d: it.w })))));
+      }
+      if (item.kind === 'lamppost') {
+        s.appendChild(field('Hauteur', slider(item.h ?? 2.2, {
+          min: 0.8, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          onInput: (v) => patch({ h: v }, 'h'),
+        }), 'une borne basse ou un lampadaire'));
+      }
+      if (item.kind === 'carport') {
+        s.append(
+          field('Hauteur', slider(item.h ?? 2.3, {
+            min: 1.8, max: 3.5, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+            onInput: (v) => patch({ h: v }, 'h'),
+          }), 'sous la couverture'),
+          field('Couverture', select(item.cover || 'flat',
+            [['flat', 'Toit plat'], ['slats', 'Lames (pergola)']], (v) => patch({ cover: v }))),
+        );
       }
       if (item.kind === 'car') {
         // Width and depth are the footprint on the ground, so a car turned

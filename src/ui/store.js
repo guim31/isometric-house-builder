@@ -12,7 +12,7 @@ import { saveLocal } from '../io/project.js';
 const HISTORY_LIMIT = 80;
 
 /** The model list each kind of selectable item lives in. A volume is not one. */
-const LISTS = { opening: 'openings', roofItem: 'roofItems', prop: 'props' };
+const LISTS = { opening: 'openings', fixture: 'fixtures', roofItem: 'roofItems', prop: 'props' };
 
 export class Store {
   constructor(model) {
@@ -75,6 +75,7 @@ export class Store {
     // and silently taken back at the next reload.
     const grows = next.buildings !== this.model.buildings || next.props !== this.model.props
       || next.openings !== this.model.openings || next.roofItems !== this.model.roofItems
+      || next.fixtures !== this.model.fixtures
       || next.views !== this.model.views;
     if (!silent && grows) {
       const breach = limitBreach(next);
@@ -247,6 +248,7 @@ export class Store {
       ...m,
       buildings: m.buildings.filter((b) => b.id !== id),
       openings: m.openings.filter((o) => !cells.has(o.edge.split(',').slice(0, 2).join(','))),
+      fixtures: m.fixtures.filter((o) => !cells.has(o.edge.split(',').slice(0, 2).join(','))),
       roofItems: m.roofItems.filter((it) => !cells.has(`${Math.floor(it.x / cs)},${Math.floor(it.y / cs)}`)),
     }));
     this.activeId = null;
@@ -290,6 +292,9 @@ export class Store {
     if (sel.type === 'opening') {
       // Beside the original, and still whole on the same wall.
       copy = fitOpening(this.model, { ...copy, offset: (src.offset ?? 0.5) + (src.width ?? 1.2) + 0.2 });
+    } else if (sel.type === 'fixture') {
+      // Along the same wall, an arm's length away.
+      copy = fitOpening(this.model, { ...copy, offset: (src.offset ?? 0.5) + 0.8 });
     } else if (sel.type === 'roofItem') {
       // On the same roof when there is room beside it: a copy nudged off the
       // eaves fell to the ground, or landed on the neighbour's roof.

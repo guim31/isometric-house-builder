@@ -10,8 +10,8 @@ import { key, parseKey, boundaryEdges, boundaryRuns } from '../core/grid.js';
 import { cellSet, cellSizeOf, fmtMetres, buildingCells, setBuildingCells, fitOpening } from '../core/model.js';
 import { focusFrame } from '../core/focus.js';
 import {
-  OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS,
-  placeOpening, placeRoofItem, placeProp, placeRun, runShape,
+  OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS, FIXTURE_DEFAULTS,
+  placeOpening, placeRoofItem, placeProp, placeRun, runShape, placeFixture,
 } from './actions.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -148,7 +148,7 @@ export class PlanView {
       const py = centred ? p.y - pd / 2 : p.y;
       const a = this.toPx(px, py + pd);
       const selected = this.store.selection?.id === p.id;
-      const shape = p.kind === 'tree' || p.kind === 'bush'
+      const shape = p.kind === 'tree' || p.kind === 'bush' || p.kind === 'lamppost'
         ? el('circle', { cx: a[0] + (pw * map.scale) / 2, cy: a[1] + (pd * map.scale) / 2, r: (pw * map.scale) / 2 })
         : el('rect', {
           x: a[0], y: a[1],
@@ -228,6 +228,23 @@ export class PlanView {
       line.dataset.id = op.id;
       line.dataset.type = 'opening';
       gOpen.appendChild(line);
+    }
+
+    // Wall fixtures, as a dot on their wall.
+    for (const f of m.fixtures || []) {
+      const e = byId.get(f.edge);
+      if (!e) continue;
+      const a = [e.a[0] * cs, e.a[1] * cs];
+      const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
+      const c = f.offset ?? 0.5;
+      const pt = this.toPx(a[0] + ((e.b[0] * cs - a[0]) / len) * c, a[1] + ((e.b[1] * cs - a[1]) / len) * c);
+      const dot = el('circle', {
+        cx: pt[0], cy: pt[1], r: 5,
+        class: `fixture fixture-${f.kind}${this.store.selection?.id === f.id ? ' selected' : ''}`,
+      });
+      dot.dataset.id = f.id;
+      dot.dataset.type = 'fixture';
+      gOpen.appendChild(dot);
     }
 
     // Roof items.
@@ -347,7 +364,7 @@ export class PlanView {
         const target = ev.target.dataset?.type ? ev.target : null;
         if (!target) { s.select(null); return; }
         s.select({ type: target.dataset.type, id: target.dataset.id });
-        if (target.dataset.type === 'opening') {
+        if (target.dataset.type === 'opening' || target.dataset.type === 'fixture') {
           // An opening has no free x/y — it lives on a wall. Dragging slides
           // it along the walls (and across corners) instead of writing
           // meaningless coordinates onto it.
@@ -361,6 +378,11 @@ export class PlanView {
       if (OPENING_DEFAULTS[tool]) {
         const hit = this.nearestEdge(pt);
         if (hit) placeOpening(s, tool, hit.edge.id, 0, hit.offset);
+        return;
+      }
+      if (FIXTURE_DEFAULTS[tool]) {
+        const hit = this.nearestEdge(pt);
+        if (hit) placeFixture(s, tool, hit.edge.id, 0, hit.offset);
         return;
       }
       if (ROOF_ITEM_DEFAULTS[tool]) { placeRoofItem(s, tool, pt); return; }

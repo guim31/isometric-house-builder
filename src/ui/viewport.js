@@ -4,17 +4,19 @@
 
 import { renderScene } from '../render/svg.js';
 import {
-  hitLayer, screenToGround, roofItemCorners, roofAt, rayOnRoof, snapOntoBuilding,
+  hitLayer, screenToGround, roofItemCorners, roofAt, rayOnRoof, snapOntoBuilding, fixtureOutline,
 } from '../render/hit.js';
 import { boundaryEdges } from '../core/grid.js';
-import { cellSizeOf, buildingOfEdge, storeyBase, openingSpan, fitOpening } from '../core/model.js';
+import {
+  cellSizeOf, buildingOfEdge, storeyBase, openingSpan, fitOpening, storeyHeightOf, fixtureZRange,
+} from '../core/model.js';
 import { buildMesh } from '../core/scene.js';
 import { mergeCoplanar } from '../core/mesh.js';
 import { rotateDir, project, clampPitch, clampRoll, normaliseYaw } from '../core/iso.js';
 import { focusModel } from '../core/focus.js';
 import {
-  OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS,
-  placeOpening, placeProp, placeRoofItem,
+  OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS, FIXTURE_DEFAULTS,
+  placeOpening, placeProp, placeRoofItem, placeFixture,
 } from './actions.js';
 
 /** Degrees of orbit per pixel dragged. */
@@ -22,7 +24,7 @@ const ORBIT_YAW = 0.4;
 const ORBIT_PITCH = 0.3;
 const ROLL_PER_PX = 0.2;
 /** What a drag on the selection can move. */
-const MOVABLE = new Set(['prop', 'opening', 'roofItem']);
+const MOVABLE = new Set(['prop', 'opening', 'roofItem', 'fixture']);
 /** Pixels of travel before a press stops being a click and becomes a gesture. */
 const DRAG_SLOP = 4;
 
@@ -31,7 +33,7 @@ const DRAG_SLOP = 4;
  * whenever it changes, so identity comparison is exact — and cheap.
  */
 const geometryOf = (m) => [
-  m.buildings, m.openings, m.roofItems, m.props,
+  m.buildings, m.openings, m.fixtures, m.roofItems, m.props,
   m.grid, m.ground, m.style.shadow, m.style.windowBars,
 ];
 
@@ -152,8 +154,17 @@ export class Viewport {
       const d = item.r ? item.r * 2 : item.d ?? 2;
       const x0 = centred ? item.x - w / 2 : item.x;
       const y0 = centred ? item.y - d / 2 : item.y;
-      const z = (item.z ?? 0) + 0.06;
+      // Equipment outlined at its top, where it is picked: a carport's
+      // outline on the lawn under it said nothing about which one it was.
+      const z = ['lamppost', 'heatpump', 'mailbox', 'carport'].includes(item.kind)
+        ? (item.h ?? 1) : (item.z ?? 0) + 0.06;
       pts.push([x0, y0, z], [x0 + w, y0, z], [x0 + w, y0 + d, z], [x0, y0 + d, z]);
+    } else if (sel.type === 'fixture') {
+      const m = this.store.model;
+      const host = buildingOfEdge(m, item.edge);
+      const e = host && boundaryEdges(new Set(host.cells)).find((x) => x.id === item.edge);
+      if (!e) return '';
+      pts.push(...fixtureOutline(item, e, host, cellSizeOf(m)));
     } else if (sel.type === 'opening') {
       const m = this.store.model;
       const cs = cellSizeOf(m);
@@ -240,6 +251,16 @@ export class Viewport {
       // A tool that acts on a wall acts at once: it is a click, not a gesture.
       if (pick === 'wall' && !roof && OPENING_DEFAULTS[tool]) {
         this.addOpening(tool, ev.target.dataset.edge, Number(ev.target.dataset.storey), ev);
+        return;
+      }
+      // A fixture hangs where the wall was clicked, at that height too.
+      if (pick === 'wall' && !roof && FIXTURE_DEFAULTS[tool]) {
+        const edge = ev.target.dataset.edge, storey = Number(ev.target.dataset.storey) || 0;
+        const at = this.wallPoint(edge, storey, sx, sy);
+        if (at) {
+          const [lo, hi] = fixtureZRange(storeyHeightOf(at.host, storey));
+          placeFixture(s, tool, edge, storey, Math.max(0, Math.min(at.len, at.s)), Math.max(lo, Math.min(hi, at.h)));
+        }
         return;
       }
 
@@ -413,7 +434,7 @@ export class Viewport {
       const part = this.roofPartOf(origin);
       this.drag.part = part;
       this.drag.grab = part && rayOnRoof(cam, sx, sy, part);
-    } else if (target.type === 'opening') {
+    } else if (target.type === 'opening' || target.type === 'fixture') {
       this.drag.grab = this.wallPoint(origin.edge, origin.storey || 0, sx, sy);
     }
     this.frozen = { scale: cam.scale, offset: [...cam.offset] };
@@ -455,6 +476,14 @@ export class Viewport {
       // Along its own run of wall, never past its corners — as the plan and
       // the inspector already keep it.
       s.patchSelected((it, m) => fitOpening(m, { ...it, offset }), 'drag');
+    } else if (d.pick.type === 'fixture') {
+      // Along its wall and up it: a fixture has a height of its own.
+      const at = this.wallPoint(o.edge, o.storey || 0, sx, sy);
+      if (!at || !d.grab) return;
+      const offset = Math.round((o.offset + at.s - d.grab.s) * 20) / 20;
+      const [lo, hi] = fixtureZRange(storeyHeightOf(at.host, o.storey || 0));
+      const z = Math.max(lo, Math.min(hi, Math.round((o.z + at.h - d.grab.h) * 20) / 20));
+      s.patchSelected((it, m) => fitOpening(m, { ...it, offset, z }), 'drag');
     } else if (d.pick.type === 'roofItem') {
       if (!d.part || !d.grab) return;
       const p = rayOnRoof(cam, sx, sy, d.part);

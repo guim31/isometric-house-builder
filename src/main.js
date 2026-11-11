@@ -55,6 +55,19 @@ const TOOL_GROUPS = [
     ],
   },
   {
+    // What a home dashboard puts a badge on: the lights, the camera, the
+    // charger, the heat pump, the letter box, where the car sleeps.
+    title: 'Équipements', folded: true, tools: [
+      ['wallLight', 'Applique'],
+      ['camera', 'Caméra'],
+      ['charger', 'Borne de recharge'],
+      ['lamppost', 'Lampadaire'],
+      ['heatpump', 'Pompe à chaleur'],
+      ['mailbox', 'Boîte aux lettres'],
+      ['carport', 'Carport / pergola'],
+    ],
+  },
+  {
     title: 'Cadrage', folded: true, tools: [
       ['frame', 'Zone de cadrage'],
     ],
@@ -86,6 +99,13 @@ const HINTS = {
   muret: 'Glissez dans le plan pour tracer le muret — sa longueur s’affiche pendant le tracé.',
   frame: 'Glissez dans le plan pour délimiter la zone à montrer : le rendu se recadre dessus et le reste disparaît.',
   gate: 'Cliquez près d’un muret : le portail s’y aligne et l’ouvre automatiquement.',
+  wallLight: 'Cliquez un mur, dans le plan ou sur le rendu — à la hauteur voulue — pour fixer une applique. Elle s’allume en vue de nuit.',
+  camera: 'Cliquez un mur, dans le plan ou sur le rendu, pour fixer une caméra de surveillance.',
+  charger: 'Cliquez un mur, près du garage, pour fixer une borne de recharge.',
+  lamppost: 'Cliquez dans le plan ou sur le rendu pour planter un lampadaire. Il s’allume en vue de nuit.',
+  heatpump: 'Cliquez près d’un mur, dans le plan ou sur le rendu, pour poser la pompe à chaleur.',
+  mailbox: 'Cliquez dans le plan ou sur le rendu pour planter la boîte aux lettres, près du portail.',
+  carport: 'Cliquez dans le plan ou sur le rendu pour poser un carport ; une voiture se gare dessous.',
 };
 
 const $ = (id) => document.getElementById(id);

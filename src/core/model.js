@@ -12,9 +12,11 @@ import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
 import { THEMES } from './palette.js';
 import { PRESETS } from '../data/presets.js';
 
-// 2: per-level heights, recessed openings, raised slabs, steps. Older files
-// open unchanged; the number is what tells a newer file apart.
-export const MODEL_VERSION = 2;
+// 2: per-level heights, recessed openings, raised slabs, steps.
+// 3: wall fixtures (a list of their own), equipment on the ground, the ridge
+// of a gable, a car's direction, a tree's silhouette. Older files open
+// unchanged; the number is what tells a newer file apart.
+export const MODEL_VERSION = 3;
 
 /** Drawing pitches the plan offers, in metres per cell. */
 export const CELL_SIZES = [1, 0.5];
@@ -43,7 +45,7 @@ export function newId(prefix, model = null) {
 /** Every id a model carries, whatever list it is in. */
 export function idsOf(m) {
   const out = new Set();
-  for (const list of ['buildings', 'openings', 'roofItems', 'props', 'views']) {
+  for (const list of ['buildings', 'openings', 'fixtures', 'roofItems', 'props', 'views']) {
     for (const it of m?.[list] || []) if (it?.id) out.add(it.id);
   }
   return out;
@@ -99,7 +101,32 @@ export const PROP_DEFAULTS = {
   tree: { r: 1.5 },
   bush: { r: 1.1 },
   car: { w: 1.8, d: 4.2 },
+  // Equipment on the ground — what a home dashboard puts a badge on. `dir` is
+  // the side they face: the fan of a heat pump, the slot of a letter box.
+  lamppost: { w: 0.4, d: 0.4, h: 2.2 },
+  heatpump: { w: 1, d: 0.4, h: 0.8, dir: 'S' },
+  mailbox: { w: 0.4, d: 0.3, h: 1.15, dir: 'S' },
+  carport: { w: 3, d: 5.5, h: 2.3, cover: 'flat' },
 };
+
+/**
+ * Equipment fixed to a wall, anchored as openings are: an edge, metres along
+ * it from its start, a level — and `z`, the height of its centre above that
+ * level's floor. `width` is what it takes up along the wall, for keeping it
+ * whole on its run; it is a property of the kind, not a setting.
+ *
+ * In a list of their own rather than among the openings: a version of the
+ * application that predates them reads any opening kind it does not know as a
+ * window, and would have hung a window where the camera was.
+ */
+export const FIXTURE_DEFAULTS = {
+  wallLight: { z: 2, width: 0.28 },
+  camera: { z: 2.3, width: 0.2 },
+  charger: { z: 1.1, width: 0.44 },
+};
+
+/** Range of a fixture's height above its level's floor, and how close to it. */
+export const fixtureZRange = (levelHeight) => [0.25, Math.max(0.25, levelHeight - 0.25)];
 
 /**
  * Size of a newly placed roof item, by kind — and what a file that leaves a
@@ -124,6 +151,7 @@ export const stairsRun = (h) => Math.max(1.25, Math.ceil((stairsSteps(h) * 0.28)
 /** Outdoor items a quarter turn makes sense for: rectangles, and the car. */
 export const TURNABLE_KINDS = new Set([
   'terrace', 'path', 'deck', 'pool', 'stairs', 'gate', 'muret', 'hedge', 'fence', 'car',
+  'heatpump', 'mailbox', 'carport',
 ]);
 
 const NEXT_DIR = { N: 'E', E: 'S', S: 'W', W: 'N' };
@@ -142,7 +170,7 @@ export function quarterTurn(p) {
     out.x = p.x + w / 2 - d / 2;
     out.y = p.y + d / 2 - w / 2;
   }
-  if (p.kind === 'stairs' || p.kind === 'car' || p.dir) out.dir = NEXT_DIR[p.dir || 'N'];
+  if (p.kind === 'stairs' || p.kind === 'car' || p.dir) out.dir = NEXT_DIR[p.dir || (PROP_DEFAULTS[p.kind]?.dir) || 'N'];
   return out;
 }
 
@@ -214,6 +242,7 @@ export function emptyModel() {
     texture: { roof: 'none', wall: 'none' },
     overrides: {},
     openings: [],
+    fixtures: [],
     roofItems: [],
     props: [],
     ground: { enabled: true, material: 'grass', margin: 3 },
@@ -272,6 +301,7 @@ export const LIMITS = {
   /** Any position, in metres from the origin. */
   coord: 250,
   openings: 200,
+  fixtures: 100,
   /**
    * Roof items, by number and by what they actually cost. A panel or a roof
    * window is laid as a patch subdivided every eighteen centimetres, so its
@@ -321,6 +351,7 @@ const R = {
   propH: [0.05, 6],
   propZ: [0, 6],
   propRadius: [0, 5],
+  fixtureZ: [0.25, 3.75],
 };
 
 const SIDES_RE = /^[NSEW]$/;
@@ -336,6 +367,7 @@ const KINDS = {
   shape: ['rounded', 'rect'],
   gate: ['swing', 'sliding'],
   tree: ['leafy', 'conifer'],
+  cover: ['flat', 'slats'],
 };
 
 /** Ids made safe, and unique within their list: a second item of the same id
@@ -401,6 +433,7 @@ export function normalise(input) {
       : { ...base.texture, ...(declared.texture || {}) }),
     overrides: safeColours(input.overrides),
     openings: normaliseOpenings(input.openings),
+    fixtures: normaliseFixtures(input.fixtures),
     roofItems: normaliseRoofItems(input.roofItems),
     props: normaliseProps(input.props),
     ground: {
@@ -458,6 +491,7 @@ export function limitBreach(m) {
   if (total > LIMITS.totalCells) return `${n(LIMITS.totalCells)} cases en tout au plus`;
   if (edges > LIMITS.edges) return 'contour des bâtiments trop découpé';
   if (m.openings.length > LIMITS.openings) return `${LIMITS.openings} ouvertures au plus`;
+  if ((m.fixtures || []).length > LIMITS.fixtures) return `${LIMITS.fixtures} équipements muraux au plus`;
   if (m.roofItems.length > LIMITS.roofItems) return `${LIMITS.roofItems} objets de toit au plus`;
   if (roofArea(m.roofItems) > LIMITS.roofArea) return `${LIMITS.roofArea} m² de panneaux et fenêtres de toit au plus`;
   if (m.props.length > LIMITS.props) return `${LIMITS.props} objets extérieurs au plus`;
@@ -507,6 +541,22 @@ function normaliseOpenings(input) {
       return out;
     });
   return uniqueIds(list, 'o');
+}
+
+/** Wall fixtures: on an edge that can be named, at a height within reason. */
+function normaliseFixtures(input) {
+  const list = (Array.isArray(input) ? input : []).filter(isRecord)
+    .filter((f) => FIXTURE_DEFAULTS[f.kind] && typeof f.edge === 'string' && /^-?\d{1,4},-?\d{1,4},[SENW]$/.test(f.edge))
+    .slice(0, LIMITS.fixtures)
+    .map((f) => ({
+      id: f.id,
+      kind: f.kind,
+      edge: f.edge,
+      storey: Number.isFinite(f.storey) ? Math.max(0, Math.min(3, Math.round(f.storey))) : 0,
+      offset: coord(f.offset, 0.5),
+      z: num(f.z, R.fixtureZ, FIXTURE_DEFAULTS[f.kind].z),
+    }));
+  return uniqueIds(list, 'f');
 }
 
 /** Kinds laid flat on the slope as a subdivided patch: what costs, by area. */
@@ -577,6 +627,7 @@ function normaliseProps(input) {
       // tree is broad-leaved or a conifer.
       pick('style', KINDS[p.kind] || KINDS.gate);
       pick('dir', ['N', 'S', 'E', 'W']);
+      pick('cover', KINDS.cover);
       return out;
     })
     .filter((p) => {
@@ -808,7 +859,8 @@ export function fitOffset(offset, width, run) {
 export function fitOpening(m, op) {
   const run = openingRun(m, op);
   if (!run) return op;
-  const offset = fitOffset(op.offset ?? 0.5, op.width ?? OPENING_DEFAULTS[op.kind]?.width ?? 1.2, run);
+  const width = op.width ?? OPENING_DEFAULTS[op.kind]?.width ?? FIXTURE_DEFAULTS[op.kind]?.width ?? 1.2;
+  const offset = fitOffset(op.offset ?? 0.5, width, run);
   return offset === op.offset ? op : { ...op, offset };
 }
 
@@ -823,6 +875,15 @@ export function openingSpan(op, b) {
   const sill = Math.max(0, Math.min(op.sill ?? 0.95, level - 0.1));
   const z0 = base + sill;
   return { z0, z1: Math.min(z0 + (op.height ?? 1.25), base + level) };
+}
+
+/**
+ * Height of a fixture's centre above the ground, kept within its level: a
+ * light set at 2,40 m on a level since lowered to 2,20 m stays on its wall.
+ */
+export function fixtureHeight(f, b) {
+  const [lo, hi] = fixtureZRange(storeyHeightOf(b, f.storey || 0));
+  return storeyBase(b, f.storey || 0) + Math.max(lo, Math.min(hi, f.z ?? FIXTURE_DEFAULTS[f.kind]?.z ?? 2));
 }
 
 /**
@@ -927,6 +988,8 @@ export function withCellSize(m, size) {
     grid: { ...m.grid, cellSize: size },
     buildings: m.buildings.map((b) => ({ ...b, cells: convert(b.cells) })),
     openings: m.openings.map(reanchor),
+    // Fixtures hang off an edge exactly as openings do.
+    fixtures: (m.fixtures || []).map(reanchor),
   };
 }
 

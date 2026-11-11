@@ -621,3 +621,18 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12px; }
    view: the cursor says so before the press, and while it lasts. */
 .iso-canvas.can-move, .iso-canvas.can-move .hit-layer path,
 .iso-canvas.moving, .iso-canvas.moving .hit-layer path { cursor: move; }
+
+/* Equipment in the plan: a fixture is a dot on its wall, ground equipment a
+   shape of its own colour. */
+.fixture { fill: var(--focus); stroke: #fff; stroke-width: 1.5; cursor: pointer; }
+.fixture.selected { stroke: #111; stroke-width: 2.5; }
+.prop-lamppost { fill: #f2c14e; stroke: #8a6a1e; }
+.prop-heatpump { fill: #9aa6b0; stroke: #4a5560; }
+.prop-mailbox { fill: #e0b84b; stroke: #7a5e1a; }
+.prop-carport { fill: #c9b79c; fill-opacity: .35; stroke: #8a7558; stroke-dasharray: 4 3; }
+
+/* A seventh family of tools had to fit the same column: the gaps between
+   families give back what its heading takes. (The layout as a whole is lot
+   4's to rethink.) */
+.tool-group { margin-bottom: 1px; }
+.tool-list { padding-bottom: 1px; }

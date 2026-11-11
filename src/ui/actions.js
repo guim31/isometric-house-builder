@@ -10,10 +10,11 @@
 
 import {
   newId, fitOpening, OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, stairsRun,
+  FIXTURE_DEFAULTS,
 } from '../core/model.js';
 
 // Defined in the model, which fills them into files that leave them out.
-export { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS };
+export { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, FIXTURE_DEFAULTS };
 
 
 
@@ -37,6 +38,25 @@ export function placeOpening(store, kind, edgeId, storey, offsetMetres) {
     })],
   }));
   store.select({ type: 'opening', id });
+}
+
+/**
+ * Hang a fixture on a wall, `offsetMetres` along its edge and, when given,
+ * `z` metres above its level's floor — where the wall was clicked in the
+ * render; at the kind's usual height from the plan, which has no height.
+ */
+export function placeFixture(store, kind, edgeId, storey, offsetMetres, z = null) {
+  const id = newId('f', store.model);
+  const def = FIXTURE_DEFAULTS[kind];
+  store.update((m) => ({
+    ...m,
+    fixtures: [...m.fixtures, fitOpening(m, {
+      id, kind, edge: edgeId, storey: storey || 0,
+      offset: Math.round(offsetMetres * 20) / 20,
+      z: Number.isFinite(z) ? Math.round(z * 20) / 20 : def.z,
+    })],
+  }));
+  store.select({ type: 'fixture', id });
 }
 
 export function placeRoofItem(store, kind, pt) {

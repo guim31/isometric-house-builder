@@ -115,7 +115,7 @@ function clipProp(p, rect) {
  */
 let memo = { key: null, out: null };
 
-const inputsOf = (m) => [m.buildings, m.props, m.openings, m.roofItems, m.focus, m.grid];
+const inputsOf = (m) => [m.buildings, m.props, m.openings, m.fixtures, m.roofItems, m.focus, m.grid];
 
 /**
  * The model as it should be drawn: unchanged when no frame is set, otherwise
@@ -132,7 +132,8 @@ export function focusModel(model) {
   // next frame would miss it.
   const o = memo.out;
   if (o && model.buildings === o.buildings && model.props === o.props
-    && model.openings === o.openings && model.roofItems === o.roofItems) return model;
+    && model.openings === o.openings && model.roofItems === o.roofItems
+    && model.fixtures === o.fixtures) return model;
   const key = inputsOf(model);
   if (!memo.key || !key.every((v, i) => v === memo.key[i])) {
     memo = { key, out: compute(model) };
@@ -156,6 +157,8 @@ function compute(model) {
   // with it. Their own position is not tested: a window on the far side of a
   // kept house is hidden by the house, not by the frame.
   const openings = model.openings.filter((o) => kept.has(o.edge.split(',').slice(0, 2).join(',')));
+  // Fixtures likewise: a lamp on the wall of a house kept goes with it.
+  const fixtures = (model.fixtures || []).filter((o) => kept.has(o.edge.split(',').slice(0, 2).join(',')));
   const roofItems = model.roofItems.filter((it) =>
     kept.has(`${Math.floor(it.x / cs)},${Math.floor(it.y / cs)}`));
 
@@ -164,7 +167,8 @@ function compute(model) {
   if (buildings.length === model.buildings.length
     && propsUnchanged
     && openings.length === model.openings.length
+    && fixtures.length === (model.fixtures || []).length
     && roofItems.length === model.roofItems.length) return null;
 
-  return { buildings, props, openings, roofItems };
+  return { buildings, props, openings, fixtures, roofItems };
 }

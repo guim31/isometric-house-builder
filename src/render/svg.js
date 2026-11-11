@@ -73,8 +73,13 @@ const SHELL = new Set(['wall', 'roof', 'roofEdge', 'niche']);
  * own house, a terrace at 2.50 m was drawn behind the wall it stands against at
  * 19 of 36 orientations, by up to twelve metres; put the same terrace back on
  * the ground and the fault goes with it.
+ *
+ * Equipment joins it — a lamp on a wall, a heat pump against one, a carport
+ * and the car under it: small solids standing against large ones, which is
+ * where a centre is least to be trusted. Being boxes, they are exactly what
+ * the axis test settles.
  */
-const SOLID = new Set([...SHELL, 'slab', 'stairs']);
+const SOLID = new Set([...SHELL, 'slab', 'stairs', 'equip', 'parked']);
 
 /**
  * A group name without its per-item tag: `slab:p5shoa` -> `slab`.

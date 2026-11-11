@@ -9,7 +9,9 @@
  */
 
 import { boundaryEdges, parseKey } from '../core/grid.js';
-import { wallTop, storeyBase, cellSizeOf, openingShown, openingSpan, CENTRED_KINDS } from '../core/model.js';
+import {
+  wallTop, storeyBase, cellSizeOf, openingShown, openingSpan, CENTRED_KINDS, fixtureHeight,
+} from '../core/model.js';
 import { unrotatePoint } from '../core/iso.js';
 
 // The layer is parsed as markup, and ids come from files and share links.
@@ -82,6 +84,15 @@ export function hitLayer(model, camera, built = null) {
       { 'data-pick': 'opening', 'data-id': op.id });
   }
 
+  // Wall fixtures, as a patch standing proud of their wall by their depth,
+  // so they win over the wall and the opening they may hang beside.
+  for (const f of model.fixtures || []) {
+    const e = edgeById.get(f.edge);
+    const b = model.buildings.find((bd) => bd.cells.includes(f.edge.split(',').slice(0, 2).join(',')));
+    if (!e || !b || !openingShown(f, b)) continue;
+    add(fixtureOutline(f, e, b, cs), { 'data-pick': 'fixture', 'data-id': f.id });
+  }
+
   // Roof items, flat on the slope of whichever volume carries them.
   for (const it of model.roofItems) {
     const pts = roofItemCorners(model, it, built);
@@ -120,7 +131,10 @@ export function hitLayer(model, camera, built = null) {
       add(c.map(([x, y]) => [x, y, top(x, y) + 0.02]), attrs);
       continue;
     }
-    const z = p.kind === 'tree' ? (p.r ?? 1.4) * 1.6
+    // Equipment at its top, which is the part that stands clear of the rest:
+    // the cover of a carport, the lantern of a lamp.
+    const z = EQUIPMENT_KINDS.has(p.kind) ? (p.h ?? 1)
+      : p.kind === 'tree' ? (p.r ?? 1.4) * 1.6
       : p.kind === 'bush' ? (p.r ?? 1.1) * 0.5
         : p.kind === 'car' ? 0.7 : p.kind === 'muret' || p.kind === 'gate' ? (p.h ?? 1.5)
         : (p.z ?? 0) + 0.06;
@@ -132,6 +146,25 @@ export function hitLayer(model, camera, built = null) {
     const attrs = Object.entries(t.attrs).map(([k, v]) => `${k}="${escapeAttr(v)}"`).join(' ');
     return `<path d="${t.d}" ${attrs} fill="transparent" stroke="none"/>`;
   }).join('');
+}
+
+/** Ground equipment, picked at its top. */
+const EQUIPMENT_KINDS = new Set(['lamppost', 'heatpump', 'mailbox', 'carport']);
+
+/**
+ * The patch a wall fixture is picked and outlined by: its front, a quarter
+ * metre proud of the wall, a little larger than the fixture itself so that a
+ * small lamp stays easy to hit.
+ */
+export function fixtureOutline(f, e, b, cs) {
+  const a = [e.a[0] * cs, e.a[1] * cs];
+  const len = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]) * cs;
+  const u = [(e.b[0] * cs - a[0]) / len, (e.b[1] * cs - a[1]) / len];
+  const o = 0.25;
+  const p = (s, z) => [a[0] + u[0] * s + e.n[0] * o, a[1] + u[1] * s + e.n[1] * o, z];
+  const c = f.offset ?? 0.5, z = fixtureHeight(f, b);
+  const hw = 0.26, hh = 0.32;
+  return [p(c - hw, z - hh), p(c + hw, z - hh), p(c + hw, z + hh), p(c - hw, z + hh)];
 }
 
 /**

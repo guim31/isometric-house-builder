@@ -89,6 +89,20 @@ export function darken(hex, amount = 0.22) {
   return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
 }
 
+/**
+ * Equipment in the Horizons palettes: the same few greys and blues as the
+ * rest of its drawings, so a lamp or a heat pump sits in the picture rather
+ * than on it.
+ */
+const HORIZONS_EQUIPMENT = {
+  lampPost: '#48555f', lampGlass: '#f8f4ed',
+  camBody: '#ffffff', camLens: '#48555f',
+  chargerBody: '#eef0f2', chargerLight: '#8cc7a4', chargerSocket: '#48555f',
+  hpBody: '#f2f2f0', hpGrille: '#9aa6b0',
+  mailBox: '#54749e', mailPost: '#48555f', mailSlot: '#2e4468',
+  carportFrame: '#c9b79c', carportRoof: '#eef0f2',
+};
+
 export const THEMES = {
   horizons: {
     label: 'Horizons — terre cuite',
@@ -111,6 +125,7 @@ export const THEMES = {
     solar: '#41608f', solarCell: '#54749e', solarFrame: '#2e4468',
     chimney: '#efe8dc', chimneyCap: '#e0d6c6',
     fence: '#efe8dc', carBody: '#54749e', carGlass: '#bcd6f2', carTyre: '#48555f',
+    ...HORIZONS_EQUIPMENT,
   },
   horizonsSlate: {
     label: 'Horizons — ardoise',
@@ -128,6 +143,7 @@ export const THEMES = {
     solar: '#41608f', solarCell: '#54749e', solarFrame: '#2e4468',
     chimney: '#eef0f2', chimneyCap: '#e0d6c6',
     fence: '#eef0f2', carBody: '#54749e', carGlass: '#bcd6f2', carTyre: '#48555f',
+    ...HORIZONS_EQUIPMENT,
   },
   terracotta: {
     label: 'Terre cuite',
@@ -170,6 +186,12 @@ export const FIXED = {
   chimney: '#d8d3c8', chimneyCap: '#8c8880',
   foliage: '#5fa855', foliageDark: '#4a8a44', trunk: '#8a6242',
   fence: '#d9cfbf', carBody: '#d94f4f', carGlass: '#8fb6c9', carTyre: '#33383d',
+  lampPost: '#3b4248', lampGlass: '#f3ead2',
+  camBody: '#f4f4f2', camLens: '#2b3036',
+  chargerBody: '#e9edf0', chargerLight: '#3fb98a', chargerSocket: '#2b3036',
+  hpBody: '#e6e8ea', hpGrille: '#5b646c',
+  mailBox: '#e0b84b', mailPost: '#4a5258', mailSlot: '#2b3036',
+  carportFrame: '#a07850', carportRoof: '#c9ccce',
   shadow: '#000000',
 };
 
@@ -193,7 +215,9 @@ export const NIGHT = {
   star: '#dfe6f5',
   // Windows are the point of a night view on a home dashboard: they say
   // whether the house is awake. Left ungraded and warmed instead.
-  lit: { glass: '#ffd98d', glassDark: '#f0b45e' },
+  // Lamps too, for the same reason, and the charger's status light: on a
+  // dashboard after dark they are what is worth seeing.
+  lit: { glass: '#ffd98d', glassDark: '#f0b45e', lampGlass: '#ffe6a3', chargerLight: '#5fe0a8' },
 };
 
 const NIGHT_BLUE = [26, 39, 72];
