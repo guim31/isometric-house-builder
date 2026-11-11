@@ -31,7 +31,7 @@ const LINEAR_THICKNESS = { muret: 0.24, fence: 0.2, hedge: 0.6 };
 const snap = (v) => Math.round(v * 4) / 4;
 
 export function placeOpening(store, kind, edgeId, storey, offsetMetres) {
-  const id = newId('o');
+  const id = newId('o', store.model);
   // Whole on its wall: a click near a corner put half a window round it.
   store.update((m) => ({
     ...m,
@@ -44,7 +44,7 @@ export function placeOpening(store, kind, edgeId, storey, offsetMetres) {
 }
 
 export function placeRoofItem(store, kind, pt) {
-  const id = newId('r');
+  const id = newId('r', store.model);
   store.update((m) => ({
     ...m,
     roofItems: [...m.roofItems, { id, kind, x: snap(pt[0]), y: snap(pt[1]), ...ROOF_ITEM_DEFAULTS[kind] }],
@@ -53,7 +53,7 @@ export function placeRoofItem(store, kind, pt) {
 }
 
 export function placeProp(store, kind, pt) {
-  const id = newId('p');
+  const id = newId('p', store.model);
   let def = PROP_DEFAULTS[kind];
   let extra = {};
   if (kind === 'stairs') {
@@ -156,9 +156,13 @@ export function runShape(kind, from, to) {
   return { len, shape: horiz ? { x: a0, y: c, w: len, d: t } : { x: c, y: a0, w: t, d: len } };
 }
 
-/** Create a linear prop from a dragged run. */
+/**
+ * Create a linear prop from a dragged run. A click without a drag lays
+ * nothing: it used to leave a half-metre stub where one meant to select.
+ */
 export function placeRun(store, kind, from, to) {
-  const id = newId('p');
+  if (Math.max(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1])) < 0.25) return;
+  const id = newId('p', store.model);
   const def = PROP_DEFAULTS[kind] || {};
   const { shape } = runShape(kind, from, to);
   store.update((m) => ({ ...m, props: [...m.props, { id, kind, ...def, ...shape }] }));

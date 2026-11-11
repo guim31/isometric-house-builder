@@ -421,8 +421,10 @@ $('btn-png').addEventListener('click', async () => {
 });
 
 $('btn-svg').addEventListener('click', () => {
-  exportSvg(store.model, currentSize());
-  status('Fichier SVG téléchargé.');
+  try {
+    exportSvg(store.model, currentSize());
+    status('Fichier SVG téléchargé.');
+  } catch (e) { status('Échec : ' + e.message); }
 });
 
 $('btn-four').addEventListener('click', async () => {
@@ -519,6 +521,11 @@ function scheduleRender() {
 }
 
 store.subscribe(scheduleRender);
+// The autosave waits for a pause; a page being closed will not get one.
+window.addEventListener('pagehide', () => store.flush());
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') store.flush();
+});
 window.addEventListener('resize', scheduleRender);
 // The inspector skips its own rebuild while one of its controls is mid-drag;
 // the release fires 'change', which runs the refresh it deferred.

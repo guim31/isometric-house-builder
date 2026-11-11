@@ -18,8 +18,32 @@ export const CELL_SIZES = [1, 0.5];
 /** Range of one level's height, in metres — the inspector's and the files'. */
 export const STOREY_HEIGHT_RANGE = [0.6, 4];
 
-let seq = 0;
-export const newId = (prefix) => `${prefix}${(seq++).toString(36)}${Math.floor(performance.now() % 1e6).toString(36)}`;
+/**
+ * A fresh id, unused in `model` when one is given.
+ *
+ * Drawn at random rather than from a counter and the page clock: both start
+ * again at every load, so an item added after reopening a project could be
+ * given the id of one already in it — and then edited, selected and deleted
+ * along with it.
+ */
+export function newId(prefix, model = null) {
+  const taken = model ? idsOf(model) : null;
+  for (;;) {
+    const bytes = new Uint8Array(6);
+    crypto.getRandomValues(bytes);
+    const id = prefix + [...bytes].map((b) => (b % 36).toString(36)).join('');
+    if (!taken || !taken.has(id)) return id;
+  }
+}
+
+/** Every id a model carries, whatever list it is in. */
+export function idsOf(m) {
+  const out = new Set();
+  for (const list of ['buildings', 'openings', 'roofItems', 'props', 'views']) {
+    for (const it of m?.[list] || []) if (it?.id) out.add(it.id);
+  }
+  return out;
+}
 
 /*
  * A model also arrives from a share link or a file someone else wrote, and its

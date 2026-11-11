@@ -10,7 +10,9 @@ import { buildMesh } from '../core/scene.js';
 import { mergeCoplanar } from '../core/mesh.js';
 import { rotateDir, project, clampPitch, clampRoll, normaliseYaw } from '../core/iso.js';
 import { focusModel } from '../core/focus.js';
-import { OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, placeOpening, placeProp } from './actions.js';
+import {
+  OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS, placeOpening, placeProp,
+} from './actions.js';
 
 /** Degrees of orbit per pixel dragged. */
 const ORBIT_YAW = 0.4;
@@ -181,7 +183,10 @@ export class Viewport {
 
       // Outdoor items can be dropped straight onto the render: the ground
       // plane is exactly invertible, so a click maps back to a grid position.
-      if (!pick && ev.button === 0 && !ev.shiftKey && PROP_DEFAULTS[tool] && this.lastRender) {
+      // Not the runs — wall, fence, hedge: those are dragged out on the plan,
+      // and a click here dropped a default length nobody asked for.
+      if (!pick && ev.button === 0 && !ev.shiftKey && PROP_DEFAULTS[tool] && !LINEAR_KINDS.has(tool)
+        && this.lastRender) {
         const rect = this.root.getBoundingClientRect();
         placeProp(s, tool, screenToGround(this.lastRender.camera, ev.clientX - rect.left, ev.clientY - rect.top));
         return;

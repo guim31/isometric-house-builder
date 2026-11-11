@@ -5,7 +5,7 @@ import { app } from './app-frame.js';
 import { appStore, frames } from './app.test.js';
 import {
   defaultModel, normalise, withTheme, makeBuilding, emptyModel, openingRun, fitOpening, openingSpan,
-  overlappingOpenings,
+  overlappingOpenings, newId, idsOf,
 } from '../src/core/model.js';
 import { placeOpening } from '../src/ui/actions.js';
 import { THEMES } from '../src/core/palette.js';
@@ -592,4 +592,100 @@ check('sous cadrage, pivoter ne reconstruit pas le maillage du rendu', () => {
   }
   div.remove();
   return vp.cache.built === built || 'maillage reconstruit à chaque image';
+});
+
+/* ---------------- D: consistency ---------------- */
+
+check('supprimer un corps supprime aussi ses objets de toit', () => {
+  const s = new Store(normalise({
+    ...emptyModel(),
+    buildings: [
+      makeBuilding({ id: 'maison', cells: [...rectCells(0, 0, 7, 5)] }),
+      makeBuilding({ id: 'abri', cells: [...rectCells(12, 0, 15, 3)] }),
+    ],
+    roofItems: [
+      { id: 'r1', kind: 'chimney', x: 3, y: 3, ...ROOF_ITEM_DEFAULTS.chimney },
+      { id: 'r2', kind: 'solar', x: 14, y: 2, ...ROOF_ITEM_DEFAULTS.solar },
+    ],
+  }));
+  s.removeBuilding('abri');
+  const ids = s.model.roofItems.map((r) => r.id).join();
+  return ids === 'r1' || `objets restants : ${ids}`;
+});
+
+check('un clic sans glisser avec Haie, Clôture ou Muret ne pose rien', () => {
+  const s = new Store(emptyModel());
+  const view = new PlanView(document.getElementById('plan'), s);
+  view.render();
+  for (const tool of ['hedge', 'fence', 'muret']) {
+    s.setTool(tool);
+    view.svg.dispatchEvent(pointer(view, 20.4, 20.4, 'pointerdown'));
+    view.svg.dispatchEvent(pointer(view, 20.4, 20.4, 'pointerup'));
+  }
+  view.svg.remove();
+  return !s.model.props.length || `${s.model.props.length} tronçon(s) posé(s)`;
+});
+
+check('la copie d’un objet de toit reste sur le toit quand c’est possible', () => {
+  const s = new Store(normalise({
+    ...emptyModel(),
+    buildings: [makeBuilding({ id: 'maison', cells: [...rectCells(0, 0, 7, 5)] })],
+    roofItems: [{ id: 'r1', kind: 'velux', x: 7, y: 3, ...ROOF_ITEM_DEFAULTS.velux }],
+  }));
+  s.select({ type: 'roofItem', id: 'r1' });
+  s.duplicateSelected();
+  const copy = s.model.roofItems[1];
+  const cell = `${Math.floor(copy.x)},${Math.floor(copy.y)}`;
+  return s.model.buildings[0].cells.includes(cell) || `copie posée en ${copy.x}, ${copy.y}, hors du toit`;
+});
+
+await checkAsync('la sauvegarde automatique s’écrit sans délai quand la page se masque', async () => {
+  clearLocal();
+  const s = new Store(normalise({ ...defaultModel(), name: 'à garder' }));
+  s.update((m) => ({ ...m, name: 'dernière retouche' }));
+  s.flush();
+  const saved = JSON.parse(localStorage.getItem('isometric-house-builder/current') || 'null');
+  clearLocal();
+  return saved?.name === 'dernière retouche' || `enregistré : ${saved?.name}`;
+});
+
+await checkAsync('l’application écrit sa sauvegarde en attente quand elle se masque', async () => {
+  const frame = await app();
+  const store = await appStore();
+  const win = frame.contentWindow;
+  store.update((m) => ({ ...m, name: 'fermeture imminente' }));
+  win.dispatchEvent(new win.Event('pagehide'));
+  const saved = JSON.parse(win.localStorage.getItem('isometric-house-builder/current') || 'null');
+  store.undo();
+  return saved?.name === 'fermeture imminente' || `enregistré : ${saved?.name}`;
+});
+
+check('un identifiant neuf n’est jamais celui d’un élément du projet', () => {
+  const m = defaultModel();
+  const ids = new Set();
+  for (let i = 0; i < 2000; i++) ids.add(newId('p', m));
+  if (ids.size !== 2000) return 'identifiants répétés';
+  for (const id of ids) if (idsOf(m).has(id)) return `${id} existe déjà`;
+  // And a reload does not restart a sequence: two "sessions" draw apart.
+  return newId('p') !== newId('p') || 'deux tirages identiques';
+});
+
+await checkAsync('un export SVG impossible le dit dans la fenêtre d’export', async () => {
+  const frame = await app();
+  const win = frame.contentWindow;
+  const doc = frame.contentDocument;
+  const orig = win.URL.createObjectURL;
+  win.URL.createObjectURL = () => { throw new Error('refus d’essai'); };
+  const errors = [];
+  const onError = (e) => { errors.push(e.message); e.preventDefault(); };
+  win.addEventListener('error', onError);
+  try {
+    doc.getElementById('btn-svg').click();
+  } finally {
+    win.URL.createObjectURL = orig;
+    win.removeEventListener('error', onError);
+  }
+  const text = doc.getElementById('export-status').textContent;
+  if (errors.length) return `exception : ${errors.join(' ; ')}`;
+  return /Échec.*refus d’essai/.test(text) || `statut : « ${text} »`;
 });

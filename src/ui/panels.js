@@ -643,7 +643,7 @@ export class Inspector {
       if (!name) return;
       this.set({
         views: [...m.views, {
-          id: newId('v'), name,
+          id: newId('v', m), name,
           camera: { ...m.camera }, focus: { ...m.focus },
         }],
       });

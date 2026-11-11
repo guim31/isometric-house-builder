@@ -37,13 +37,26 @@ export class Store {
   emit(reason) {
     for (const fn of this.listeners) fn(this, reason);
     clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
-      const ok = saveLocal(this.model);
-      // Said once, not at every change: private browsing or a full storage
-      // otherwise loses the work at the next reload without a word.
-      if (!ok && !this.saveFailed) this.onSaveError?.();
-      this.saveFailed = !ok;
-    }, 400);
+    this.saveTimer = setTimeout(() => this.save(), 400);
+  }
+
+  save() {
+    clearTimeout(this.saveTimer);
+    this.saveTimer = null;
+    const ok = saveLocal(this.model);
+    // Said once, not at every change: private browsing or a full storage
+    // otherwise loses the work at the next reload without a word.
+    if (!ok && !this.saveFailed) this.onSaveError?.();
+    this.saveFailed = !ok;
+  }
+
+  /**
+   * Write a pending save now. The page calls it as it is hidden or closed:
+   * the last change before closing the tab fell inside the delay, and was
+   * lost.
+   */
+  flush() {
+    if (this.saveTimer) this.save();
   }
 
   /**
@@ -187,22 +200,28 @@ export class Store {
 
   /** Add an empty volume and make it the one being painted into. */
   addBuilding() {
-    const b = makeBuilding({ name: `Bâtiment ${this.model.buildings.length + 1}` });
+    const b = makeBuilding({ id: newId('b', this.model), name: `Bâtiment ${this.model.buildings.length + 1}` });
     this.update((m) => ({ ...m, buildings: [...m.buildings, b] }));
     this.activeId = b.id;
     this.emit('selection');
     return b.id;
   }
 
-  /** Remove a volume, along with the openings that lived on its walls. */
+  /**
+   * Remove a volume, along with what lived on it: the openings on its walls
+   * and the items on its roof — left behind, those fell to the ground or onto
+   * whichever roof was next drawn under them.
+   */
   removeBuilding(id) {
     if (this.model.buildings.length <= 1) return;
     const gone = this.model.buildings.find((b) => b.id === id);
     const cells = new Set(gone ? gone.cells : []);
+    const cs = this.model.grid?.cellSize || 1;
     this.update((m) => ({
       ...m,
       buildings: m.buildings.filter((b) => b.id !== id),
       openings: m.openings.filter((o) => !cells.has(o.edge.split(',').slice(0, 2).join(','))),
+      roofItems: m.roofItems.filter((it) => !cells.has(`${Math.floor(it.x / cs)},${Math.floor(it.y / cs)}`)),
     }));
     this.activeId = null;
     this.emit('selection');
@@ -241,10 +260,21 @@ export class Store {
     if (!list) return;
     const src = (this.model[list] || []).find((it) => it.id === sel.id);
     if (!src) return;
-    let copy = { ...src, id: newId(sel.type[0]) };
+    let copy = { ...src, id: newId(sel.type[0], this.model) };
     if (sel.type === 'opening') {
       // Beside the original, and still whole on the same wall.
       copy = fitOpening(this.model, { ...copy, offset: (src.offset ?? 0.5) + (src.width ?? 1.2) + 0.2 });
+    } else if (sel.type === 'roofItem') {
+      // On the same roof when there is room beside it: a copy nudged off the
+      // eaves fell to the ground, or landed on the neighbour's roof.
+      const cs = this.model.grid?.cellSize || 1;
+      const owner = (x, y) => this.model.buildings.find((b) => b.cells.includes(`${Math.floor(x / cs)},${Math.floor(y / cs)}`));
+      const home = owner(src.x, src.y);
+      const step = Math.max(src.w ?? 1, src.d ?? 1) + 0.25;
+      const spots = [[step, 0], [-step, 0], [0, step], [0, -step], [1.5, 0]];
+      const [dx, dy] = spots.find(([ax, ay]) => home && owner(src.x + ax, src.y + ay) === home) || [1.5, 0];
+      copy.x = src.x + dx;
+      copy.y = src.y + dy;
     } else copy.x = (src.x ?? 0) + 1.5;
     this.update((m) => ({ ...m, [list]: [...m[list], copy] }));
     this.select({ type: sel.type, id: copy.id });
