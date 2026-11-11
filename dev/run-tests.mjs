@@ -182,7 +182,11 @@ async function main() {
       });
       if (!result.value) continue;
       state = JSON.parse(result.value);
-      for (const r of state.results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.detail}`);
+      for (const r of state.results) {
+        // A slow test is worth knowing about before it becomes a timeout.
+        const slow = r.ms > 3000 ? ` (${(r.ms / 1000).toFixed(1)} s)` : '';
+        console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.detail}${slow}`);
+      }
       shown += state.results.length;
       if (state.done) break;
     }

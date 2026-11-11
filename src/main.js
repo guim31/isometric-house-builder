@@ -569,7 +569,7 @@ if (boot.rejected) {
 }
 
 // For the test bench and the console: the running store, nothing else.
-window.__app = { store, viewport, plan };
+window.__app = { store, viewport, plan, render: renderAll };
 
 // On a genuinely first visit, offer the gallery rather than leaving someone to
 // guess what the tool is for — over the first preset, which beats an empty

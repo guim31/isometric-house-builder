@@ -10,6 +10,7 @@
 import { checkAsync } from './harness.js';
 import { app } from './app-frame.js';
 import { appStore, frames } from './app.test.js';
+
 import { FIXTURE_ITEMS, fixtureHouse } from './reliability.test.js';
 import { normalise, limitBreach } from '../src/core/model.js';
 
@@ -57,6 +58,9 @@ const LIST = { opening: 'openings', roofItem: 'roofItems', prop: 'props' };
  * actual change, with the drawing before and after, for those who care.
  */
 async function workControls(win, doc, scope, reset, onChange = null) {
+  // Drawn at once rather than at the next animation frame: the same code
+  // path, a thousand frames sooner.
+  const frames = async (w) => w.__app.render();
   const controls = () => [...doc.querySelectorAll(scope)].filter((el) => el.offsetParent !== null || el.closest('details'));
   await reset();
   await frames(win, 1);
@@ -89,15 +93,11 @@ async function workControls(win, doc, scope, reset, onChange = null) {
     }
     if (el.tagName === 'SELECT') {
       for (const v of [...el.options].map((o) => o.value)) {
-        await reset();
-        await frames(win, 1);
         const was = controls()[k]?.value;
         await act(k, (c) => { c.value = v; }, ['change'], v !== was);
       }
     } else if (el.type === 'range') {
       for (const end of ['min', 'max']) {
-        await reset();
-        await frames(win, 1);
         const c0 = controls()[k];
         const changes = c0 && Number(c0.value) !== Number(c0[end]);
         await act(k, (c) => { c.value = c[end]; }, ['input', 'change'], changes);

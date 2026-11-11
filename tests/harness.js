@@ -10,12 +10,17 @@ const results = () => document.getElementById('results');
 
 export const report = (window.__tests ||= { results: [], passed: 0, failed: 0, done: false });
 
+let last = performance.now();
+
 function record(name, ok, detail) {
+  const now = performance.now();
+  const ms = Math.round(now - last);
+  last = now;
   const li = document.createElement('li');
   li.className = ok ? 'ok' : 'ko';
   li.textContent = name + detail;
   results()?.appendChild(li);
-  report.results.push({ name, ok, detail });
+  report.results.push({ name, ok, detail, ms });
   if (ok) report.passed++; else report.failed++;
 }
 
