@@ -531,6 +531,15 @@ trouvés étaient invisibles sur une capture et évidents pour lui. Il balaie le
 orientations *et* les hauteurs de caméra : la première version ne balayait que
 les hauteurs et passait pendant qu'un mur traversait manifestement un débord.
 
+Une mise en ligne se protège aussi d'elle-même. GitHub Pages garde dix minutes
+de cache, et les modules s'importent sans numéro de version : juste après une
+publication, un navigateur peut recevoir un `main.js` neuf et un `roof.js`
+ancien, et l'import échoue avant que l'application n'ait rien affiché. Une
+**garde de démarrage**, petit script classique d'`index.html` hors du graphe
+de modules, le constate, recharge tout le graphe en contournant le cache et
+relance la page une fois ; si cela ne suffit pas, elle le dit et propose de
+recharger. Le lanceur de tests rejoue ce scénario.
+
 Les contributions sont bienvenues : ouvrez une issue ou une pull request.
 Merci de faire passer `node dev/run-tests.mjs` avant de proposer un changement.
 

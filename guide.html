@@ -238,11 +238,12 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 </p>
 <p>
   Avec l’outil <em>Sélection</em>, <strong>glissez un corps</strong> pour le
-  déplacer tout entier, par cases, avec ses ouvertures et ce qui est posé sur
-  son toit ; les flèches le décalent d’une case. Les boutons
+  déplacer tout entier, par cases, avec ses ouvertures, ses équipements muraux
+  et ce qui est posé sur son toit ; les flèches le décalent d’une case. Les boutons
   <strong>Dupliquer</strong>, <strong>Tourner ¼</strong> et
   <strong>Miroir</strong> de la section <em>Corps</em> (et
-  <kbd>Ctrl</kbd>+<kbd>D</kbd>) font le reste ; la pente d’un appentis suit.
+  <kbd>Ctrl</kbd>+<kbd>D</kbd>) font le reste ; la pente d’un appentis suit,
+  et un faîtage imposé tourne avec le corps.
   Deux corps ne se recouvrent jamais : un geste qui y mènerait est refusé.
 </p>
 
@@ -303,9 +304,12 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 </p>
 <p>
   Les équipements muraux se posent comme les ouvertures, d’un clic sur un mur
-  — dans le rendu, <em>à la hauteur cliquée</em>. Ils se règlent en position et
-  en hauteur, suivent leur mur quand la maison change, et partent avec leur
-  corps s’il est supprimé. Appliques et lampadaires <strong>s’allument en vue
+  — dans le rendu, <em>à la hauteur cliquée</em> ; dans le plan, le pan visé et
+  le point de pose s’affichent avant le clic. Ils se règlent en position et
+  en hauteur, coulissent sur leur mur au glisser comme aux flèches — et d’un
+  mur à l’autre en les glissant dans le plan —, suivent leur mur quand la
+  maison change, et partent avec leur corps quand il est déplacé, tourné,
+  dupliqué ou supprimé. Appliques et lampadaires <strong>s’allument en vue
   de nuit</strong>, comme les fenêtres.
 </p>
 <p>
@@ -350,8 +354,8 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   glisser — le curseur le signale au survol : un extérieur glisse au sol par
   quarts de mètre, une ouverture le long de son mur sans en sortir, un objet de
   toit sur son toit, un équipement mural le long de son mur et en hauteur.
-  Tout autre glisser fait tourner la vue. Cliquer un toit sélectionne son
-  corps.
+  Tout autre glisser fait tourner la vue. <kbd>Échap</kbd> pendant le glisser
+  rend l’élément à sa place. Cliquer un toit sélectionne son corps.
 </p>
 <p>
   La section <em>Vue</em> donne les mêmes réglages au degré près, et
@@ -446,11 +450,11 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   <tr><th>Touche</th><th>Effet</th></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>Z</kbd></td><td>Annuler, rétablir — dans un champ texte, annule la saisie. Tourner ou déplacer la vue n’est pas une modification : l’historique l’ignore, et la vue reste où elle est quand on annule</td></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Dupliquer la sélection — un corps sélectionné est dupliqué à côté</td></tr>
-  <tr><td>Flèches</td><td>Décaler la sélection de 25 cm (1 m avec <kbd>Maj</kbd>) ; une ouverture de 5 cm le long de son mur ; un corps d’une case. Un champ qui a le focus garde ses flèches</td></tr>
+  <tr><td>Flèches</td><td>Décaler la sélection de 25 cm (1 m avec <kbd>Maj</kbd>) ; une ouverture ou un équipement mural de 5 cm le long de son mur ; un corps d’une case. Un champ qui a le focus garde ses flèches</td></tr>
   <tr><td><kbd>Espace</kbd> + glisser</td><td>Déplacer le plan</td></tr>
   <tr><td><kbd>Alt</kbd> en glissant</td><td>Suspendre l’aimantation (dans le plan)</td></tr>
   <tr><td><kbd>Suppr</kbd></td><td>Supprimer l’élément sélectionné (un corps se supprime depuis l’inspecteur)</td></tr>
-  <tr><td><kbd>Échap</kbd></td><td>Annuler le geste en cours dans le plan ; sinon, désélectionner</td></tr>
+  <tr><td><kbd>Échap</kbd></td><td>Annuler le geste en cours, dans le plan ou le rendu ; sinon, désélectionner</td></tr>
   <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Tourner d’un quart de tour</td></tr>
 </table>
 
