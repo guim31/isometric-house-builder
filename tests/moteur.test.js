@@ -130,3 +130,38 @@ check('conifères et voitures dans tous les sens restent bien rangés, à tout a
   }
   return true;
 });
+
+/* ---------------- plafond des objets de toit ---------------- */
+
+import { LIMITS, roofArea } from '../src/core/model.js';
+import { Store } from '../src/ui/store.js';
+
+const panels = (n, w = 1.7, d = 1) => Array.from({ length: n }, (_, k) => ({
+  id: `s${k}`, kind: 'solar', x: 1 + (k % 10) * 1.8, y: 1 + Math.floor(k / 10) * 1.1, w, d,
+}));
+
+check('soixante panneaux posés un à un sont acceptés, à l’ouverture comme à l’édition', () => {
+  const house = { buildings: [{ cells: [...rectCells(0, 0, 19, 9)], roof: { type: 'gable', pitch: 30 } }] };
+  const m = normalise({ ...house, roofItems: panels(60) });
+  if (m.roofItems.length !== 60) return `${m.roofItems.length} gardés à l’ouverture`;
+  const s = new Store(normalise(house));
+  let refused = null;
+  s.onLimit = (msg) => { refused = msg; };
+  for (const it of panels(60)) s.update((mm) => ({ ...mm, roofItems: [...mm.roofItems, it] }));
+  return (s.model.roofItems.length === 60 && !refused) || `${s.model.roofItems.length} posés, ${refused}`;
+});
+
+check('le plafond des objets de toit porte sur la surface, qui est ce qui coûte', () => {
+  // A hundred chimneys cost nothing; ten panels of 80 m² cost a second.
+  const chimneys = Array.from({ length: 100 }, (_, k) => ({ kind: 'chimney', x: k % 20, y: Math.floor(k / 20) }));
+  if (normalise({ roofItems: chimneys }).roofItems.length !== 100) return 'cent cheminées refusées';
+  const big = normalise({ roofItems: panels(30, 10, 8) });
+  if (roofArea(big.roofItems) > LIMITS.roofArea) return `${roofArea(big.roofItems)} m² gardés`;
+  if (big.roofItems.length !== Math.floor(LIMITS.roofArea / 80)) return `${big.roofItems.length} grands panneaux gardés`;
+  // And the edit that would cross it is refused, and said.
+  const s = new Store(big);
+  let refused = null;
+  s.onLimit = (msg) => { refused = msg; };
+  s.update((mm) => ({ ...mm, roofItems: [...mm.roofItems, { id: 'x', kind: 'velux', x: 1, y: 1, w: 2, d: 2 }] }));
+  return (s.model.roofItems.length === big.roofItems.length && /m²/.test(refused || '')) || `refus : ${refused}`;
+});

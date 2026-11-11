@@ -272,7 +272,17 @@ export const LIMITS = {
   /** Any position, in metres from the origin. */
   coord: 250,
   openings: 200,
-  roofItems: 20,
+  /**
+   * Roof items, by number and by what they actually cost. A panel or a roof
+   * window is laid as a patch subdivided every eighteen centimetres, so its
+   * price is its area — about a third of a millisecond a square metre — and a
+   * chimney or a dish costs next to nothing. Twenty items was a ceiling for
+   * someone laying panels one at a time; the area keeps the worst file where
+   * that ceiling had it.
+   */
+  roofItems: 100,
+  /** Square metres of panels and roof windows, all roofs together. */
+  roofArea: 800,
   props: 150,
   views: 30,
   name: 120,
@@ -449,6 +459,7 @@ export function limitBreach(m) {
   if (edges > LIMITS.edges) return 'contour des bâtiments trop découpé';
   if (m.openings.length > LIMITS.openings) return `${LIMITS.openings} ouvertures au plus`;
   if (m.roofItems.length > LIMITS.roofItems) return `${LIMITS.roofItems} objets de toit au plus`;
+  if (roofArea(m.roofItems) > LIMITS.roofArea) return `${LIMITS.roofArea} m² de panneaux et fenêtres de toit au plus`;
   if (m.props.length > LIMITS.props) return `${LIMITS.props} objets extérieurs au plus`;
   if (m.views.length > LIMITS.views) return `${LIMITS.views} vues enregistrées au plus`;
   let run = 0;
@@ -498,8 +509,19 @@ function normaliseOpenings(input) {
   return uniqueIds(list, 'o');
 }
 
+/** Kinds laid flat on the slope as a subdivided patch: what costs, by area. */
+const PATCH_KINDS = new Set(['solar', 'velux']);
+
+/** Area of the patch-laid roof items of a list, in square metres. */
+export function roofArea(items) {
+  let a = 0;
+  for (const it of items) if (PATCH_KINDS.has(it.kind)) a += (it.w ?? 0) * (it.d ?? 0);
+  return a;
+}
+
 /** Roof items: a kind something draws, a position, and sizes within reason. */
 function normaliseRoofItems(input) {
+  let area = 0;
   const list = (Array.isArray(input) ? input : []).filter(isRecord)
     .filter((it) => ROOF_ITEM_DEFAULTS[it.kind] && Number.isFinite(it.x) && Number.isFinite(it.y))
     .slice(0, LIMITS.roofItems)
@@ -511,6 +533,13 @@ function normaliseRoofItems(input) {
       };
       if (Number.isFinite(it.h) || def.h !== undefined) out.h = num(it.h, R.riH, def.h);
       return out;
+    })
+    // Past the area, the later panels are left out, as the later runs of
+    // hedge are past their length.
+    .filter((it) => {
+      if (!PATCH_KINDS.has(it.kind)) return true;
+      area += it.w * it.d;
+      return area <= LIMITS.roofArea;
     });
   return uniqueIds(list, 'r');
 }
