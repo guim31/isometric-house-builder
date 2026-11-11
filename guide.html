@@ -99,6 +99,7 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
     <li><a href="#ouvertures">Fenêtres, portes, objets de toit</a></li>
     <li><a href="#corps">Plusieurs corps de bâtiment</a></li>
     <li><a href="#abords">Les abords : muret, portail, piscine, escalier</a></li>
+    <li><a href="#equipements">Les équipements, pour le tableau de bord</a></li>
     <li><a href="#couleurs">Couleurs et matières</a></li>
     <li><a href="#vue">Regarder sa maison</a></li>
     <li><a href="#cadrage">Cadrer sur une zone, pour un widget</a></li>
@@ -121,8 +122,9 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <img src="assets/screenshot.png" alt="L’interface : outils à gauche, plan et rendu au centre, réglages à droite">
 <ul>
   <li><strong>À gauche, créer.</strong> Les outils qui ajoutent quelque chose,
-    rangés par familles qui se replient. Deux arrivent repliées — <em>Sur le
-    toit</em> et <em>Cadrage</em> — parce qu’on les règle une fois.</li>
+    rangés par familles qui se replient. Trois arrivent repliées — <em>Sur le
+    toit</em>, <em>Équipements</em> et <em>Cadrage</em> — parce qu’on les pose
+    une fois et qu’on n’y revient guère.</li>
   <li><strong>Au centre, dessiner et regarder.</strong> Le plan pour
     construire, le rendu pour juger et exporter.</li>
   <li><strong>À droite, régler</strong>, en quatre familles : <em>Sélection</em>
@@ -163,6 +165,12 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <p>
   Le débord se règle par pas de 25 cm, pour que la rive tombe sur la trame.
 </p>
+<p>
+  Un toit à deux pans prend son <strong>faîtage</strong> le long du grand côté
+  du corps. La liste <em>Faîtage</em> l’impose <em>est-ouest</em> ou
+  <em>nord-sud</em> — pour une maison presque carrée, ou pour des pignons sur
+  rue qui ne sont pas sur le grand côté.
+</p>
 
 <h2 id="ouvertures">5. Fenêtres, portes, objets de toit</h2>
 <p>
@@ -188,8 +196,11 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 </p>
 <p>
   Ce qui se pose sur le toit — panneaux solaires, cheminée, fenêtre de toit,
-  parabole — se place dans le plan, d’un clic sur l’emprise. Ils épousent la
-  pente.
+  parabole — se place d’un clic sur l’emprise dans le plan, ou <em>sur le
+  versant même</em> dans le rendu : l’objet arrive à l’endroit cliqué. Ils
+  épousent la pente. Un toit en accepte autant qu’on veut en poser un à un —
+  la limite, cent objets et 800 m² de panneaux et fenêtres de toit, ne gêne
+  qu’un fichier démesuré.
 </p>
 
 <h2 id="corps">6. Plusieurs corps de bâtiment</h2>
@@ -229,10 +240,41 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <p>
   Largeur et profondeur d’un extérieur se règlent par quarts de mètre, à partir
   de 0,25 m : une terrasse de 3 × 4 m se cale donc exactement sur le bâtiment
-  qu’elle borde.
+  qu’elle borde. Le bouton <strong>Tourner d’un quart de tour</strong> fait
+  pivoter une terrasse, une allée, une piscine, un escalier — son sens de
+  montée avec lui —, un portail, un muret, une haie, une clôture ou la voiture,
+  autour de son centre.
+</p>
+<p>
+  La voiture a un <strong>sens</strong> : la liste dit où pointe le capot. Un
+  arbre est <em>feuillu</em> ou <em>conifère</em>.
 </p>
 
-<h2 id="couleurs">8. Couleurs et matières</h2>
+<h2 id="equipements">8. Les équipements, pour le tableau de bord</h2>
+<p>
+  La famille <em>Équipements</em> regroupe ce sur quoi un tableau de bord pose
+  ses pastilles : <strong>applique</strong>, <strong>caméra</strong> et
+  <strong>borne de recharge</strong>, qui se fixent au mur, puis
+  <strong>lampadaire</strong>, <strong>pompe à chaleur</strong>,
+  <strong>boîte aux lettres</strong> et <strong>carport</strong>, qui se posent
+  au sol.
+</p>
+<p>
+  Les équipements muraux se posent comme les ouvertures, d’un clic sur un mur
+  — dans le rendu, <em>à la hauteur cliquée</em>. Ils se règlent en position et
+  en hauteur, suivent leur mur quand la maison change, et partent avec leur
+  corps s’il est supprimé. Appliques et lampadaires <strong>s’allument en vue
+  de nuit</strong>, comme les fenêtres.
+</p>
+<p>
+  La pompe à chaleur et la boîte aux lettres se tournent vers un côté
+  (<em>Ventilateur vers</em>, <em>Fente vers</em>). Le carport se règle en
+  dimensions et en hauteur, avec un toit plat ou des lames de pergola, et une
+  voiture se gare dessous.
+</p>
+<img src="assets/equipment.png" alt="Les sept équipements, de jour puis de nuit">
+
+<h2 id="couleurs">9. Couleurs et matières</h2>
 <p>
   Section <em>Projet → Apparence</em> pour la palette, <em>Couleurs et
   matières</em> pour le reste. Six palettes, des matières de toit (tuiles,
@@ -245,7 +287,7 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   maison ne détonne pas à côté du reste du tableau de bord.
 </div>
 
-<h2 id="vue">9. Regarder sa maison</h2>
+<h2 id="vue">10. Regarder sa maison</h2>
 <p>
   <strong>Glissez dans le rendu</strong> pour faire tourner la maison, où qu’on
   la prenne. Le pavé en bas à droite fait la même chose au clic, et bascule
@@ -255,11 +297,20 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <table>
   <tr><th>Geste</th><th>Effet</th></tr>
   <tr><td>Glisser</td><td>Faire tourner la maison, et monter ou descendre la caméra</td></tr>
+  <tr><td>Glisser l’élément sélectionné</td><td>Le déplacer : au sol, le long de son mur, ou sur son toit</td></tr>
   <tr><td><kbd>Maj</kbd> + glisser</td><td>Déplacer la vue</td></tr>
   <tr><td><kbd>Alt</kbd> + glisser</td><td>Incliner l’image dans son cadre</td></tr>
   <tr><td>Molette</td><td>Zoomer autour du curseur</td></tr>
   <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Tourner d’un quart de tour</td></tr>
 </table>
+<p>
+  Un élément <strong>déjà sélectionné</strong> se déplace en le faisant
+  glisser — le curseur le signale au survol : un extérieur glisse au sol par
+  quarts de mètre, une ouverture le long de son mur sans en sortir, un objet de
+  toit sur son toit, un équipement mural le long de son mur et en hauteur.
+  Tout autre glisser fait tourner la vue. Cliquer un toit sélectionne son
+  corps.
+</p>
 <p>
   La section <em>Vue</em> donne les mêmes réglages au degré près, et
   <strong>+ Enregistrer cette vue</strong> garde un angle et un cadrage sous un
@@ -272,7 +323,7 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 </p>
 <img src="assets/night.png" alt="La même maison de jour et deux maisons de nuit">
 
-<h2 id="cadrage">10. Cadrer sur une zone, pour un widget</h2>
+<h2 id="cadrage">11. Cadrer sur une zone, pour un widget</h2>
 <p>
   Un widget qui pilote un seul appareil ne gagne rien à montrer toute la
   propriété : le portail y fait quelques pixels. L’outil <strong>Zone de
@@ -299,7 +350,7 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
     peut porter autant de cadrages que de widgets.</li>
 </ul>
 
-<h2 id="export">11. Exporter et poser dans Gladys</h2>
+<h2 id="export">12. Exporter et poser dans Gladys</h2>
 <ol>
   <li><strong>Exporter une image</strong>, en haut à droite (ou le bouton au
     pied de la section <em>Cadrage</em>).</li>
@@ -323,7 +374,7 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   et l’export reste du PNG ordinaire pour Home Assistant, Jeedom ou un wiki.
 </p>
 
-<h2 id="fichiers">12. Enregistrer, partager, confidentialité</h2>
+<h2 id="fichiers">13. Enregistrer, partager, confidentialité</h2>
 <p>
   <strong>Rien ne quitte votre navigateur.</strong> L’outil n’envoie aucune
   requête : pas de compte, pas de serveur, pas de mesure d’audience. Le projet
@@ -347,7 +398,7 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
     <strong>Enregistrer</strong>.</li>
 </ul>
 
-<h2 id="raccourcis">13. Raccourcis</h2>
+<h2 id="raccourcis">14. Raccourcis</h2>
 <table>
   <tr><th>Touche</th><th>Effet</th></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>Z</kbd></td><td>Annuler, rétablir — dans un champ texte, annule la saisie. Tourner ou déplacer la vue n’est pas une modification : l’historique l’ignore, et la vue reste où elle est quand on annule</td></tr>

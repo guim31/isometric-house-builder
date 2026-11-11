@@ -53,18 +53,43 @@ tout moment, et *Page blanche* reste disponible.
 | **Volumes** | Plusieurs **corps de bâtiment indépendants** — maison, garage, abri de jardin — chacun avec sa toiture, sa hauteur, ses matières et ses couleurs |
 | **Volume** | Emprise dessinée à main levée sur une trame de 1 m ou 0,50 m, jusqu'à 4 niveaux — chacun avec **sa propre hauteur**, pour l'étage sous combles — et soubassement réglable |
 | **Cotes** | Longueur affichée sur chaque pan de mur, dimensions en direct pendant le tracé, emprise et surface dans l'inspecteur |
-| **Toiture** | Croupe, deux pans, appentis, toit plat — inclinaison, débord et épaisseur de rive ; les noues entre ailes sont calculées |
+| **Toiture** | Croupe, deux pans, appentis, toit plat — inclinaison, débord et épaisseur de rive, **sens du faîtage** d'un deux-pans ; les noues entre ailes sont calculées |
 | **Ouvertures** | Fenêtres, fenêtres à volets, portes, portes de garage, posées sur n'importe quel mur et à n'importe quel niveau — avec un **renfoncement** optionnel, la niche étant de la vraie géométrie |
-| **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente |
-| **Extérieurs** | Piscine, terrasse, allée, haies, clôtures, arbres, buissons, voiture — terrasses et piscines pouvant être **surélevées jusqu'à 3 m**, avec leurs joues, et un **escalier** qui s'y pose de lui-même à la bonne hauteur |
+| **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente, dans le plan ou **d'un clic sur le versant** dans le rendu |
+| **Extérieurs** | Piscine, terrasse, allée, haies, clôtures, arbres feuillus ou **conifères**, buissons, voiture **orientable** — terrasses et piscines pouvant être **surélevées jusqu'à 3 m**, avec leurs joues, et un **escalier** qui s'y pose de lui-même à la bonne hauteur ; chaque rectangle **tourne d'un quart de tour** |
+| **Équipements** | Ce sur quoi un tableau de bord pose ses pastilles : **applique**, **caméra** et **borne de recharge** fixées au mur, **lampadaire**, **pompe à chaleur**, **boîte aux lettres** et **carport** (toit plat ou lames) au sol — appliques et lampadaires allumés la nuit |
 | **Clôture** | **Muret** tracé au glisser, avec chaperon ; **portillon** battant et **portail coulissant**, qui ouvrent le muret là où on les pose |
 | **Matières** | Tuiles, **tuiles canal panachées**, ardoises, bac acier sur le toit ; briques, bardage, pierre, colombages sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
 | **Nuit** | Une **vue de nuit** : ciel dégradé et étoilé, lune, teintes de clair de lune — et les fenêtres allumées |
+| **Dans le rendu** | Cliquer un toit choisit son corps ; l'élément sélectionné **se déplace au glisser** — au sol, le long de son mur, sur son toit |
 | **Caméra** | **Orbite libre** : on fait tourner la maison à la souris, sur 360° et de la vue rasante à la quasi-verticale — plus une inclinaison de l'image ; pavé de navigation à l'écran, et les quatre faces à un clic |
 | **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, ce qui la traverse est coupé, rien n'est tranché par le bord, et chaque cadrage se garde comme **vue nommée** |
 | **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, toutes les vues enregistrées en lot, copie directe dans le presse-papier |
+
+## Les équipements
+
+![Les sept équipements, de jour puis de nuit](assets/equipment.png)
+
+Une image de maison sur un tableau de bord sert à y poser des pastilles :
+l'éclairage du jardin, la caméra du portail, la borne de la voiture, la pompe à
+chaleur. La famille *Équipements* les dessine, pour que chaque pastille ait
+quelque chose sous elle. Ils suivent les mêmes règles que le reste : des
+aplats, rien qui ne se lise pas à petite taille — et un peu plus grands que
+nature, comme les fenêtres, faute de quoi une applique serait un point.
+
+Les équipements muraux s'accrochent **comme les ouvertures** : une arête de
+mur, une position le long de celle-ci, un niveau, plus une hauteur. Ils
+suivent donc leur mur quand la trame change, et partent avec leur corps. Ils
+vivent pourtant dans une **liste à part** (`fixtures`) plutôt que parmi les
+ouvertures : la version précédente de l'outil lit toute ouverture d'un type
+inconnu comme une fenêtre, et un fichier partagé aurait ouvert chez elle une
+fenêtre à la place de chaque caméra. Une liste qu'elle ne connaît pas, elle
+l'ignore.
+
+Appliques et lampadaires **s'allument la nuit**, comme les fenêtres et pour la
+même raison.
 
 ## La vue de nuit
 
@@ -156,7 +181,7 @@ régénère toutes en une passe quand la maison change.
 Trois colonnes, trois rôles, et rien qui les mélange :
 
 - **À gauche, créer.** Les outils qui ajoutent quelque chose au modèle, par
-  familles repliables. Deux d'entre elles — les objets de toit et le cadrage —
+  familles repliables. Trois d'entre elles — les objets de toit, les équipements et le cadrage —
   arrivent repliées : on les règle une fois et on n'y revient pas.
 - **Au centre, dessiner et regarder.** Le plan pour construire, le rendu pour
   juger et exporter. Le **pavé de navigation**, en bas à droite du rendu, donne
@@ -193,7 +218,7 @@ session.
    qu'elle suppose — *Horizons* se passe de contours et de soubassement, c'est
    ce qui fait son allure.
 4. **Posez les ouvertures.** Choisissez *Fenêtre*, *Porte* ou *Porte de garage*,
-   puis cliquez le long d'un mur — dans le plan, ou directement sur le rendu.
+   puis cliquez le long d'un mur — dans le plan, ou directement sur le rendu, les objets de toit sur le versant cliqué.
 5. **Ajoutez d'autres corps** si besoin (bouton *+ Nouveau corps*) :
    chacun se dessine et se règle séparément, et cliquer un volume dans le plan
    le rend actif. C'est ainsi qu'un abri de jardin reçoit un toit plat pendant
@@ -235,7 +260,11 @@ répète le pas.
 Un appui sur le modèle reste ambigu jusqu'à ce que le pointeur bouge ou ne
 bouge pas : au-delà de quelques pixels c'est une navigation, sinon c'est une
 sélection. Sans cela, attraper la maison — le geste évident pour la tourner —
-ne faisait rien du tout.
+ne faisait rien du tout. Seule exception : un appui sur **l'élément déjà
+sélectionné** le prend en main, et le glisser le déplace — un extérieur au
+sol par quarts de mètre, une ouverture le long de son mur sans en sortir, un
+objet de toit sur son toit, un équipement mural le long de son mur et en
+hauteur. Le curseur l'annonce au survol, et chaque geste s'annule d'un coup.
 
 Sur les trois rotations : les deux premières déplacent la caméra autour de la
 maison, la troisième tourne le dessin fini dans son cadre. Ce sont les seules
@@ -399,6 +428,24 @@ modifier le moteur :
   reste — arbres, sol, terrasses — est rangé par des mécanismes propres, et
   n'est pas fait de solides plans se rejoignant sur leurs arêtes.
 
+- **Ce qu'on clique, c'est ce qui est dessiné.** Le calque de sélection est
+  fait de cibles invisibles triées sur leur centre, et un toit n'en avait pas :
+  cliquer un versant ne sélectionnait rien, ou l'arbre caché derrière la
+  maison, ou posait une fenêtre sur le mur du fond. Ce qui est vu à un pixel
+  est pourtant connu — c'est la face dessinée en dernier. Le toit se choisit
+  donc sur le dessin lui-même, et le point cliqué se résout sur le plan de la
+  face touchée : le rayon de vue est affine en hauteur, son intersection avec
+  un plan se calcule exactement. Un objet de toit qu'on fait glisser suit le
+  rayon jusqu'au champ de hauteur de son toit, par dichotomie entre deux
+  plis, ce qui revient au même puisque le toit y est plan.
+- **Les équipements sont des boîtes qui se touchent sans s'interpénétrer.**
+  Ils rejoignent alors la passe d'ordre exacte avec la coque : deux boîtes
+  disjointes ont toujours un axe du monde entre elles. C'est ce qui garde une
+  applique sous son débord de toit, et le toit d'un carport au-dessus de la
+  voiture qu'il abrite, quel que soit l'angle. Un conifère, fait de cônes
+  empilés, suit une règle voisine : chaque étage est au-dessus d'un plan
+  horizontal, la caméra aussi, donc l'arbre se range d'un bloc par son centre,
+  puis étage après étage.
 - **Les éléments linéaires sont émis en tronçons.** Une haie ou un muret de
   vingt mètres fusionné en une seule face n'a qu'un centre, donc qu'une
   profondeur : le tout passe devant la maison ou derrière, jamais en partie
@@ -487,7 +534,9 @@ solar home — so you begin by adjusting something close to your own rather than
 from an empty grid.
 
 Draw the footprint on a one-metre grid, pick a roof (hip, gable, shed, flat),
-place windows, doors, garage doors, solar panels, chimneys, a pool, trees, then
+place windows, doors, garage doors, solar panels, chimneys, a pool, trees, and
+the equipment a dashboard pins badges on — wall lights, cameras, a car charger,
+a garden lamp, a heat pump, a letter box, a carport — then
 export the current view or all four isometric orientations at once.
 
 The default palette matches the **Horizons** theme of Gladys Assistant v5, so an

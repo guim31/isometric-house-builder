@@ -141,12 +141,13 @@ function positionField(m, item, patch) {
   const max = Math.max(0, run.hi - run.lo - w, from);
   const min = Math.min(0, from);
   const outside = from < -1e-6 || from > run.hi - run.lo - w + 1e-6;
+  const what = FIXTURE_DEFAULTS[item.kind] ? 'l’équipement' : 'l’ouverture';
   return field('Position', slider(Math.round(from * 100) / 100, {
     min, max, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
     onInput: (v) => patch({ offset: v + run.lo + w / 2 }, 'offset'),
   }), outside
-    ? 'l’ouverture dépasse de son pan de mur'
-    : 'depuis l’angle du mur, jusqu’au bord de l’ouverture');
+    ? `${what} dépasse de son pan de mur`
+    : `depuis l’angle du mur, jusqu’au bord de ${what}`);
 }
 
 export class Inspector {

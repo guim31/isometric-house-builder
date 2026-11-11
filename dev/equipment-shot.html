@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#fff;font:13px system-ui}
+#grid{width:1280px;display:grid;grid-template-columns:repeat(7,1fr)}
+figure{margin:0}figcaption{text-align:center;color:#5a6b7d;padding:2px 0 8px}
+</style></head><body><div id="grid"></div>
+<script type="module">
+// The seven pieces of equipment, each on its own, by day and by night: the
+// illustration in the README and the guide (assets/equipment.png).
+import { normalise, makeBuilding, emptyModel } from '../src/core/model.js';
+import { rectCells } from '../src/core/grid.js';
+import { renderScene } from '../src/render/svg.js';
+
+// A stretch of wall to hang a fixture on: two metres of facade facing the
+// default camera, under a short eave.
+const wall = (kind, z) => ({
+  buildings: [makeBuilding({ cells: [...rectCells(0, 0, 2, 1)], storeyHeight: 2.6,
+    roof: { type: 'shed', pitch: 12, overhang: 0.25, fascia: 0.14, shedDir: 'S' } })],
+  fixtures: [{ id: 'f', kind, edge: '1,1,N', offset: 0.5, z }],
+});
+const ground = (p) => ({ buildings: [], props: p });
+const shots = [
+  ['Applique', wall('wallLight', 1.9)],
+  ['Caméra', wall('camera', 2.1)],
+  ['Borne de recharge', wall('charger', 1.1)],
+  ['Lampadaire', ground([{ id: 'l', kind: 'lamppost', x: 0, y: 0, w: 0.4, d: 0.4, h: 2.2 }])],
+  ['Pompe à chaleur', ground([{ id: 'h', kind: 'heatpump', x: 0, y: 0, w: 0.4, d: 1, h: 0.8, dir: 'E' }])],
+  ['Boîte aux lettres', ground([{ id: 'm', kind: 'mailbox', x: 0, y: 0, w: 0.3, d: 0.4, h: 1.15, dir: 'E' }])],
+  ['Carport et voiture', ground([
+    { id: 'c', kind: 'carport', x: 0, y: 0, w: 3, d: 5.5, h: 2.3, cover: 'flat' },
+    { id: 'v', kind: 'car', x: 1.5, y: 2.75, w: 1.8, d: 4.2 }])],
+];
+const tile = ([name, scene], night) => {
+  // A tight pad: around one small item the lawn would otherwise be the picture.
+  const m = normalise({ ...emptyModel(), ...scene, ground: { enabled: true, material: 'grass', margin: scene.fixtures ? 0.6 : 0 } });
+  m.style = { ...m.style, night };
+  const svg = renderScene(m, { width: 182, height: 190, pad: 14 }).svg;
+  return `<figure>${svg}<figcaption>${name}${night ? ' — nuit' : ''}</figcaption></figure>`;
+};
+document.getElementById('grid').innerHTML = shots.map((s) => tile(s, false)).join('')
+  + shots.map((s) => tile(s, true)).join('');
+</script></body></html>
