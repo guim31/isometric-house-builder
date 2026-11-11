@@ -26,6 +26,16 @@ import { specFor, textureSegments, textureTiles } from './texture.js';
 const SESSION = Math.random().toString(36).slice(2, 7);
 let renderSeq = 0;
 
+/*
+ * Nothing from the model is written into an attribute unless it is a number
+ * or a colour checked here, whatever normalise has already done: a caller may
+ * hand over a model that never went through it, and the markup is inserted
+ * with innerHTML and exported as a file.
+ */
+const COLOUR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+const colour = (c, fallback = '#888888') => (typeof c === 'string' && COLOUR.test(c) ? c : fallback);
+const lineWidth = (v, fallback) => (Number.isFinite(v) && v > 0 && v < 20 ? v : fallback);
+
 /** Materials drawn without an outline, or with a special opacity. */
 const NO_OUTLINE = new Set(['shadow', 'grass', 'water', 'solarCell', 'garageLine']);
 const OPACITY = { shadow: 0.13 };
@@ -699,6 +709,7 @@ export function renderScene(input, opts = {}) {
   const defs = [];
 
   const hair = Math.max(0.5, camera.scale * 0.02);
+  const outlineWidth = lineWidth(model.style.outlineWidth, 1.1);
   // Night is a grade over whichever palette is in use, applied once here: the
   // textures take their own shades from `fill`, and the outlines are derived
   // from it, so both follow without knowing anything about it.
@@ -711,10 +722,10 @@ export function renderScene(input, opts = {}) {
     // any per-building override, and callers should not have to redo that.
     f.fill = fill;
     const d = pathData(f, camera);
-    const parts = [`d="${d}"`, `fill="${fill}"`];
+    const parts = [`d="${d}"`, `fill="${colour(fill)}"`];
     if (OPACITY[f.mat] != null) parts.push(`opacity="${OPACITY[f.mat]}"`);
     if (model.style.outline && !NO_OUTLINE.has(f.mat)) {
-      parts.push(`stroke="${darken(fill, 0.26)}"`, `stroke-width="${model.style.outlineWidth}"`);
+      parts.push(`stroke="${colour(darken(fill, 0.26))}"`, `stroke-width="${outlineWidth}"`);
     }
     sink.push(`<path ${parts.join(' ')}/>`);
 
@@ -739,8 +750,8 @@ export function renderScene(input, opts = {}) {
         const acc = byShade.get(tile.colour);
         if (acc) acc.push(sub); else byShade.set(tile.colour, [sub]);
       }
-      for (const [colour, subs] of byShade) {
-        layers.push(`<path d="${subs.join('')}" clip-path="url(#${id})" fill="${colour}"/>`);
+      for (const [shade, subs] of byShade) {
+        layers.push(`<path d="${subs.join('')}" clip-path="url(#${id})" fill="${colour(shade)}"/>`);
       }
     }
 
@@ -752,7 +763,7 @@ export function renderScene(input, opts = {}) {
       }).join('');
       layers.push(
         `<path d="${lines}" clip-path="url(#${id})" fill="none" ` +
-        `stroke="${darken(fill, spec.contrast ?? 0.2)}" ` +
+        `stroke="${colour(darken(fill, spec.contrast ?? 0.2))}" ` +
         `stroke-width="${(hair * (spec.weight ?? 1)).toFixed(2)}"/>`,
       );
     }

@@ -8,17 +8,13 @@
  * two had already begun to drift.
  */
 
-import { newId, fitOpening, OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, stairsRun } from '../core/model.js';
+import {
+  newId, fitOpening, OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, stairsRun,
+} from '../core/model.js';
 
 // Defined in the model, which fills them into files that leave them out.
-export { OPENING_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS };
+export { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS };
 
-export const ROOF_ITEM_DEFAULTS = {
-  solar: { w: 4, d: 2.4 },
-  chimney: { w: 0.8, d: 0.8, h: 1.1 },
-  velux: { w: 1, d: 1.2 },
-  dish: { w: 0.8, d: 0.8 },
-};
 
 
 

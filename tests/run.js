@@ -15,7 +15,7 @@ export const FILES = [
   'textures', 'presets', 'ordering', 'buildings', 'levels', 'garden', 'stacking',
   'palette', 'model', 'store', 'plan', 'viewport', 'inspector',
   'review-fixes', 'review-consistency', 'review-rest',
-  'export', 'night', 'occlusion', 'focus', 'page', 'app', 'reliability',
+  'export', 'night', 'occlusion', 'focus', 'page', 'app', 'reliability', 'hostile',
 ];
 
 for (const name of FILES) {

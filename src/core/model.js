@@ -4,7 +4,11 @@
  */
 
 import { key, rectCells, connectedComponents, SIDES, runExtents } from './grid.js';
-import { DEFAULT_PROJECTION, DEFAULT_PITCH, clampPitch, clampRoll, normaliseYaw } from './iso.js';
+import {
+  DEFAULT_PROJECTION, DEFAULT_PITCH, PROJECTIONS, clampPitch, clampRoll, normaliseYaw,
+} from './iso.js';
+import { ROOF_TYPES } from './roof.js';
+import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
 import { THEMES } from './palette.js';
 import { PRESETS } from '../data/presets.js';
 
@@ -52,19 +56,13 @@ export function idsOf(m) {
  */
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const COLOUR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
-const safeId = (id, prefix) => (typeof id === 'string' && ID_RE.test(id) ? id : newId(prefix));
 const safeColours = (o) => Object.fromEntries(
-  Object.entries(o && typeof o === 'object' ? o : {})
-    .filter(([k, v]) => ID_RE.test(k.replace('#', '')) && COLOUR_RE.test(v)),
+  Object.entries(o && typeof o === 'object' && !Array.isArray(o) ? o : {})
+    .filter(([k, v]) => ID_RE.test(k.replace('#', '')) && COLOUR_RE.test(v))
+    .slice(0, LIMITS.overrides),
 );
 const isRecord = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
-// Spreading a source that carries explicit `undefined` would overwrite the
-// defaults with it — a file that simply omits a storey height would then
-// build a roof at NaN. Only stated keys are taken.
-const stated = (o) => Object.fromEntries(
-  Object.entries(o || {}).filter(([, v]) => v !== undefined && v !== null),
-);
 
 /** Items positioned by their centre rather than their minimum corner. */
 export const CENTRED_KINDS = new Set(['tree', 'bush', 'car']);
@@ -101,6 +99,17 @@ export const PROP_DEFAULTS = {
   tree: { r: 1.5 },
   bush: { r: 1.1 },
   car: { w: 1.8, d: 4.2 },
+};
+
+/**
+ * Size of a newly placed roof item, by kind — and what a file that leaves a
+ * field out gets, as for openings and outdoor items.
+ */
+export const ROOF_ITEM_DEFAULTS = {
+  solar: { w: 4, d: 2.4 },
+  chimney: { w: 0.8, d: 0.8, h: 1.1 },
+  velux: { w: 1, d: 1.2 },
+  dish: { w: 0.8, d: 0.8 },
 };
 
 /** About eighteen centimetres a riser, which is what a stair is. */
@@ -202,64 +211,282 @@ export function defaultModel() {
   return normalise({ ...preset.model, name: preset.name });
 }
 
-/** Fill in anything a hand-edited or older file may be missing. */
+/**
+ * How much a project may hold.
+ *
+ * A model arrives from files and links anyone can write, and is saved as soon
+ * as it opens: a footprint of 200 × 200 cells froze the tab for fifteen
+ * seconds, a hundred-kilometre hedge made 6,5 MB of SVG, a fifty-metre eave a
+ * second per frame — at every reload. These ceilings keep the worst accepted
+ * file to about a second of building and drawing on a modest machine, while
+ * a real house with its garden passes with room to spare: a 60 × 40 m plot on
+ * the half-metre grid, fifty items outside. The plan applies the same ones as
+ * it draws.
+ */
+export const LIMITS = {
+  buildings: 12,
+  /** Cells of one building, and of all of them together. */
+  cells: 3000,
+  totalCells: 6000,
+  /**
+   * Exterior wall edges of all the buildings together. What costs is the
+   * outline, not the area: a solid 60 × 40 m block draws in no time, the same
+   * cells laid out as a chequerboard in fifteen seconds. A real house, even a
+   * complicated one on the fine grid, has a few hundred.
+   */
+  edges: 800,
+  /**
+   * Total length of hedges, fences, walls and gates, in metres — a gate
+   * counting five times its width, being all bars.
+   */
+  runLength: 600,
+  /** Widest gate, in metres: past that it is a fence. */
+  gate: 12,
+  /** Footprint of one building, in metres along either axis. */
+  extent: 60,
+  /** Any position, in metres from the origin. */
+  coord: 250,
+  openings: 200,
+  roofItems: 20,
+  props: 150,
+  views: 30,
+  name: 120,
+  overrides: 64,
+};
+
+/*
+ * Ranges of every number a file may carry, as [min, max] — at least those of
+ * the inspector's own controls, so nothing set through the interface is ever
+ * pulled back.
+ */
+const R = {
+  storeyHeight: STOREY_HEIGHT_RANGE,
+  plinth: [0, 1],
+  pitch: [1, 70],
+  overhang: [0, 2],
+  fascia: [0, 0.6],
+  outlineWidth: [0.1, 4],
+  groundMargin: [0, 10],
+  focusSize: [2, 200],
+  focusMargin: [0, 10],
+  // Openings, in metres.
+  opWidth: [0.2, 10],
+  opHeight: [0.2, 6],
+  opSill: [0, 6],
+  opDepth: [0, 1],
+  opSides: [0, 2],
+  opHead: [0, 1],
+  // Roof items.
+  riW: [0.2, 10],
+  riD: [0.2, 8],
+  riH: [0.1, 5],
+  // Outdoor items.
+  propSize: [0.05, 60],
+  propR: [0.1, 8],
+  propH: [0.05, 6],
+  propZ: [0, 6],
+  propRadius: [0, 5],
+};
+
+const SIDES_RE = /^[NSEW]$/;
+const isBool = (v) => typeof v === 'boolean';
+const bool = (v, fallback) => (isBool(v) ? v : fallback);
+const num = (v, [lo, hi], fallback) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : fallback);
+const oneOf = (v, allowed, fallback) => (allowed.includes(v) ? v : fallback);
+const text = (v, fallback, max = LIMITS.name) => (typeof v === 'string' && v ? v.slice(0, max) : fallback);
+const coord = (v, fallback) => num(v, [-LIMITS.coord, LIMITS.coord], fallback);
+const KINDS = {
+  ground: ['grass', 'paving', 'gravel'],
+  slab: ['paving', 'gravel', 'deck'],
+  shape: ['rounded', 'rect'],
+  gate: ['swing', 'sliding'],
+};
+
+/** Ids made safe, and unique within their list: a second item of the same id
+ * would be selected, edited and deleted along with the first. */
+function uniqueIds(list, prefix) {
+  const seen = new Set();
+  for (const it of list) {
+    let id = typeof it.id === 'string' && ID_RE.test(it.id) ? it.id : null;
+    if (!id || seen.has(id)) {
+      do { id = newId(prefix); } while (seen.has(id));
+    }
+    it.id = id;
+    seen.add(id);
+  }
+  return list;
+}
+
+/** Materials of a building or of the project, from the lists the renderer has. */
+function materials(input, fallback) {
+  const t = isRecord(input) ? input : {};
+  return {
+    roof: oneOf(t.roof, Object.keys(ROOF_TEXTURES), fallback.roof),
+    wall: oneOf(t.wall, Object.keys(WALL_TEXTURES), fallback.wall),
+  };
+}
+
+/**
+ * Rebuild a model from whatever it was given, field by field.
+ *
+ * Nothing is copied wholesale: every field is read, checked against its type
+ * and its range, and anything else is left behind. A value that fails takes
+ * its type's default; an item that cannot be made sense of is dropped. The
+ * reason is that a model also arrives from a share link or a file someone
+ * else wrote, and its values end up in SVG attributes and in loops — an
+ * outline width of `"><…` went straight into the markup, a fifty-metre eave
+ * into the roof lattice.
+ *
+ * Older shapes still open on the same house: the single legacy footprint, the
+ * quarter-turn camera, the quarter-metre grid, the settings a palette
+ * prescribes when a file predates them.
+ */
 export function normalise(input) {
   if (!isRecord(input)) input = {};
   const base = emptyModel();
-  const m = { ...base, ...input };
-  if (!THEMES[m.theme]) m.theme = base.theme;
-  if (typeof m.name !== 'string') m.name = base.name;
-  // Only the pitch is a setting; the extent the grid once declared was never
-  // read, and is not written back.
-  const size = Number(input?.grid?.cellSize);
-  m.grid = { cellSize: [...CELL_SIZES, 0.25].includes(size) ? size : 1 };
-  m.ground = { ...base.ground, ...(input?.ground || {}) };
-  m.camera = normaliseCamera(input?.camera, base.camera);
-  m.focus = normaliseFocus(input?.focus, base.focus);
-  m.views = normaliseViews(input?.views);
-  m.texture = { ...base.texture, ...(input?.texture || {}) };
-  m.style = { ...base.style, ...(input?.style || {}) };
-  if (m.style.background !== 'transparent' && !COLOUR_RE.test(m.style.background)) {
-    m.style.background = base.style.background;
-  }
-  m.overrides = safeColours(input?.overrides);
-  // Anything the file does not state falls back to what its own palette
-  // prescribes, not to the global default. Without this, a project saved
-  // before a setting existed would inherit whichever palette happens to be
-  // the current default — and render with the wrong palette's conventions.
-  const declared = THEMES[m.theme].style || {};
-  m.buildings = normaliseBuildings(input, declared.plinth);
-  delete m.cells; delete m.storeys; delete m.storeyHeight; delete m.plinth; delete m.roof;
-  for (const list of ['openings', 'roofItems', 'props']) {
-    m[list] = Array.isArray(m[list]) ? m[list].filter(isRecord) : [];
-    for (const it of m[list]) it.id = safeId(it.id, list[0]);
-  }
-  // Missing fields take their kind's defaults; a kind nobody knows is dropped,
-  // as nothing would draw it.
-  m.props = m.props
-    .filter((p) => PROP_DEFAULTS[p.kind] && Number.isFinite(p.x) && Number.isFinite(p.y))
-    .map((p) => ({ ...PROP_DEFAULTS[p.kind], ...stated(p) }));
-  m.openings = m.openings
-    .filter((op) => typeof op.edge === 'string' && /^-?\d+,-?\d+,[SENW]$/.test(op.edge))
-    .map((op) => {
-      const kind = OPENING_DEFAULTS[op.kind] ? op.kind : 'window';
-      const out = { storey: 0, offset: 0.5, ...OPENING_DEFAULTS[kind], ...op, kind };
-      for (const k of ['storey', 'offset', 'width', 'height', 'sill']) {
-        if (!Number.isFinite(out[k])) out[k] = k === 'storey' ? 0 : k === 'offset' ? 0.5 : OPENING_DEFAULTS[kind][k];
-      }
-      out.storey = Math.max(0, Math.min(3, Math.round(out.storey)));
-      return out;
-    });
-  for (const k of ['outline', 'shadow', 'windowBars']) {
-    if (input?.style?.[k] === undefined && declared[k] !== undefined) m.style[k] = declared[k];
-  }
-  if (!input?.texture && declared.texture) m.texture = { ...m.texture, ...declared.texture };
+  const theme = THEMES[input.theme] ? input.theme : base.theme;
+  const declared = THEMES[theme].style || {};
+  const size = Number(isRecord(input.grid) ? input.grid.cellSize : undefined);
+  const cellSize = [...CELL_SIZES, 0.25].includes(size) ? size : 1;
 
-  m.version = MODEL_VERSION;
+  const ground = isRecord(input.ground) ? input.ground : {};
+  const style = isRecord(input.style) ? input.style : {};
+  const m = {
+    version: MODEL_VERSION,
+    name: typeof input.name === 'string' ? input.name.slice(0, LIMITS.name) : base.name,
+    grid: { cellSize },
+    buildings: normaliseBuildings(input, declared.plinth, cellSize),
+    theme,
+    // Anything the file does not state falls back to what its own palette
+    // prescribes, not to the global default. Without this, a project saved
+    // before a setting existed would inherit whichever palette happens to be
+    // the current default — and render with the wrong palette's conventions.
+    texture: materials(input.texture, isRecord(input.texture) ? base.texture
+      : { ...base.texture, ...(declared.texture || {}) }),
+    overrides: safeColours(input.overrides),
+    openings: normaliseOpenings(input.openings),
+    roofItems: normaliseRoofItems(input.roofItems),
+    props: normaliseProps(input.props),
+    ground: {
+      enabled: bool(ground.enabled, base.ground.enabled),
+      material: oneOf(ground.material, KINDS.ground, base.ground.material),
+      margin: num(ground.margin, R.groundMargin, base.ground.margin),
+    },
+    camera: normaliseCamera(input.camera, base.camera),
+    focus: normaliseFocus(input.focus, base.focus),
+    views: normaliseViews(input.views),
+    style: {
+      outline: bool(style.outline, bool(declared.outline, base.style.outline)),
+      outlineWidth: num(style.outlineWidth, R.outlineWidth, base.style.outlineWidth),
+      background: style.background === 'transparent' || COLOUR_RE.test(style.background)
+        ? style.background : base.style.background,
+      shadow: bool(style.shadow, bool(declared.shadow, base.style.shadow)),
+      windowBars: bool(style.windowBars, bool(declared.windowBars, base.style.windowBars)),
+      night: bool(style.night, base.style.night),
+    },
+  };
   // A quarter-metre grid was accepted on input but never offered, and the roof
   // lattice cannot hold it: a ridge over an odd number of quarter cells falls
   // between its points. Such a file opens on the half-metre grid instead.
-  return m.grid.cellSize === 0.25 ? withCellSize(m, 0.5) : m;
+  return cellSize === 0.25 ? withCellSize(m, 0.5) : m;
+}
+
+/** Number of exterior wall edges of a set of cells. */
+function outlineLength(cells) {
+  const set = new Set(cells);
+  let n = 0;
+  for (const c of cells) {
+    const [i, j] = c.split(',').map(Number);
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!set.has(`${i + di},${j + dj}`)) n++;
+  }
+  return n;
+}
+
+/** Openings: on a wall edge that can at least be named, with every size set. */
+function normaliseOpenings(input) {
+  const list = (Array.isArray(input) ? input : []).filter(isRecord)
+    .filter((op) => typeof op.edge === 'string' && /^-?\d{1,4},-?\d{1,4},[SENW]$/.test(op.edge))
+    .slice(0, LIMITS.openings)
+    .map((op) => {
+      const kind = OPENING_DEFAULTS[op.kind] ? op.kind : 'window';
+      const def = OPENING_DEFAULTS[kind];
+      const out = {
+        id: op.id,
+        edge: op.edge,
+        storey: Number.isFinite(op.storey) ? Math.max(0, Math.min(3, Math.round(op.storey))) : 0,
+        kind,
+        offset: coord(op.offset, 0.5),
+        width: num(op.width, R.opWidth, def.width),
+        height: num(op.height, R.opHeight, def.height),
+        sill: num(op.sill, R.opSill, def.sill),
+      };
+      // Recess settings only when stated, as files have always had them.
+      if (Number.isFinite(op.depth)) out.depth = num(op.depth, R.opDepth, 0);
+      if (Number.isFinite(op.sides)) out.sides = num(op.sides, R.opSides, 0);
+      if (Number.isFinite(op.head)) out.head = num(op.head, R.opHead, 0);
+      return out;
+    });
+  return uniqueIds(list, 'o');
+}
+
+/** Roof items: a kind something draws, a position, and sizes within reason. */
+function normaliseRoofItems(input) {
+  const list = (Array.isArray(input) ? input : []).filter(isRecord)
+    .filter((it) => ROOF_ITEM_DEFAULTS[it.kind] && Number.isFinite(it.x) && Number.isFinite(it.y))
+    .slice(0, LIMITS.roofItems)
+    .map((it) => {
+      const def = ROOF_ITEM_DEFAULTS[it.kind];
+      const out = {
+        id: it.id, kind: it.kind, x: coord(it.x, 0), y: coord(it.y, 0),
+        w: num(it.w, R.riW, def.w), d: num(it.d, R.riD, def.d),
+      };
+      if (Number.isFinite(it.h) || def.h !== undefined) out.h = num(it.h, R.riH, def.h);
+      return out;
+    });
+  return uniqueIds(list, 'r');
+}
+
+/**
+ * Outdoor items. Missing fields take their kind's defaults; a kind nobody
+ * knows is dropped, as nothing would draw it.
+ */
+function normaliseProps(input) {
+  let run = 0;
+  const list = (Array.isArray(input) ? input : []).filter(isRecord)
+    .filter((p) => PROP_DEFAULTS[p.kind] && Number.isFinite(p.x) && Number.isFinite(p.y))
+    .slice(0, LIMITS.props)
+    .map((p) => {
+      const def = PROP_DEFAULTS[p.kind];
+      const out = { id: p.id, kind: p.kind, x: coord(p.x, 0), y: coord(p.y, 0) };
+      const size = (k, range) => {
+        if (Number.isFinite(p[k])) out[k] = num(p[k], range, def[k]);
+        else if (def[k] !== undefined) out[k] = def[k];
+      };
+      const span = p.kind === 'gate' ? [R.propSize[0], LIMITS.gate] : R.propSize;
+      size('w', span);
+      size('d', span);
+      size('h', R.propH);
+      size('r', R.propR);
+      size('z', R.propZ);
+      size('radius', R.propRadius);
+      const pick = (k, allowed) => {
+        const v = oneOf(p[k], allowed, def[k]);
+        if (v !== undefined) out[k] = v;
+      };
+      pick('material', KINDS.slab);
+      pick('shape', KINDS.shape);
+      pick('style', KINDS.gate);
+      pick('dir', ['N', 'S', 'E', 'W']);
+      return out;
+    })
+    .filter((p) => {
+      // Runs are drawn in segments, posts and rails: their cost is their
+      // length, and past the ceiling the later ones are left out.
+      if (!['hedge', 'fence', 'muret', 'gate'].includes(p.kind)) return true;
+      run += Math.max(p.w ?? 0, p.d ?? 0) * (p.kind === 'gate' ? 5 : 1);
+      return run <= LIMITS.runLength;
+    });
+  return uniqueIds(list, 'p');
 }
 
 /**
@@ -270,61 +497,95 @@ export function normalise(input) {
  * so a shed drawn apart from the house can be re-roofed the moment the file
  * is opened, without any manual re-splitting.
  */
-function normaliseBuildings(input, themePlinth) {
+function normaliseBuildings(input, themePlinth, cs) {
   const proto = makeBuilding();
+  // Cells as the grid has them, within reach of the origin and within the
+  // footprint one building may cover; past that a file is cut, not frozen.
+  const reach = Math.floor(LIMITS.coord / cs);
+  const span = Math.floor(LIMITS.extent / cs);
+  const cellsOf = (list) => {
+    if (!Array.isArray(list)) return [];
+    const out = [];
+    let i0 = Infinity, j0 = Infinity;
+    for (const c of list) {
+      if (out.length >= LIMITS.cells) break;
+      if (typeof c !== 'string' || !/^-?\d{1,5},-?\d{1,5}$/.test(c)) continue;
+      const [i, j] = c.split(',').map(Number);
+      if (Math.abs(i) > reach || Math.abs(j) > reach) continue;
+      // Measured from the first cell kept: a file holding the far corners of
+      // a huge square keeps the corner it starts with.
+      if (!Number.isFinite(i0)) { i0 = i; j0 = j; }
+      if (Math.abs(i - i0) >= span || Math.abs(j - j0) >= span) continue;
+      out.push(`${i},${j}`);
+    }
+    return [...new Set(out)].sort();
+  };
   const clean = (b, fallbackName) => {
-    const out = { ...proto, ...stated(b) };
-    out.id = safeId(b.id, 'b');
-    out.name = typeof b.name === 'string' && b.name ? b.name : fallbackName;
-    // A file that says nothing about the plinth gets its palette's: brick and
-    // stone houses stand on one, the flat Horizons look does not.
-    if (!Number.isFinite(b.plinth)) out.plinth = Number.isFinite(themePlinth) ? themePlinth : 0;
-    out.cells = Array.isArray(b.cells) ? b.cells.filter((c) => /^-?\d+,-?\d+$/.test(c)).sort() : [];
-    out.roof = { ...proto.roof, ...(b.roof || {}) };
-    out.overrides = safeColours(b.overrides);
-    out.texture = b.texture ? { ...b.texture } : null;
-    out.storeys = Math.max(1, Math.min(4, Math.round(out.storeys) || 1));
+    const roof = isRecord(b.roof) ? b.roof : {};
     const [lo, hi] = STOREY_HEIGHT_RANGE;
-    out.storeyHeight = Number.isFinite(out.storeyHeight) ? Math.max(lo, Math.min(hi, out.storeyHeight)) : proto.storeyHeight;
-    out.plinth = Number.isFinite(out.plinth) ? Math.max(0, Math.min(1, out.plinth)) : 0;
-    // All four kept, not only the levels in use: taking a level away and
-    // putting it back should find its height where it was left.
-    out.storeyHeights = Array.isArray(b.storeyHeights)
-      ? b.storeyHeights.slice(0, 4)
-        .map((v) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : out.storeyHeight))
-      : null;
-    return out;
+    const storeyHeight = num(b.storeyHeight, R.storeyHeight, proto.storeyHeight);
+    return {
+      id: b.id,
+      name: text(b.name, fallbackName),
+      cells: cellsOf(b.cells),
+      storeys: Number.isFinite(b.storeys) ? Math.max(1, Math.min(4, Math.round(b.storeys) || 1)) : 1,
+      storeyHeight,
+      // All four kept, not only the levels in use: taking a level away and
+      // putting it back should find its height where it was left.
+      storeyHeights: Array.isArray(b.storeyHeights)
+        ? b.storeyHeights.slice(0, 4).map((v) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : storeyHeight))
+        : null,
+      // A file that says nothing about the plinth gets its palette's: brick
+      // and stone houses stand on one, the flat Horizons look does not.
+      plinth: num(b.plinth, R.plinth, Number.isFinite(themePlinth) ? themePlinth : 0),
+      roof: {
+        type: oneOf(roof.type, ROOF_TYPES, proto.roof.type),
+        pitch: num(roof.pitch, R.pitch, proto.roof.pitch),
+        overhang: num(roof.overhang, R.overhang, proto.roof.overhang),
+        fascia: num(roof.fascia, R.fascia, proto.roof.fascia),
+        shedDir: SIDES_RE.test(roof.shedDir) ? roof.shedDir : proto.roof.shedDir,
+      },
+      overrides: safeColours(b.overrides),
+      texture: isRecord(b.texture) ? materials(b.texture, { roof: 'none', wall: 'none' }) : null,
+    };
   };
 
   // Empty volumes never win over a legacy footprint: a caller that spreads a
   // blank model and then sets `cells` means the cells, and silently dropping
   // them would lose the whole house.
   const declared = Array.isArray(input?.buildings) ? input.buildings.filter(isRecord) : null;
-  const declaredHasCells = declared && declared.some((b) => (b.cells || []).length);
+  const declaredHasCells = declared && declared.some((b) => Array.isArray(b.cells) && b.cells.length);
   const legacyCells = Array.isArray(input?.cells) && input.cells.length;
+  let out;
   if (declared && declared.length && (declaredHasCells || !legacyCells)) {
     // A cell belongs to one body. A file in which two claim it — painted over
-    // before the plan prevented it — keeps it with the first.
+    // before the plan prevented it — keeps it with the first. And the whole
+    // project holds so many cells, the later bodies giving way first.
     const owned = new Set();
-    return declared.map((b, i) => {
-      const out = clean(b, i ? `Bâtiment ${i + 1}` : 'Corps principal');
-      out.cells = out.cells.filter((c) => !owned.has(c) && owned.add(c));
-      return out;
+    let edges = 0;
+    out = declared.slice(0, LIMITS.buildings).map((b, i) => {
+      const nb = clean(b, i ? `Bâtiment ${i + 1}` : 'Corps principal');
+      nb.cells = nb.cells.filter((c) => !owned.has(c) && owned.size < LIMITS.totalCells && owned.add(c));
+      return nb;
+    }).filter((nb) => {
+      // A body whose outline would take the project past its ceiling is left
+      // out whole: trimming it would leave an arbitrary shape nobody drew.
+      edges += outlineLength(nb.cells);
+      return edges <= LIMITS.edges;
     });
+    if (!out.length) out = [makeBuilding()];
+  } else {
+    const legacy = clean({
+      cells: input?.cells, storeys: input?.storeys, storeyHeight: input?.storeyHeight,
+      plinth: input?.plinth, roof: input?.roof,
+    }, 'Corps principal');
+    if (!legacy.cells.length) return [makeBuilding()];
+    const parts = connectedComponents(new Set(legacy.cells));
+    out = parts.length <= 1 ? [legacy] : parts.slice(0, LIMITS.buildings).map((cells, i) => ({
+      ...legacy, id: i ? undefined : legacy.id, cells, name: i ? `Bâtiment ${i + 1}` : 'Corps principal',
+    }));
   }
-
-  const legacy = clean({
-    cells: input?.cells, storeys: input?.storeys, storeyHeight: input?.storeyHeight,
-    plinth: input?.plinth, roof: input?.roof,
-  }, 'Corps principal');
-  if (!legacy.cells.length) return [makeBuilding()];
-
-  const parts = connectedComponents(new Set(legacy.cells));
-  if (parts.length <= 1) return [legacy];
-  return parts.map((cells, i) => clean(
-    { ...legacy, id: i ? newId('b') : legacy.id, cells },
-    i ? `Bâtiment ${i + 1}` : 'Corps principal',
-  ));
+  return uniqueIds(out, 'b');
 }
 
 /**
@@ -335,46 +596,46 @@ function normaliseBuildings(input, themePlinth) {
  * on the view they were saved from, so the index is read as its yaw in degrees.
  */
 function normaliseCamera(input, base) {
-  const c = { ...base, ...(input || {}) };
-  if (input && input.yaw === undefined && input.rotation !== undefined) {
-    c.yaw = (((Math.round(input.rotation) % 4) + 4) % 4) * 90;
-  }
-  delete c.rotation;
-  c.yaw = normaliseYaw(c.yaw);
-  c.pitch = clampPitch(c.pitch);
-  c.roll = clampRoll(c.roll);
-  return c;
+  const c = isRecord(input) ? input : {};
+  let yaw = c.yaw;
+  if (yaw === undefined && Number.isFinite(c.rotation)) yaw = (((Math.round(c.rotation) % 4) + 4) % 4) * 90;
+  return {
+    yaw: normaliseYaw(Number.isFinite(yaw) ? yaw : base.yaw),
+    pitch: clampPitch(Number.isFinite(c.pitch) ? c.pitch : base.pitch),
+    roll: clampRoll(Number.isFinite(c.roll) ? c.roll : base.roll),
+    projection: oneOf(c.projection, Object.keys(PROJECTIONS), base.projection),
+  };
 }
 
-/** A framing rectangle that is at least a rectangle. */
+/**
+ * A framing rectangle that is at least a rectangle. Older files carry `hide`
+ * and `vignette`; neither is a setting any more — both softened a crop by the
+ * picture's own border, and the camera no longer makes one.
+ */
 function normaliseFocus(input, base) {
-  const f = { ...base, ...(input || {}) };
-  const num = (v, min, fallback) =>
-    (Number.isFinite(v) ? Math.max(min, v) : fallback);
-  // Two metres, as the plan and the inspector have it: below that the zone
-  // holds nothing and the camera zooms to a blur.
-  f.w = num(f.w, 2, base.w);
-  f.d = num(f.d, 2, base.d);
-  f.margin = num(f.margin, 0, base.margin);
-  f.x = Number.isFinite(f.x) ? f.x : base.x;
-  f.y = Number.isFinite(f.y) ? f.y : base.y;
-  // Older files carry `hide` and `vignette`. Neither is a setting any more:
-  // both softened a crop by the picture's own border, and the camera no longer
-  // makes one — it fits what is drawn, whole.
-  delete f.hide;
-  delete f.vignette;
-  return f;
+  const f = isRecord(input) ? input : {};
+  return {
+    enabled: bool(f.enabled, base.enabled),
+    // Two metres, as the plan and the inspector have it: below that the zone
+    // holds nothing and the camera zooms to a blur.
+    x: coord(f.x, base.x),
+    y: coord(f.y, base.y),
+    w: num(f.w, R.focusSize, base.w),
+    d: num(f.d, R.focusSize, base.d),
+    margin: num(f.margin, R.focusMargin, base.margin),
+  };
 }
 
 /** Saved framings: a named camera and focus, re-exportable in one click. */
 function normaliseViews(input) {
   if (!Array.isArray(input)) return [];
-  return input.filter(isRecord).map((v, i) => ({
-    id: safeId(v.id, 'v'),
-    name: typeof v.name === 'string' && v.name ? v.name : `Vue ${i + 1}`,
+  const list = input.filter(isRecord).slice(0, LIMITS.views).map((v, i) => ({
+    id: v.id,
+    name: text(v.name, `Vue ${i + 1}`),
     camera: normaliseCamera(v.camera, DEFAULT_CAMERA),
     focus: normaliseFocus(v.focus, DEFAULT_FOCUS),
   }));
+  return uniqueIds(list, 'v');
 }
 
 /**
