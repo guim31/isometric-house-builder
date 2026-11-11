@@ -24,7 +24,7 @@ function invalid(m) {
   if (breach) return `plafond franchi : ${breach}`;
   if (/NaN|Infinity/.test(JSON.stringify(m))) return 'valeur non finie';
   const again = normalise(JSON.parse(JSON.stringify(m)));
-  for (const list of ['openings', 'roofItems', 'props', 'buildings']) {
+  for (const list of ['openings', 'fixtures', 'roofItems', 'props', 'buildings']) {
     if (again[list].length !== m[list].length) return `${list} : un élément écarté par normalise`;
   }
   return null;
@@ -161,25 +161,46 @@ await checkAsync('chaque contrôle des autres sections de l’inspecteur, sans e
   const doc = frame.contentDocument;
   const store = await appStore();
   const before = store.model;
-  const stage = { ...fixtureHouse(), views: [{ id: 'v1', name: 'Vue', camera: {}, focus: { enabled: true } }] };
+  const views = [{ id: 'v1', name: 'Vue', camera: {}, focus: { enabled: true } }];
+  // Twice: a hip roof, then a gable — whose ridge has a control of its own —
+  // on a body that carries something of every list, for the body's buttons
+  // (duplicate, turn, mirror) to carry along.
+  const plain = { ...fixtureHouse(), views };
+  const items = { openings: [], roofItems: [], props: [], fixtures: [] };
+  for (const [type, list] of Object.entries(FIXTURE_ITEMS)) {
+    list.forEach((it, i) => items[LIST[type]].push({ ...it, id: `other${type}${i}` }));
+  }
+  const gable = normalise({
+    ...plain, ...items,
+    buildings: plain.buildings.map((b) => ({ ...b, roof: { ...b.roof, type: 'gable', ridge: 'ew' } })),
+  });
   const prompt = win.prompt;
   win.prompt = () => 'Vue d’essai';
   let actions = 0;
+  const bad = [];
   const errors = await watch(win, async () => {
-    actions = await workControls(win, doc, '#inspector details input, #inspector details select, #inspector details button',
-      async () => {
-        store.reset(stage);
-        store.select(null);
-        await frames(win, 1);
-        doc.querySelectorAll('#inspector details').forEach((d) => { d.open = true; });
-      });
+    for (const stage of [plain, gable]) {
+      actions += await workControls(win, doc, '#inspector details input, #inspector details select, #inspector details button',
+        async () => {
+          store.reset(stage);
+          store.select(null);
+          await frames(win, 1);
+          doc.querySelectorAll('#inspector details').forEach((d) => { d.open = true; });
+        });
+      const wrong = invalid(store.model);
+      if (wrong) bad.push(wrong);
+    }
   });
   win.prompt = prompt;
-  const bad = invalid(store.model);
+  const ridge = (() => {
+    store.reset(gable);
+    return [...doc.querySelectorAll('#inspector .field-label')].some((l) => l.textContent === 'Faîtage');
+  })();
   store.reset(before);
   if (errors.length) return `exception : ${errors.slice(0, 3).join(' ; ')}`;
-  if (bad) return bad;
-  return actions > 40 || `${actions} actions seulement`;
+  if (bad.length) return bad.join(' ; ');
+  if (!ridge) return 'le réglage du faîtage n’a pas été atteint';
+  return actions > 80 || `${actions} actions seulement`;
 });
 
 await checkAsync('chaque outil, un clic dans le plan puis dans le rendu, sans exception', async () => {
@@ -189,7 +210,12 @@ await checkAsync('chaque outil, un clic dans le plan puis dans le rendu, sans ex
   const store = await appStore();
   const before = store.model;
   const tools = [...doc.querySelectorAll('#tools .tool')];
-  if (tools.length < 20) return `${tools.length} outils`;
+  // Both lots' tools, each one: the plan's and the equipment.
+  const want = ['select', 'paint', 'rect', 'erase', 'window', 'door', 'solar', 'chimney', 'pool', 'muret', 'gate',
+    'frame', 'wallLight', 'camera', 'charger', 'lamppost', 'heatpump', 'mailbox', 'carport'];
+  const have = new Set(tools.map((b) => b.dataset.tool));
+  const missing = want.filter((t) => !have.has(t));
+  if (missing.length) return `outils absents : ${missing.join(', ')}`;
   const press = (target, x, y) => {
     const opts = { clientX: x, clientY: y, bubbles: true, pointerId: 31, isPrimary: true, button: 0, buttons: 1 };
     target.dispatchEvent(new win.PointerEvent('pointerdown', opts));
@@ -203,6 +229,13 @@ await checkAsync('chaque outil, un clic dans le plan puis dans le rendu, sans ex
       b.closest('details').open = true;
       b.click();
       await frames(win, 1);
+      // Over the plan first, without a press: each tool's preview is drawn.
+      const plan = doc.querySelector('#plan .plan-svg').getBoundingClientRect();
+      for (const [fx, fy] of [[0.5, 0.5], [0.3, 0.4], [0.9, 0.9]]) {
+        doc.querySelector('#plan .plan-svg').dispatchEvent(new win.PointerEvent('pointermove', {
+          clientX: plan.left + plan.width * fx, clientY: plan.top + plan.height * fy, bubbles: true, pointerId: 32,
+        }));
+      }
       for (const id of ['plan', 'iso']) {
         const svg = doc.querySelector(`#${id} svg`);
         const r = svg.getBoundingClientRect();
