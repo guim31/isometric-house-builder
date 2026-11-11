@@ -614,3 +614,10 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12px; }
 
 /* An unexpected error: the same toast, in the danger colour, held longer. */
 .toast.error { background: var(--danger); }
+
+/* ---------- Lot 3 : gestes dans le rendu ---------- */
+
+/* Over the selected item, a press takes hold of it instead of turning the
+   view: the cursor says so before the press, and while it lasts. */
+.iso-canvas.can-move, .iso-canvas.can-move .hit-layer path,
+.iso-canvas.moving, .iso-canvas.moving .hit-layer path { cursor: move; }

@@ -62,7 +62,7 @@ const TOOL_GROUPS = [
 ];
 
 const HINTS = {
-  select: 'Cliquez un élément pour le régler, glissez pour le déplacer — une ouverture coulisse le long des murs. Dans le rendu, glisser fait tourner la maison où qu’on la prenne ; le pavé en bas à droite fait de même, et bascule entre pivoter et déplacer.',
+  select: 'Cliquez un élément pour le régler, glissez pour le déplacer — une ouverture coulisse le long des murs. Dans le rendu, l’élément sélectionné se déplace aussi au glisser ; ailleurs, glisser fait tourner la maison. Le pavé en bas à droite bascule entre pivoter et déplacer.',
   paint: 'Dessinez l’emprise de la maison. Alt efface.',
   rect: 'Glissez pour ajouter un volume rectangulaire. Alt retire.',
   erase: 'Glissez pour retirer des cases.',
@@ -70,10 +70,10 @@ const HINTS = {
   shutter: 'Cliquez près d’un mur pour poser une fenêtre à volets.',
   door: 'Cliquez près d’un mur pour poser une porte.',
   garage: 'Cliquez près d’un mur pour poser une porte de garage.',
-  solar: 'Cliquez sur le toit pour poser des panneaux.',
-  chimney: 'Cliquez sur le toit pour poser une cheminée.',
-  velux: 'Cliquez sur le toit pour poser une fenêtre de toit.',
-  dish: 'Cliquez sur le toit pour poser une parabole.',
+  solar: 'Cliquez sur le toit, dans le plan ou sur le rendu, pour poser des panneaux.',
+  chimney: 'Cliquez sur le toit, dans le plan ou sur le rendu, pour poser une cheminée.',
+  velux: 'Cliquez sur le toit, dans le plan ou sur le rendu, pour poser une fenêtre de toit.',
+  dish: 'Cliquez sur le toit, dans le plan ou sur le rendu, pour poser une parabole.',
   pool: 'Cliquez dans le plan — ou directement sur le rendu — pour poser la piscine.',
   terrace: 'Cliquez dans le plan ou sur le rendu pour poser la terrasse.',
   path: 'Cliquez dans le plan ou sur le rendu pour poser l’allée.',
