@@ -8,7 +8,10 @@ import { THEMES } from '../src/core/palette.js';
 import { rectCells } from '../src/core/grid.js';
 import { Store } from '../src/ui/store.js';
 import { PlanView } from '../src/ui/plan.js';
-import { pointer, stageViewport } from './helpers.js';
+import { pointer, stageViewport, stripIds } from './helpers.js';
+import { Inspector } from '../src/ui/panels.js';
+import { renderScene } from '../src/render/svg.js';
+import { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS } from '../src/ui/actions.js';
 import { toShareUrl, saveLocal, clearLocal, initialModel } from '../src/io/project.js';
 
 /* ---------------- B1: palettes ---------------- */
@@ -246,3 +249,89 @@ await checkAsync('un lien collé dans l’appli ouverte se charge, quitte l’ad
   frame.contentDocument.getElementById('btn-undo').click();
   return store.model.name === mine || `annuler ramène « ${store.model.name} »`;
 });
+
+/* ---------------- B6: every control does something ---------------- */
+
+/** A plain house to hang items on, in a palette whose materials all differ. */
+export function fixtureHouse() {
+  return normalise({
+    ...emptyModel(),
+    theme: 'terracotta',
+    buildings: [makeBuilding({ cells: [...rectCells(0, 0, 9, 6)], storeys: 2, storeyHeight: 2.7 })],
+    texture: { roof: 'none', wall: 'none' },
+  });
+}
+
+/** A wall the default camera sees, with room on either side. */
+export const FIXTURE_EDGE = '4,6,N';
+
+export const FIXTURE_ITEMS = {
+  opening: ['window', 'shutter', 'door', 'garage'].map((kind) => ({
+    kind, edge: FIXTURE_EDGE, storey: 0, offset: 0.5, ...OPENING_DEFAULTS[kind],
+  })),
+  roofItem: ['solar', 'chimney', 'velux', 'dish'].map((kind) => ({
+    kind, x: 5, y: 2, ...ROOF_ITEM_DEFAULTS[kind],
+  })),
+  prop: Object.keys(PROP_DEFAULTS).map((kind) => ({
+    kind, x: kind === 'stairs' ? 3 : 2, y: -8, ...PROP_DEFAULTS[kind],
+  })),
+};
+
+const LIST = { opening: 'openings', roofItem: 'roofItems', prop: 'props' };
+
+/** The model with one item added and selected, in a store, with its inspector. */
+export function staged(type, item) {
+  const id = `fx${type[0]}${item.kind}`;
+  const m = fixtureHouse();
+  const s = new Store({ ...m, [LIST[type]]: [{ ...item, id }] });
+  s.setTool('select');
+  s.select({ type, id });
+  const root = document.createElement('div');
+  document.getElementById('stage').appendChild(root);
+  const ins = new Inspector(root, s);
+  ins.render();
+  return { s, root, ins };
+}
+
+/** Each control of the selection block, as [label, element]. */
+const selectionControls = (root) => [...root.querySelectorAll('.panel-selected .field')]
+  .map((f) => [f.querySelector('.field-label')?.textContent, f.querySelector('input, select')])
+  .filter(([, el]) => el);
+
+const picture = (m) => stripIds(renderScene(m, { width: 500, height: 360 }).svg);
+
+for (const type of Object.keys(FIXTURE_ITEMS)) {
+  for (const item of FIXTURE_ITEMS[type]) {
+    check(`chaque réglage de l’inspecteur change le rendu : ${type} ${item.kind}`, () => {
+      const probe = staged(type, item);
+      const labels = selectionControls(probe.root).map(([l]) => l);
+      probe.root.remove();
+      const dead = [];
+      labels.forEach((label, i) => {
+        const { s, root } = staged(type, item);
+        const before = picture(s.model);
+        const [, el] = selectionControls(root)[i];
+        const tries = [];
+        if (el.tagName === 'SELECT') {
+          for (const o of el.options) if (o.value !== el.value) tries.push(o.value);
+        } else if (el.type === 'range') {
+          tries.push(Number(el.value) === Number(el.max) ? el.min : el.max);
+        } else if (el.type === 'number') {
+          tries.push(String(Math.min(Number(el.max), Number(el.value) + 1)));
+        } else if (el.type === 'checkbox') {
+          tries.push(!el.checked);
+        }
+        const start = s.model;
+        for (const v of tries) {
+          s.update(start);
+          const ctl = selectionControls(root)[i][1];
+          if (ctl.type === 'checkbox') ctl.checked = v; else ctl.value = v;
+          ctl.dispatchEvent(new Event(ctl.type === 'range' ? 'input' : 'change', { bubbles: true }));
+          if (picture(s.model) === before) dead.push(`${label} = ${v}`);
+        }
+        root.remove();
+      });
+      return !dead.length || `sans effet : ${dead.join(', ')}`;
+    });
+  }
+}

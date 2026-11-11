@@ -9,7 +9,7 @@ import {
 import { ROOF_TYPES, STEP } from '../core/roof.js';
 import {
   withCellSize, withTheme, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
-  storeyHeightOf, DEFAULT_FOCUS, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
+  storeyHeightOf, DEFAULT_FOCUS, PROP_DEFAULTS, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
 } from '../core/model.js';
 import { bounds, edgeRunExtent } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
@@ -782,15 +782,26 @@ export class Inspector {
         field('Type', select(item.kind, Object.entries(ROOF_ITEM_LABELS), (v) => patch({ kind: v }))),
         field('X', number(item.x, { min: 0, max: 60, step: 0.25, onChange: (v) => patch({ x: v }) })),
         field('Y', number(item.y, { min: 0, max: 60, step: 0.25, onChange: (v) => patch({ y: v }) })),
-        field('Largeur', slider(item.w ?? 2, {
-          min: 0.4, max: 10, step: 0.2, format: (v) => `${v.toFixed(1)} m`,
-          onInput: (v) => patch({ w: v }, 'w'),
-        })),
-        field('Profondeur', slider(item.d ?? 1.5, {
-          min: 0.4, max: 8, step: 0.2, format: (v) => `${v.toFixed(1)} m`,
-          onInput: (v) => patch({ d: v }, 'd'),
-        })),
       );
+      if (item.kind === 'dish') {
+        // A dish is round, drawn from the larger of its two sides: a width and
+        // a depth meant one of the two sliders did nothing.
+        s.appendChild(field('Diamètre', slider(Math.max(item.w ?? 0.8, item.d ?? 0.8), {
+          min: 0.4, max: 2, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          onInput: (v) => patch({ w: v, d: v }, 'w'),
+        })));
+      } else {
+        s.append(
+          field('Largeur', slider(item.w ?? 2, {
+            min: 0.4, max: 10, step: 0.2, format: (v) => `${v.toFixed(1)} m`,
+            onInput: (v) => patch({ w: v }, 'w'),
+          })),
+          field('Profondeur', slider(item.d ?? 1.5, {
+            min: 0.4, max: 8, step: 0.2, format: (v) => `${v.toFixed(1)} m`,
+            onInput: (v) => patch({ d: v }, 'd'),
+          })),
+        );
+      }
       if (item.kind === 'chimney') {
         s.appendChild(field('Hauteur', slider(item.h ?? 1.1, {
           min: 0.3, max: 3, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
@@ -802,8 +813,10 @@ export class Inspector {
         field('X', number(item.x, { min: -20, max: 80, step: 0.25, onChange: (v) => patch({ x: v }) })),
         field('Y', number(item.y, { min: -20, max: 80, step: 0.25, onChange: (v) => patch({ y: v }) })),
       );
-      if (item.kind === 'tree') {
-        s.appendChild(field('Taille', slider(item.r ?? 1.4, {
+      // A tree and a bush are drawn from their radius alone: offering them a
+      // width and a depth gave the bush two sliders that did nothing.
+      if (item.kind === 'tree' || item.kind === 'bush') {
+        s.appendChild(field('Taille', slider(item.r ?? PROP_DEFAULTS[item.kind].r, {
           min: 0.5, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
           onInput: (v) => patch({ r: v }, 'r'),
         })));
