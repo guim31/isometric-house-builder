@@ -11,6 +11,7 @@ import { PlanView } from '../src/ui/plan.js';
 import { pointer, stageViewport, stripIds } from './helpers.js';
 import { Inspector } from '../src/ui/panels.js';
 import { renderScene } from '../src/render/svg.js';
+import { buildMesh } from '../src/core/scene.js';
 import { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS } from '../src/ui/actions.js';
 import { toShareUrl, saveLocal, clearLocal, initialModel } from '../src/io/project.js';
 
@@ -394,4 +395,20 @@ check('un fichier où deux corps se disputent une case la laisse au premier', ()
   });
   return (m.buildings[0].cells.join() === '0,0,1,0' && m.buildings[1].cells.join() === '2,0')
     || JSON.stringify(m.buildings.map((b) => b.cells));
+});
+
+/* ---------------- D10: the fence stands where it is drawn ---------------- */
+
+check('la clôture est dessinée au milieu de son emprise, comme dans le plan', () => {
+  const fence = (p) => buildMesh(normalise({ ...emptyModel(), props: [{ id: 'f', kind: 'fence', ...p }] }))
+    .mesh.tris.filter((t) => t.mat === 'fence');
+  const mid = (tris, k) => {
+    let lo = Infinity, hi = -Infinity;
+    for (const t of tris) for (const v of [t.a, t.b, t.c]) { lo = Math.min(lo, v[k]); hi = Math.max(hi, v[k]); }
+    return (lo + hi) / 2;
+  };
+  const h = mid(fence({ x: 0, y: 4, w: 6, d: 0.6 }), 1);
+  const v = mid(fence({ x: 2, y: 0, w: 0.6, d: 6 }), 0);
+  if (Math.abs(h - 4.3) > 1e-6) return `clôture est-ouest centrée sur y = ${h}`;
+  return Math.abs(v - 2.3) < 1e-6 || `clôture nord-sud centrée sur x = ${v}`;
 });

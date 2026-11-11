@@ -248,19 +248,24 @@ export function buildProps(mesh, m) {
         const t = 0.09;
         const len = horizontal ? p.w : p.d;
         const posts = Math.max(2, Math.round(len / 1.6));
+        // Down the middle of its footprint, which is where the plan, the
+        // selection outline and the framing all see it. Drawn on one edge, it
+        // stood half its thickness off its own outline — and a depth change in
+        // the inspector moved the outline and not the fence.
+        const mx = p.x + p.w / 2, my = p.y + p.d / 2;
         for (let k = 0; k <= posts; k++) {
           const f = (len * k) / posts;
-          const cx = horizontal ? p.x + f : p.x;
-          const cy = horizontal ? p.y : p.y + f;
+          const cx = horizontal ? p.x + f : mx;
+          const cy = horizontal ? my : p.y + f;
           mesh.box([cx - t, cy - t, 0], [cx + t, cy + t, h], 'fence', 'fence', ['bottom'], anchor);
         }
         for (const zr of [0.45, 0.8]) {
           const z = h * zr;
           const tag = `fence:${p.id}:${zr}`;
           if (horizontal) {
-            segmentedBox(mesh, [p.x, p.y - t / 2, z - 0.06], [p.x + p.w, p.y + t / 2, z + 0.06], 'fence', tag, anchor);
+            segmentedBox(mesh, [p.x, my - t / 2, z - 0.06], [p.x + p.w, my + t / 2, z + 0.06], 'fence', tag, anchor);
           } else {
-            segmentedBox(mesh, [p.x - t / 2, p.y, z - 0.06], [p.x + t / 2, p.y + p.d, z + 0.06], 'fence', tag, anchor);
+            segmentedBox(mesh, [mx - t / 2, p.y, z - 0.06], [mx + t / 2, p.y + p.d, z + 0.06], 'fence', tag, anchor);
           }
         }
         break;
