@@ -36,7 +36,8 @@ enregistrés dans leur navigateur et des liens partagés en circulation.
 ## Organisation
 
 ```
-index.html, styles.css, guide.html   la page, ses styles, le guide utilisateur
+index.html, styles.css, guide.html   la page, ses styles, le guide utilisateur ;
+                   index.html porte aussi la garde de démarrage (voir plus bas)
 src/main.js        câblage : magasin, vues, barre d'outils, clavier, filet d'erreurs
 src/core/          le modèle et la géométrie, sans DOM
   model.js         format du projet, normalise (liste blanche, plafonds LIMITS),
@@ -65,7 +66,10 @@ Les tests sont des fichiers `tests/*.test.js` par domaine, chargés dans l'ordre
 par `tests/run.js` (la liste `FILES`). `tests/harness.js` fournit `check`,
 `checkAsync` et `uncaught` ; `tests/helpers.js` les aides partagées ;
 `tests/app-frame.js` charge l'application réelle dans une iframe, partagée par
-`page`, `app`, `reliability`, `smoke` et `plan-app`. Les tests du plan
+`page`, `app`, `reliability`, `smoke` et `plan-app`. `croisements` vérifie ce
+que le plan et le rendu se doivent (même action, même modèle) et ce que les
+transformations de corps doivent aux équipements ; `demarrage`, la garde de
+démarrage, devant une mise en ligne rejouée par le lanceur. Les tests du plan
 (`plan-view`, `plan-draw`, `plan-edit`) montent une `PlanView` dans le
 `#stage` (`stagePlan` de `plan-view.test.js`) et lui envoient de vrais
 événements de pointeur ; `fireOn` vise l'élément dessiné, comme le ferait un
@@ -89,6 +93,15 @@ Le lanceur cherche Chrome dans `CHROME`, puis `google-chrome`, `chromium`,
 échec, sur une suite qui ne se termine pas en trois minutes, et **sur toute
 exception non rattrapée ou erreur de console de la page**. Il signale les tests
 de plus de trois secondes. `dev/run-tests.sh` n'en est qu'un relais.
+
+Le lanceur rejoue aussi une mise en ligne pour `demarrage.test.js` : sous
+`/__boot/<scénario>-<n°>/`, il sert le dépôt avec dix minutes de cache, comme
+GitHub Pages, et un `roof.js` d'avant (`deploy` : périmé à la première
+requête seulement ; `stuck` : toujours ; `slow` : un `main.js` qui ne se dit
+pas prêt, garde réglée à 1,5 s ; `ok`). `/__boot-log/<…>` dit ce qui a été
+demandé, et comment. Les erreurs de ces pages-là sont voulues : le lanceur ne
+les compte pas. Servie par `python3 -m http.server`, la suite saute ces
+quatre tests (ils passent en le disant).
 
 La CI (`.github/workflows/tests.yml`) lance la même commande sur chaque push et
 chaque pull request.
@@ -127,9 +140,16 @@ de rendu voulu.
   `"i,j,côté"` d'une case du corps, `offset` = mètres depuis le début de
   l'arête, `z` = hauteur du centre au-dessus du plancher du niveau). Toute
   transformation qui réancre les ouvertures (`withCellSize`, et les
-  transformations de corps à venir) doit réancrer `fixtures` de la même
-  façon ; `fitOpening` les garde entiers sur leur pan, leur largeur venant
-  de `FIXTURE_DEFAULTS`. Supprimer un corps les supprime (`removeBuilding`),
+  transformations de corps) doit réancrer `fixtures` de la même
+  façon — c'est fait dans `bodies.js`, où un quart de tour échange aussi un
+  faîtage imposé (`roof.ridge` `ew` ↔ `ns`). `fitOpening` les garde entiers
+  sur leur pan, leur largeur (`wallSpan`) venant de `FIXTURE_DEFAULTS`.
+- Glisser une ouverture ou un équipement mural le long d'un même pan garde
+  son arête et fait croître `offset` (`offsetOnRun`), dans le plan comme dans
+  le rendu et aux flèches ; seul un changement de pan change l'arête. Ainsi
+  le même geste donne les mêmes valeurs dans les deux vues.
+- Un glisser de la sélection dans le rendu est un geste du magasin, comme
+  ceux du plan (`beginGesture`… ; Échap l'annule). Supprimer un corps les supprime (`removeBuilding`),
   le cadrage les garde avec leur corps (`focus.js`).
 - Les objets qui doivent être rangés exactement contre la coque (murs, toits)
   sont faits de boîtes qui ne s'interpénètrent pas, dans un groupe
@@ -193,5 +213,20 @@ de rendu voulu.
 - `tests/fixtures/model-v2.js` est le `model.js` du lot 1 figé : il vérifie
   qu'un fichier écrit aujourd'hui s'ouvre dans la version précédente. Ne pas
   le mettre à jour ; en figer un nouveau à la prochaine montée de version.
+- **Une mise en ligne peut servir des modules d'âges différents** : GitHub
+  Pages garde dix minutes de cache et les imports n'ont pas de version, si
+  bien qu'un `main.js` neuf peut recevoir un `roof.js` ancien ; l'import
+  échoue et `main.js`, son filet d'erreurs compris, ne démarre jamais. La
+  garde de démarrage d'`index.html` (script classique `#boot-guard`, hors du
+  graphe) le constate — erreur d'un module, ou pas de signal
+  `window.__bootReady()` (fin de `main.js`) dans `data-timeout`, 20 s —,
+  recharge tout le graphe d'imports avec `fetch(…, { cache: 'reload' })`
+  depuis le `<script type="module">`, plus les feuilles de style, puis relance
+  la page **une fois** (marque `ihb-boot-retry` en `sessionStorage`) ; ensuite
+  elle affiche un message qui propose de recharger. Elle ne touche jamais au
+  `localStorage`. Un module ajouté n'a rien à déclarer : elle suit les
+  `import`/`export … from` relatifs. Un import d'une autre forme (chemin
+  absolu, construit) lui échapperait. Un démarrage réussi pose
+  `data-boot="ready"` sur `<html>`.
 - Le fragment `#m=…` d'un lien de partage est retiré de l'adresse par
   `history.replaceState`, qui ne déclenche pas `hashchange`.
