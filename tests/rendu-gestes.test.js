@@ -178,7 +178,7 @@ check('roofAt ne répond pas pour ce qui n’est pas un toit', () => {
 /* ---------------- déplacer la sélection au glisser ---------------- */
 
 /** Press on a pick target, travel to another pixel, release. */
-function dragFrom(vp, target, from, to, id = 51) {
+export function dragFrom(vp, target, from, to, id = 51) {
   const r = vp.svg.getBoundingClientRect();
   const ev = (el, type, [x, y]) => el.dispatchEvent(new PointerEvent(type, {
     clientX: r.left + x, clientY: r.top + y, bubbles: true, pointerId: id, isPrimary: true, button: 0,
@@ -190,7 +190,7 @@ function dragFrom(vp, target, from, to, id = 51) {
 }
 
 /** The pick target of an item, and a pixel on it. */
-function targetOf(vp, id) {
+export function targetOf(vp, id) {
   const el = vp.root.querySelector(`.hit-layer [data-id="${id}"]`);
   if (!el) return null;
   const nums = el.getAttribute('d').match(/-?\d+(\.\d+)?/g).map(Number);

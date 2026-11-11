@@ -419,3 +419,216 @@ check('un objet de toit glissé ou poussé hors du toit dans le plan y reste, et
   nudgeSelection(s, 1, 0, true);
   return (s.model.roofItems[0].x === 9.5 && said.length === 2) || `poussée en ${s.model.roofItems[0].x}`;
 });
+
+/* ---------------- 3. même action, même résultat ---------------- */
+
+/** A plan and a render, side by side, on two copies of the same model. */
+const both = (m) => ({ p: stagePlan(m), r: stage(m) });
+
+check('poser chaque objet d’extérieur dans le plan ou dans le rendu donne le même objet', () => {
+  const out = [];
+  const kinds = Object.keys(PROP_DEFAULTS).filter((k) => !LINEAR_KINDS.has(k));
+  for (const kind of kinds) {
+    const { p, r } = both(house());
+    p.s.setTool(kind);
+    r.s.setTool(kind);
+    const at = [15.1, 3.1];
+    fire(p.view, ...at, 'pointerdown');
+    fire(p.view, ...at, 'pointerup');
+    const s = r.vp.lastRender.camera.toScreen([at[0], at[1], 0]);
+    clickAt(r.vp, s[0], s[1]);
+    const a = withoutIds(p.s.model.props), b = withoutIds(r.s.model.props);
+    if (canon(a) !== canon(b)) out.push(`${kind} : ${canon(a.at(-1))} contre ${canon(b.at(-1))}`);
+  }
+  return !out.length || out.join(' ; ');
+});
+
+/** The pick target of a wall in the render, by edge and level. */
+const wallTarget = (vp, edge, storey = 0) => [...vp.root.querySelectorAll('.hit-layer [data-pick="wall"]')]
+  .find((el) => el.dataset.edge === edge && el.dataset.storey === String(storey));
+
+check('poser un équipement mural dans le plan ou dans le rendu donne le même point du mur', () => {
+  const out = [];
+  for (const kind of Object.keys(FIXTURE_DEFAULTS)) {
+    const { p, r } = both(house());
+    p.s.setTool(kind);
+    r.s.setTool(kind);
+    fire(p.view, 5.3, 7, 'pointerdown');
+    fire(p.view, 5.3, 7, 'pointerup');
+    const wall = wallTarget(r.vp, '5,6,N');
+    if (!wall) return 'mur nord introuvable dans le rendu';
+    const s = r.vp.lastRender.camera.toScreen([5.3, 7, 1.6]);
+    clickAt(r.vp, s[0], s[1], { target: wall });
+    const [a] = p.s.model.fixtures, [b] = r.s.model.fixtures;
+    if (!a || !b) { out.push(`${kind} : rien posé`); continue; }
+    // The plan has no height to offer: it takes the kind's own. The render
+    // takes the height clicked. Everything else is the same.
+    if (canon({ ...a, id: 0, z: 0 }) !== canon({ ...b, id: 0, z: 0 })) out.push(`${kind} : ${canon(a)} contre ${canon(b)}`);
+    if (a.z !== FIXTURE_DEFAULTS[kind].z || !near(b.z, 1.6, 0.051)) out.push(`${kind} : hauteurs ${a.z} et ${b.z}`);
+  }
+  return !out.length || out.join(' ; ');
+});
+
+check('poser un objet de toit dans le plan ou sur le versant donne le même objet ; hors toit, refusé des deux côtés', () => {
+  const out = [];
+  for (const kind of Object.keys(ROOF_ITEM_DEFAULTS)) {
+    const { p, r } = both(house());
+    p.s.setTool(kind);
+    r.s.setTool(kind);
+    const v = visible(r.vp, 'roof');
+    if (!v) return 'aucun versant visible';
+    clickAt(r.vp, v.screen[0], v.screen[1]);
+    const b = r.s.model.roofItems[0];
+    if (!b) { out.push(`${kind} : rien posé dans le rendu`); continue; }
+    fire(p.view, b.x, b.y, 'pointerdown');
+    fire(p.view, b.x, b.y, 'pointerup');
+    const a = p.s.model.roofItems[0];
+    if (canon(withoutIds([a])) !== canon(withoutIds([b]))) out.push(`${kind} : ${canon(a)} contre ${canon(b)}`);
+  }
+  const { p, r } = both(house());
+  const said = [];
+  p.s.onNotice = (x) => said.push(`plan : ${x}`);
+  r.s.onNotice = (x) => said.push(`rendu : ${x}`);
+  p.s.setTool('solar');
+  r.s.setTool('solar');
+  fire(p.view, 15, 3, 'pointerdown');
+  fire(p.view, 15, 3, 'pointerup');
+  const s = r.vp.lastRender.camera.toScreen([15, 3, 0]);
+  clickAt(r.vp, s[0], s[1]);
+  if (p.s.model.roofItems.length || r.s.model.roofItems.length) out.push('un objet de toit posé sur la pelouse');
+  if (said.length !== 2 || said[0].slice(7) !== said[1].slice(8)) out.push(`messages : ${said.join(' | ')}`);
+  return !out.length || out.join(' ; ');
+});
+
+check('déplacer un objet au sol ou un équipement mural donne les mêmes valeurs dans le plan et dans le rendu', () => {
+  const out = [];
+  // On the ground: the heat pump two metres east and one south.
+  {
+    const { p, r } = both(equippedHouse());
+    p.s.setTool('select');
+    fireOn(p.view, '.plan-props [data-id="pac"]', 4.5, 7.25, 'pointerdown');
+    fire(p.view, 6.5, 6.25, 'pointermove', { altKey: true });
+    fire(p.view, 6.5, 6.25, 'pointerup', { altKey: true });
+    r.s.select({ type: 'prop', id: 'pac' });
+    r.vp.render();
+    const t = targetOf(r.vp, 'pac');
+    const cam = r.vp.lastRender.camera;
+    const a = cam.toScreen([4.5, 7.25, 0]), b = cam.toScreen([6.5, 6.25, 0]);
+    dragFrom(r.vp, t.el, t.at, [t.at[0] + b[0] - a[0], t.at[1] + b[1] - a[1]]);
+    const [x, y] = [p.s.model, r.s.model].map((m) => m.props.find((q) => q.id === 'pac'));
+    if (canon(x) !== canon(y)) out.push(`pompe à chaleur : ${canon(x)} contre ${canon(y)}`);
+  }
+  // On a wall: the wall light of the east wall a metre further along it.
+  {
+    const { p, r } = both(equippedHouse());
+    p.s.setTool('select');
+    // ap2 hangs on 9,6,E, 0,5 m along: at (10, 6.5).
+    fireOn(p.view, 'circle.fixture[data-id="ap2"]', 10, 6.5, 'pointerdown');
+    fire(p.view, 10, 6, 'pointermove');
+    fire(p.view, 10, 5.5, 'pointermove');
+    fire(p.view, 10, 5.5, 'pointerup');
+    r.s.select({ type: 'fixture', id: 'ap2' });
+    r.s.setCamera({ yaw: 300 });
+    r.vp.render();
+    const t = targetOf(r.vp, 'ap2');
+    if (!t) return 'applique sans cible dans le rendu';
+    const cam = r.vp.lastRender.camera;
+    const a = cam.toScreen([10, 6.5, 2]), b = cam.toScreen([10, 5.5, 2]);
+    dragFrom(r.vp, t.el, t.at, [t.at[0] + b[0] - a[0], t.at[1] + b[1] - a[1]]);
+    const [x, y] = [p.s.model, r.s.model].map((m) => m.fixtures.find((q) => q.id === 'ap2'));
+    if (canon(x) !== canon(y)) out.push(`applique : ${canon(x)} contre ${canon(y)}`);
+  }
+  return !out.length || out.join(' ; ');
+});
+
+check('sélectionner dans le plan ou dans le rendu, puis dupliquer ou supprimer, donne le même modèle', () => {
+  const m = equippedHouse({
+    openings: [{ id: 'fen', edge: '3,0,S', kind: 'window', storey: 0, offset: 0.5, width: 1, height: 1.2, sill: 0.9 }],
+    roofItems: [{ id: 'ch', kind: 'chimney', x: 3, y: 3.5, w: 0.8, d: 0.6, h: 1.1 }],
+  });
+  const out = [];
+  for (const [type, id] of [['prop', 'pac'], ['prop', 'cp'], ['fixture', 'ap2'], ['opening', 'fen'], ['roofItem', 'ch']]) {
+    const { p, r } = both(m);
+    p.s.setTool('select');
+    const sel = p.view.svg.querySelector(`[data-id="${id}"]`);
+    if (!sel) { out.push(`${id} absent du plan`); continue; }
+    sel.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, button: 0, isPrimary: true }));
+    sel.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, button: 0, isPrimary: true }));
+    // From whichever side of the house shows it.
+    let picked = false;
+    for (const yaw of [0, 90, 180, 270]) {
+      r.s.setCamera({ yaw });
+      r.vp.render();
+      const v = visible(r.vp, `equip:${id}`) || visible(r.vp, `prop:${id}`)
+        || (type === 'opening' || type === 'roofItem' ? targetOf(r.vp, id) && { screen: targetOf(r.vp, id).at } : null);
+      const el = r.vp.root.querySelector(`.hit-layer [data-id="${id}"]`);
+      if (!v || (!el && type !== 'roofItem')) continue;
+      clickAt(r.vp, v.screen[0], v.screen[1], el ? { target: el } : {});
+      if (r.s.selection?.id === id) { picked = true; break; }
+    }
+    if (!picked) { out.push(`${id} non sélectionnable dans le rendu`); continue; }
+    if (canon(p.s.selection) !== canon(r.s.selection)) { out.push(`${id} : ${canon(p.s.selection)} contre ${canon(r.s.selection)}`); continue; }
+    for (const st of [p.s, r.s]) st.duplicateSelected();
+    const strip = (mm) => canon({ ...mm, camera: null, [`${type}s`]: null, openings: withoutIds(mm.openings), fixtures: withoutIds(mm.fixtures), roofItems: withoutIds(mm.roofItems), props: withoutIds(mm.props) });
+    if (strip(p.s.model) !== strip(r.s.model)) out.push(`${id} : copies différentes`);
+    for (const st of [p.s, r.s]) st.deleteSelected();
+    if (strip(p.s.model) !== strip(r.s.model) || strip(p.s.model) !== strip(normalise(m))) out.push(`${id} : suppressions différentes`);
+  }
+  return !out.length || out.join(' ; ');
+});
+
+check('dans le rendu, glisser la sélection fait une seule étape même après une pause, et Échap l’annule', () => {
+  const { s, vp } = stage(equippedHouse());
+  s.select({ type: 'prop', id: 'lamp' });
+  vp.render();
+  const t = targetOf(vp, 'lamp');
+  const cam = vp.lastRender.camera;
+  const step = (k) => {
+    const a = cam.toScreen([6, 8.5, 0]), b = cam.toScreen([6 + k, 8.5, 0]);
+    return [t.at[0] + b[0] - a[0], t.at[1] + b[1] - a[1]];
+  };
+  const r = vp.svg.getBoundingClientRect();
+  const ev = (el, type, [x, y]) => el.dispatchEvent(new PointerEvent(type, {
+    clientX: r.left + x, clientY: r.top + y, bubbles: true, pointerId: 81, isPrimary: true, button: 0,
+  }));
+  const before = s.model;
+  const now = Date.now;
+  let clock = now();
+  Date.now = () => clock;
+  try {
+    ev(t.el, 'pointerdown', t.at);
+    ev(vp.root, 'pointermove', step(1));
+    clock += 2000; // the hand pauses for two seconds, then goes on
+    ev(vp.root, 'pointermove', step(2));
+    ev(vp.root, 'pointerup', step(2));
+  } finally {
+    Date.now = now;
+  }
+  if (s.model.props.find((x) => x.id === 'lamp').x !== 8) return `lampadaire en ${s.model.props.find((x) => x.id === 'lamp').x}`;
+  s.undo();
+  if (canon(s.model) !== canon(before)) return 'la pause a coupé le geste en deux étapes';
+  s.redo();
+  const moved = s.model;
+  vp.render();
+  const t2 = targetOf(vp, 'lamp');
+  ev(t2.el, 'pointerdown', t2.at);
+  ev(vp.root, 'pointermove', [t2.at[0] + 40, t2.at[1]]);
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  ev(vp.root, 'pointermove', [t2.at[0] + 80, t2.at[1]]);
+  ev(vp.root, 'pointerup', [t2.at[0] + 80, t2.at[1]]);
+  if (canon(s.model) !== canon(moved)) return 'Échap n’a pas rendu le lampadaire à sa place';
+  return (s.selection?.id === 'lamp' && s.past.length === 1) || 'Échap a désélectionné ou laissé une étape';
+});
+
+check('la trame d’un plan à 0,50 m garde les mêmes règles pour les équipements', () => {
+  // A fixture is placed, slid and nudged on a half-metre grid as on a metre one.
+  const m = normalise({ ...equippedHouse({ fixtures: [] }), grid: { cellSize: 0.5 } });
+  const { s, view } = stagePlan(m);
+  if (cellSizeOf(s.model) !== 0.5) return 'trame non prise';
+  s.setTool('camera');
+  fire(view, 2.2, -0.2, 'pointerdown');
+  fire(view, 2.2, -0.2, 'pointerup');
+  const f = s.model.fixtures[0];
+  if (!f || f.edge !== '4,0,S' || !near(f.offset, 0.2)) return `posée : ${JSON.stringify(f)}`;
+  return true;
+});

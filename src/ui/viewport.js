@@ -16,7 +16,7 @@ import { rotateDir, project, clampPitch, clampRoll, normaliseYaw } from '../core
 import { focusModel } from '../core/focus.js';
 import {
   OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS, FIXTURE_DEFAULTS,
-  placeOpening, placeProp, placeRoofItem, placeFixture,
+  placeOpening, placeProp, placeRoofItem, placeFixture, OFF_ROOF,
 } from './actions.js';
 
 /** Degrees of orbit per pixel dragged. */
@@ -196,6 +196,19 @@ export class Viewport {
   bindEvents() {
     const s = this.store;
 
+    // Échap takes back a drag of the selection, as it does in the plan: the
+    // item returns where it was, still selected, and the history is as before.
+    window.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape' || this.drag?.mode !== 'move') return;
+      this.store.cancelGesture();
+      this.frozen = null;
+      this.root.classList.remove('moving');
+      this.drag = { mode: 'cancelled' };
+      this.render();
+      ev.preventDefault();
+      ev.stopPropagation();
+    }, true);
+
     this.root.addEventListener('pointerdown', (ev) => {
       // As in the plan: the main button acts, the middle one pans, and the
       // others are left to the browser.
@@ -286,6 +299,7 @@ export class Viewport {
         camera: { ...s.model.camera },
         pick: target,
         moved: false,
+        button: ev.button,
       };
       // Capture is a convenience, not a requirement: a pointer the browser
       // did not issue — a synthetic one, or a pen some drivers report late —
@@ -296,6 +310,7 @@ export class Viewport {
     this.root.addEventListener('pointermove', (ev) => {
       if (this.pointers.has(ev.pointerId)) this.pointers.set(ev.pointerId, [ev.clientX, ev.clientY]);
       if (this.pinch && this.pointers.size >= 2) { this.movePinch(); return; }
+      if (this.drag?.mode === 'cancelled') return;
       if (!this.drag) {
         // The cursor says what a press would do: take hold of the selection,
         // or turn the view.
@@ -347,10 +362,11 @@ export class Viewport {
         this.pointers.delete(ev.pointerId);
         if (this.pointers.size < 2) this.pinch = null;
       }
+      if (this.drag?.mode === 'cancelled') { this.drag = null; return; }
       if (this.drag?.mode === 'move') {
-        // One gesture, one step of the history; and the camera fits the
-        // drawing again now that nothing is held under the pointer.
-        this.store.commit();
+        // One gesture, one step of the history, however long it lasted; and
+        // the camera fits the drawing again now that nothing is held.
+        this.store.endGesture();
         this.frozen = null;
         this.root.classList.remove('moving');
         this.drag = null;
@@ -358,7 +374,9 @@ export class Viewport {
         return;
       }
       if (this.drag && !this.drag.moved) {
-        // It was a click after all.
+        // It was a click after all. With a roof tool, a click off every roof
+        // places nothing, and says so — as the plan does.
+        if (ROOF_ITEM_DEFAULTS[this.store.tool] && this.drag.button === 0) this.store.notify(OFF_ROOF);
         const sel = this.drag.pick;
         if (sel?.type === 'building') this.store.setActiveBuilding(sel.id);
         this.store.select(sel);
@@ -438,8 +456,9 @@ export class Viewport {
       this.drag.grab = this.wallPoint(origin.edge, origin.storey || 0, sx, sy);
     }
     this.frozen = { scale: cam.scale, offset: [...cam.offset] };
-    // A fresh history entry, even straight after another drag.
-    this.store.commit();
+    // One history entry for the whole drag, as a gesture of the plan: a
+    // coalescing run broke in two when the hand paused for a second.
+    this.store.beginGesture();
     this.root.classList.add('moving');
     try { this.root.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
   }
@@ -468,14 +487,14 @@ export class Viewport {
       const g0 = screenToGround(cam, d.start[0], d.start[1]);
       const g = screenToGround(cam, sx, sy);
       const x = snap(o.x + g[0] - g0[0]), y = snap(o.y + g[1] - g0[1]);
-      s.patchSelected((it) => (it.x === x && it.y === y ? {} : { x, y }), 'drag');
+      s.patchSelected((it) => (it.x === x && it.y === y ? {} : { x, y }));
     } else if (d.pick.type === 'opening') {
       const at = this.wallPoint(o.edge, o.storey || 0, sx, sy);
       if (!at || !d.grab) return;
       const offset = Math.round((o.offset + at.s - d.grab.s) * 20) / 20;
       // Along its own run of wall, never past its corners — as the plan and
       // the inspector already keep it.
-      s.patchSelected((it, m) => fitOpening(m, { ...it, offset }), 'drag');
+      s.patchSelected((it, m) => fitOpening(m, { ...it, offset }));
     } else if (d.pick.type === 'fixture') {
       // Along its wall and up it: a fixture has a height of its own.
       const at = this.wallPoint(o.edge, o.storey || 0, sx, sy);
@@ -483,14 +502,14 @@ export class Viewport {
       const offset = Math.round((o.offset + at.s - d.grab.s) * 20) / 20;
       const [lo, hi] = fixtureZRange(storeyHeightOf(at.host, o.storey || 0));
       const z = Math.max(lo, Math.min(hi, Math.round((o.z + at.h - d.grab.h) * 20) / 20));
-      s.patchSelected((it, m) => fitOpening(m, { ...it, offset, z }), 'drag');
+      s.patchSelected((it, m) => fitOpening(m, { ...it, offset, z }));
     } else if (d.pick.type === 'roofItem') {
       if (!d.part || !d.grab) return;
       const p = rayOnRoof(cam, sx, sy, d.part);
       if (!p) return;
       const spot = snapOntoBuilding(d.part.building, cellSizeOf(s.model),
         o.x + p[0] - d.grab[0], o.y + p[1] - d.grab[1]);
-      if (spot) s.patchSelected({ x: spot[0], y: spot[1] }, 'drag');
+      if (spot) s.patchSelected({ x: spot[0], y: spot[1] });
     }
   }
 
