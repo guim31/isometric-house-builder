@@ -1,6 +1,7 @@
 /** Scène et rendu. */
 
-import { check } from './harness.js';
+import { check, checkAsync } from './harness.js';
+import { referenceRenders } from './reference.js';
 import { B } from './helpers.js';
 import { rectCells } from '../src/core/grid.js';
 import { defaultModel, emptyModel, normalise, wallTop } from '../src/core/model.js';
@@ -80,4 +81,15 @@ check('le fond transparent n’ajoute aucun rectangle de fond', () => {
   const m = normalise(defaultModel());
   const opaque = normalise({ ...m, style: { ...m.style, background: '#ffffff' } });
   return !svgFor(m, SIZES[0]).includes('<rect') && svgFor(opaque, SIZES[0]).includes('<rect');
+});
+
+await checkAsync('les dix modèles et l’exemple rendent exactement le SVG de référence', async () => {
+  // Fingerprints written by dev/reference-svg.html. A change of rendering that
+  // is meant regenerates them, and says so; any other difference is a fault.
+  const want = await (await fetch('fixtures/reference-svg.json')).json();
+  const got = await referenceRenders('..');
+  const keys = Object.keys(want);
+  if (keys.length < 33) return `${keys.length} empreintes de référence`;
+  const off = keys.filter((k) => got[k] !== want[k]);
+  return !off.length || `rendu différent : ${off.join(', ')}`;
 });
