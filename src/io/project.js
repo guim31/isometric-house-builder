@@ -80,6 +80,11 @@ export function fromShareUrl() {
   }
 }
 
+/** Take a share link off the address, so a reload keeps the edits made since. */
+export function clearShareHash() {
+  try { history.replaceState(null, '', location.pathname + location.search); } catch { /* sandboxed */ }
+}
+
 /**
  * The model to open with, and where it came from.
  *
@@ -90,8 +95,10 @@ export function fromShareUrl() {
 export function initialModel() {
   const shared = fromShareUrl();
   if (shared) {
-    try { history.replaceState(null, '', location.pathname + location.search); } catch { /* sandboxed */ }
-    return { model: shared, source: 'link' };
+    clearShareHash();
+    // The project that was open is handed back too: opening a link must be
+    // undoable, and the caller makes it the history entry before the link.
+    return { model: shared, source: 'link', previous: loadLocal() };
   }
   const saved = loadLocal();
   if (saved) return { model: saved, source: 'local' };

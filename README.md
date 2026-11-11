@@ -251,8 +251,11 @@ fichier `.house.json` lisible et versionnable, qu'*Ouvrir* relit ; c'est aussi
 le format des dix modèles de départ, décrits dans
 [`src/data/presets.js`](src/data/presets.js). *Partager* copie un lien qui
 encode tout le projet dans l'URL — rien ne transite par un serveur. Ouvrir un
-tel lien remplace le projet en cours ; il est ensuite retiré de la barre
-d'adresse, pour qu'un rechargement garde les retouches faites depuis.
+tel lien — au démarrage, ou collé dans la barre d'adresse de l'application déjà
+ouverte — remplace le projet en cours, mais **s'annule** : le projet précédent
+devient l'étape d'avant dans l'historique, et *Annuler* le ramène. Le lien est
+ensuite retiré de la barre d'adresse, pour qu'un rechargement garde les
+retouches faites depuis.
 
 ## Une image qui se pose, pas qui recouvre
 

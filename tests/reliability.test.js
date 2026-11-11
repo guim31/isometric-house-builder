@@ -9,6 +9,7 @@ import { rectCells } from '../src/core/grid.js';
 import { Store } from '../src/ui/store.js';
 import { PlanView } from '../src/ui/plan.js';
 import { pointer, stageViewport } from './helpers.js';
+import { toShareUrl, saveLocal, clearLocal, initialModel } from '../src/io/project.js';
 
 /* ---------------- B1: palettes ---------------- */
 
@@ -207,4 +208,41 @@ check('après annuler, la modification suivante ne fusionne pas avec une entrée
   s.update((m) => ({ ...m, name: 'ab' }), { coalesce: 'name' });
   s.undo();
   return s.model.name === 'a' || `annuler ramène « ${s.model.name} »`;
+});
+
+/* ---------------- B4: share links ---------------- */
+
+const hashOf = (model) => toShareUrl(model).slice(toShareUrl(model).indexOf('#'));
+
+check('un lien ouvert au démarrage garde le projet local pour l’annulation', () => {
+  const local = normalise({ ...defaultModel(), name: 'Projet local' });
+  saveLocal(local);
+  const shared = normalise({ ...defaultModel(), name: 'Projet partagé' });
+  const before = location.href;
+  history.replaceState(null, '', hashOf(shared));
+  let boot;
+  try {
+    boot = initialModel();
+  } finally {
+    clearLocal();
+    history.replaceState(null, '', before.replace(/#.*$/, ''));
+  }
+  if (boot.source !== 'link' || boot.model.name !== 'Projet partagé') return `source ${boot.source}`;
+  return boot.previous?.name === 'Projet local' || 'projet local perdu';
+});
+
+await checkAsync('un lien collé dans l’appli ouverte se charge, quitte l’adresse et s’annule', async () => {
+  const frame = await app();
+  const win = frame.contentWindow;
+  const store = await appStore();
+  const mine = store.model.name;
+  const shared = normalise({ ...defaultModel(), name: 'Maison du lien' });
+  const changed = new Promise((r) => win.addEventListener('hashchange', () => setTimeout(r, 0), { once: true }));
+  win.location.hash = hashOf(shared).slice(1);
+  await changed;
+  if (store.model.name !== 'Maison du lien') return `projet ouvert : ${store.model.name}`;
+  if (win.location.hash) return `le lien reste dans l’adresse : ${win.location.hash.slice(0, 20)}…`;
+  if (!/Annuler/.test(frame.contentDocument.getElementById('toast').textContent)) return 'aucun message';
+  frame.contentDocument.getElementById('btn-undo').click();
+  return store.model.name === mine || `annuler ramène « ${store.model.name} »`;
 });

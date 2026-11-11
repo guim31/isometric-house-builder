@@ -6,7 +6,9 @@ import { Store } from './ui/store.js';
 import { PlanView } from './ui/plan.js';
 import { Viewport } from './ui/viewport.js';
 import { Inspector } from './ui/panels.js';
-import { initialModel, exportProject, importProject, clearLocal, toShareUrl } from './io/project.js';
+import {
+  initialModel, exportProject, importProject, clearLocal, toShareUrl, fromShareUrl, clearShareHash,
+} from './io/project.js';
 import { Gallery } from './ui/gallery.js';
 import { emptyModel } from './core/model.js';
 import { SIZES, exportPng, exportSvg, exportFourViews, exportSavedViews, copyPngToClipboard } from './io/export.js';
@@ -107,7 +109,10 @@ window.addEventListener('error', (ev) => reportError(ev.message || ev.error?.mes
 window.addEventListener('unhandledrejection', (ev) => reportError(ev.reason?.message || String(ev.reason)));
 
 const boot = initialModel();
-const store = new Store(boot.model);
+// A link opened over a project already here does not erase it: that project
+// becomes the history entry before the link, and « Annuler » brings it back.
+const store = new Store(boot.source === 'link' && boot.previous ? boot.previous : boot.model);
+if (boot.source === 'link' && boot.previous) store.update(boot.model);
 store.onSaveError = () => toast('Sauvegarde automatique impossible dans ce navigateur : pensez à « Enregistrer »');
 const plan = new PlanView($('plan'), store);
 const viewport = new Viewport($('iso'), store);
@@ -116,13 +121,31 @@ const inspector = new Inspector($('inspector'), store, {
 });
 
 let toastTimer = null;
-function toast(message) {
+function toast(message, duration = 2600) {
   const t = $('toast');
   t.textContent = message;
+  t.classList.remove('error');
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  toastTimer = setTimeout(() => t.classList.remove('show'), duration);
 }
+
+const LINK_OPENED = 'Projet du lien ouvert — Annuler pour retrouver le vôtre';
+
+/*
+ * A link pasted into the address bar of a page already open changes only the
+ * fragment: no reload, so nothing happened at all, and the fragment stayed —
+ * the next reload then opened the link over everything done since.
+ */
+window.addEventListener('hashchange', () => {
+  const shared = fromShareUrl();
+  if (!shared) return;
+  clearShareHash();
+  store.update(shared);
+  store.select(null);
+  viewport.resetView();
+  toast(LINK_OPENED, 6000);
+});
 
 /* ---------- tool palette ---------- */
 
@@ -526,6 +549,8 @@ window.__app = { store, viewport, plan };
 // guess what the tool is for — over the first preset, which beats an empty
 // grid behind it. Returning visitors get their project straight back, even an
 // empty one: a page left blank on purpose is still their page.
+if (boot.source === 'link') toast(boot.previous ? LINK_OPENED : 'Projet du lien ouvert', 6000);
+
 if (boot.source === 'default') {
   requestAnimationFrame(() => gallery.open());
 }
