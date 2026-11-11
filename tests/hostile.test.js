@@ -1,7 +1,11 @@
 /** Fichiers hostiles ou cassés : ni exception, ni balisage, ni gel. */
 
 import { check } from './harness.js';
-import { normalise, defaultModel } from '../src/core/model.js';
+import { normalise, defaultModel, LIMITS } from '../src/core/model.js';
+import { Store } from '../src/ui/store.js';
+import { PlanView } from '../src/ui/plan.js';
+import { placeProp } from '../src/ui/actions.js';
+import { pointer } from './helpers.js';
 import { renderScene } from '../src/render/svg.js';
 import { hitLayer } from '../src/render/hit.js';
 import { buildMesh } from '../src/core/scene.js';
@@ -188,4 +192,32 @@ check('une valeur inattendue à n’importe quel champ ne casse rien', () => {
   if (failures.length) return failures.join(' ; ');
   const ms = performance.now() - t0;
   return ms < 15000 || `${paths.length} champs en ${Math.round(ms)} ms`;
+});
+
+check('le plan applique les mêmes plafonds en dessinant, avec un message', () => {
+  const s = new Store(normalise({ buildings: [{ id: 'b', cells: ['0,0'] }] }));
+  const told = [];
+  s.onLimit = (msg) => told.push(msg);
+  const view = new PlanView(document.getElementById('plan'), s);
+  view.render();
+  s.setTool('rect');
+  // A rectangle wider than a building may be.
+  view.svg.dispatchEvent(pointer(view, 0.5, 0.5, 'pointerdown'));
+  view.svg.dispatchEvent(pointer(view, LIMITS.extent + 10.5, 4.5, 'pointermove'));
+  view.svg.dispatchEvent(pointer(view, LIMITS.extent + 10.5, 4.5, 'pointerup'));
+  view.svg.remove();
+  if (s.model.buildings[0].cells.length !== 1) return `${s.model.buildings[0].cells.length} cases acceptées`;
+  if (!told.length || !/Limite atteinte/.test(told[0])) return 'aucun message';
+  // And the list ceilings, whichever tool adds to them.
+  const t = new Store(normalise({ props: Array.from({ length: LIMITS.props }, (_, k) => ({ kind: 'bush', x: k, y: 0 })) }));
+  t.onLimit = (msg) => told.push(msg);
+  placeProp(t, 'tree', [1, 1]);
+  return t.model.props.length === LIMITS.props || `${t.model.props.length} objets`;
+});
+
+check('un projet à son plafond reste modifiable', () => {
+  const s = new Store(normalise({ props: Array.from({ length: LIMITS.props }, (_, k) => ({ id: `p${k}`, kind: 'bush', x: k, y: 0 })) }));
+  s.select({ type: 'prop', id: 'p3' });
+  s.patchSelected({ x: 40 });
+  return s.model.props[3].x === 40 || 'déplacement refusé';
 });

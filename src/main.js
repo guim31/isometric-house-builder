@@ -113,6 +113,7 @@ const boot = initialModel();
 // becomes the history entry before the link, and « Annuler » brings it back.
 const store = new Store(boot.source === 'link' && boot.previous ? boot.previous : boot.model);
 if (boot.source === 'link' && boot.previous) store.update(boot.model);
+store.onLimit = (message) => toast(message, 4000);
 store.onSaveError = () => toast('Sauvegarde automatique impossible dans ce navigateur : pensez à « Enregistrer »');
 const plan = new PlanView($('plan'), store);
 const viewport = new Viewport($('iso'), store);

@@ -243,7 +243,7 @@ check('pivoter ne reconstruit pas le maillage', () => {
   // But moving a wall must.
   s.update((m) => ({
     ...m,
-    buildings: m.buildings.map((b, i) => (i ? b : { ...b, cells: [...b.cells, '99,99'] })),
+    buildings: m.buildings.map((b, i) => (i ? b : { ...b, cells: b.cells.slice(1) })),
   }));
   vp.render();
   return vp.cache.built !== built || 'le maillage n’a pas suivi la modification';

@@ -391,6 +391,49 @@ export function normalise(input) {
   return cellSize === 0.25 ? withCellSize(m, 0.5) : m;
 }
 
+/**
+ * The first ceiling a model goes past, as a sentence for the user — or null.
+ *
+ * normalise cuts a file down to the ceilings; the interface refuses the edit
+ * that would cross one instead, and says which, rather than accepting a
+ * stroke that the next reload would quietly take back.
+ */
+export function limitBreach(m) {
+  const cs = cellSizeOf(m);
+  const n = (v) => v.toLocaleString('fr-FR');
+  if (m.buildings.length > LIMITS.buildings) return `${LIMITS.buildings} corps de bâtiment au plus`;
+  let total = 0, edges = 0;
+  for (const b of m.buildings) {
+    if (b.cells.length > LIMITS.cells) return `${n(LIMITS.cells)} cases par corps au plus`;
+    total += b.cells.length;
+    if (b.cells.length) {
+      let i0 = Infinity, j0 = Infinity, i1 = -Infinity, j1 = -Infinity;
+      for (const c of b.cells) {
+        const [i, j] = c.split(',').map(Number);
+        i0 = Math.min(i0, i); j0 = Math.min(j0, j); i1 = Math.max(i1, i); j1 = Math.max(j1, j);
+        if (Math.abs(i) * cs > LIMITS.coord || Math.abs(j) * cs > LIMITS.coord) return `pas au-delà de ${LIMITS.coord} m de l’origine`;
+      }
+      if ((i1 - i0 + 1) * cs > LIMITS.extent || (j1 - j0 + 1) * cs > LIMITS.extent) {
+        return `${LIMITS.extent} m de côté au plus pour un corps`;
+      }
+    }
+    edges += outlineLength(b.cells);
+  }
+  if (total > LIMITS.totalCells) return `${n(LIMITS.totalCells)} cases en tout au plus`;
+  if (edges > LIMITS.edges) return 'contour des bâtiments trop découpé';
+  if (m.openings.length > LIMITS.openings) return `${LIMITS.openings} ouvertures au plus`;
+  if (m.roofItems.length > LIMITS.roofItems) return `${LIMITS.roofItems} objets de toit au plus`;
+  if (m.props.length > LIMITS.props) return `${LIMITS.props} objets extérieurs au plus`;
+  if (m.views.length > LIMITS.views) return `${LIMITS.views} vues enregistrées au plus`;
+  let run = 0;
+  for (const p of m.props) {
+    if (['hedge', 'fence', 'muret', 'gate'].includes(p.kind)) run += Math.max(p.w ?? 0, p.d ?? 0) * (p.kind === 'gate' ? 5 : 1);
+    if (Math.abs(p.x) > LIMITS.coord || Math.abs(p.y) > LIMITS.coord) return `pas au-delà de ${LIMITS.coord} m de l’origine`;
+  }
+  if (run > LIMITS.runLength) return `${LIMITS.runLength} m de haies, clôtures et murets au plus`;
+  return null;
+}
+
 /** Number of exterior wall edges of a set of cells. */
 function outlineLength(cells) {
   const set = new Set(cells);

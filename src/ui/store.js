@@ -6,7 +6,7 @@
  * references.
  */
 
-import { normalise, newId, makeBuilding, fitOpening } from '../core/model.js';
+import { normalise, newId, makeBuilding, fitOpening, limitBreach } from '../core/model.js';
 import { saveLocal } from '../io/project.js';
 
 const HISTORY_LIMIT = 80;
@@ -27,6 +27,7 @@ export class Store {
     this.activeId = null;
     this.saveFailed = false;
     this.onSaveError = null;
+    this.onLimit = null;
   }
 
   subscribe(fn) {
@@ -69,6 +70,19 @@ export class Store {
   update(fn, { coalesce = null, silent = false } = {}) {
     const next = typeof fn === 'function' ? fn(this.model) : fn;
     if (!next || next === this.model) return;
+    // The ceilings a file is cut down to on opening apply to editing too: the
+    // edit that would cross one is refused, and said, rather than accepted
+    // and silently taken back at the next reload.
+    const grows = next.buildings !== this.model.buildings || next.props !== this.model.props
+      || next.openings !== this.model.openings || next.roofItems !== this.model.roofItems
+      || next.views !== this.model.views;
+    if (!silent && grows) {
+      const breach = limitBreach(next);
+      if (breach && !limitBreach(this.model)) {
+        this.onLimit?.(`Limite atteinte : ${breach}`);
+        return;
+      }
+    }
     if (!silent) {
       const now = Date.now();
       const last = this.past[this.past.length - 1];
