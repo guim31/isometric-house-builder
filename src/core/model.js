@@ -346,6 +346,31 @@ function normaliseViews(input) {
   }));
 }
 
+/**
+ * Switch palettes, along with the look the palette is drawn for.
+ *
+ * Horizons without outlines or a plinth, the brick palette with both: a
+ * palette is a style as much as a set of colours, and switching only the
+ * colours gave a Horizons house with black outlines. The plinth now lives on
+ * each building, so it is set on all of them. The user's own recolourings —
+ * project-wide or per building — and a building's own materials are left as
+ * they are: those are choices, not part of a palette.
+ */
+export function withTheme(m, name) {
+  const theme = THEMES[name];
+  if (!theme) return m;
+  const preset = theme.style || {};
+  const next = { ...m, theme: name };
+  const style = { ...m.style };
+  for (const k of ['outline', 'shadow', 'windowBars']) if (preset[k] !== undefined) style[k] = preset[k];
+  next.style = style;
+  if (preset.texture) next.texture = { ...m.texture, ...preset.texture };
+  if (Number.isFinite(preset.plinth)) {
+    next.buildings = m.buildings.map((b) => ({ ...b, plinth: preset.plinth }));
+  }
+  return next;
+}
+
 /** Every cell of every building, for framing and for the ground. */
 export function allCells(m) {
   const out = new Set();

@@ -8,7 +8,7 @@ import {
 } from '../core/iso.js';
 import { ROOF_TYPES, STEP } from '../core/roof.js';
 import {
-  withCellSize, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
+  withCellSize, withTheme, cellSizeOf, fmtMetres, cellSet, buildingOfEdge,
   storeyHeightOf, DEFAULT_FOCUS, newId, CELL_SIZES, STOREY_HEIGHT_RANGE, stairsSteps,
 } from '../core/model.js';
 import { bounds, edgeRunExtent } from '../core/grid.js';
@@ -489,7 +489,7 @@ export class Inspector {
     });
     s.append(
       field('Palette', select(m.theme, Object.entries(THEMES).map(([k, v]) => [k, v.label]),
-        (v) => this.applyTheme(v)), 'certaines palettes règlent aussi contours et matières'),
+        (v) => this.store.update((mm) => withTheme(mm, v))), 'certaines palettes règlent aussi contours et matières'),
       field('Contours', toggle(m.style.outline, (v) => this.setIn('style', { outline: v }))),
       field('Ombre portée', toggle(m.style.shadow, (v) => this.setIn('style', { shadow: v }))),
       field('Croisillons des fenêtres', toggle(m.style.windowBars !== false,
