@@ -16,6 +16,7 @@ import { pointer, stageViewport, stripIds, near } from './helpers.js';
 import { Inspector } from '../src/ui/panels.js';
 import { renderScene } from '../src/render/svg.js';
 import { buildMesh } from '../src/core/scene.js';
+import { focusModel } from '../src/core/focus.js';
 import { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS } from '../src/ui/actions.js';
 import { toShareUrl, saveLocal, clearLocal, initialModel } from '../src/io/project.js';
 
@@ -567,4 +568,28 @@ check('changer le type d’une ouverture reprend l’allège et la hauteur du no
   if (a.sill !== 0 || a.height !== OPENING_DEFAULTS.door.height) return `porte à ${a.sill} m, haute de ${a.height} m`;
   const b = retype('o2');
   return b.sill === 0.6 || `allège réglée à la main perdue : ${b.sill}`;
+});
+
+/* ---------------- B9: framing keeps the mesh cache ---------------- */
+
+check('sous cadrage, deux modèles ne différant que par la caméra donnent les mêmes listes', () => {
+  const m = normalise({ ...defaultModel(), focus: { enabled: true, x: 0, y: 0, w: 6, d: 6, margin: 1 } });
+  const turned = { ...m, camera: { ...m.camera, yaw: 77 } };
+  const a = focusModel(m), b = focusModel(turned);
+  const same = ['buildings', 'props', 'openings', 'roofItems'].every((k) => a[k] === b[k]);
+  if (!same) return 'listes reconstruites pour un simple changement de caméra';
+  return b.camera.yaw === 77 || 'la caméra du second modèle est perdue';
+});
+
+check('sous cadrage, pivoter ne reconstruit pas le maillage du rendu', () => {
+  const { s, div, vp } = stageViewport();
+  s.update((m) => ({ ...m, focus: { enabled: true, x: 0, y: 0, w: 6, d: 6, margin: 1 } }));
+  vp.render();
+  const built = vp.cache.built;
+  for (const yaw of [20, 40, 60]) {
+    s.setCamera({ yaw });
+    vp.render();
+  }
+  div.remove();
+  return vp.cache.built === built || 'maillage reconstruit à chaque image';
 });

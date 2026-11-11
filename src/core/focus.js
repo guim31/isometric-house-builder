@@ -105,28 +105,46 @@ function clipProp(p, rect) {
   return { ...p, x: x0, y: y0, w: x1 - x0, d: y1 - y0 };
 }
 
-// One-entry memo, keyed by model identity. The model is immutable, so this is
-// exact — and it is what lets the viewport keep its built mesh across an orbit
-// drag instead of rebuilding the house sixty times a second.
-let memo = { in: null, out: null };
+/*
+ * One-entry memo, keyed on what the result depends on — the lists it filters,
+ * the frame and the grid — and not on the model as a whole. Keyed on the
+ * model, it missed on every frame of an orbit (a turn writes a new camera on
+ * a new model), handed back fresh arrays each time, and so defeated the
+ * viewport's mesh cache, which compares them by identity: the framed house
+ * was rebuilt sixty times a second.
+ */
+let memo = { key: null, out: null };
+
+const inputsOf = (m) => [m.buildings, m.props, m.openings, m.roofItems, m.focus, m.grid];
 
 /**
  * The model as it should be drawn: unchanged when no frame is set, otherwise
  * stripped of everything outside it.
  *
- * Returns the *same object* when nothing is removed, so callers can compare by
+ * Returns the *same object* when nothing is removed, and the same filtered
+ * lists for as long as their inputs are the same, so callers can compare by
  * identity to decide whether their caches are still good.
  */
 export function focusModel(model) {
-  if (memo.in === model) return memo.out;
-  const out = compute(model);
-  memo = { in: model, out };
-  return out;
+  if (!model.focus?.enabled) return model;
+  // Already framed — the renderer frames what the viewport hands it, which
+  // the viewport framed first. Recomputing would replace the memo, and the
+  // next frame would miss it.
+  const o = memo.out;
+  if (o && model.buildings === o.buildings && model.props === o.props
+    && model.openings === o.openings && model.roofItems === o.roofItems) return model;
+  const key = inputsOf(model);
+  if (!memo.key || !key.every((v, i) => v === memo.key[i])) {
+    memo = { key, out: compute(model) };
+  }
+  const out = memo.out;
+  if (out === null) return model;
+  return { ...model, ...out };
 }
 
+/** The filtered lists, or null when the frame removes nothing. */
 function compute(model) {
   const f = model.focus;
-  if (!f?.enabled) return model;
   const rect = focusRect(f);
   const cs = cellSizeOf(model);
 
@@ -146,7 +164,7 @@ function compute(model) {
   if (buildings.length === model.buildings.length
     && propsUnchanged
     && openings.length === model.openings.length
-    && roofItems.length === model.roofItems.length) return model;
+    && roofItems.length === model.roofItems.length) return null;
 
-  return { ...model, buildings, props, openings, roofItems };
+  return { buildings, props, openings, roofItems };
 }
