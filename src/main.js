@@ -7,10 +7,10 @@ import { PlanView } from './ui/plan.js';
 import { Viewport } from './ui/viewport.js';
 import { Inspector } from './ui/panels.js';
 import {
-  initialModel, exportProject, importProject, clearLocal, toShareUrl, fromShareUrl, clearShareHash,
+  initialModel, exportProject, importProject, clearLocal, toShareUrl, readShareUrl, clearShareHash, setAside,
 } from './io/project.js';
 import { Gallery } from './ui/gallery.js';
-import { emptyModel } from './core/model.js';
+import { emptyModel, defaultModel } from './core/model.js';
 import { SIZES, exportPng, exportSvg, exportFourViews, exportSavedViews, copyPngToClipboard } from './io/export.js';
 import { viewpointLabel, normaliseYaw } from './core/iso.js';
 
@@ -139,10 +139,14 @@ const LINK_OPENED = 'Projet du lien ouvert — Annuler pour retrouver le vôtre'
  * the next reload then opened the link over everything done since.
  */
 window.addEventListener('hashchange', () => {
-  const shared = fromShareUrl();
-  if (!shared) return;
+  const link = readShareUrl();
+  if (!link) return;
   clearShareHash();
-  store.update(shared);
+  if (link.failed) {
+    toast('Ce lien de partage est illisible : votre projet reste ouvert, et le lien est mis de côté', 6000);
+    return;
+  }
+  store.update(link.model);
   store.select(null);
   viewport.resetView();
   toast(LINK_OPENED, 6000);
@@ -548,7 +552,21 @@ store.setTool('select');
 // The first drawing is made now, not in an animation frame: a frame that the
 // browser judges hidden — a background tab, an iframe under load — gets none,
 // and the page stayed blank until it did. Later changes go through the frame.
-renderAll();
+try {
+  renderAll();
+} catch (e) {
+  // A project that normalises but will not draw: set it aside like one that
+  // will not parse, and open the default model rather than a blank page.
+  setAside(store.model);
+  boot.rejected = 'local';
+  store.reset(defaultModel());
+  renderAll();
+}
+if (boot.rejected) {
+  toast(boot.rejected === 'link'
+    ? 'Ce lien de partage est illisible : le modèle par défaut est ouvert, et le lien mis de côté'
+    : 'Le projet enregistré n’a pas pu être ouvert : il est mis de côté, et le modèle par défaut est ouvert', 8000);
+}
 
 // For the test bench and the console: the running store, nothing else.
 window.__app = { store, viewport, plan };

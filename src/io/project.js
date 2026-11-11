@@ -17,12 +17,37 @@ export function saveLocal(model) {
   }
 }
 
-export function loadLocal() {
+/** Where a project that could not be opened is kept, rather than lost. */
+export const REJECTED_KEY = 'isometric-house-builder/rejected';
+
+/**
+ * Keep a project that failed to open under a key of its own. Left in place,
+ * it would be overwritten by the default model's first autosave — and with
+ * it whatever could still have been recovered by hand.
+ */
+export function setAside(raw) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? normalise(JSON.parse(raw)) : null;
+    localStorage.setItem(REJECTED_KEY, typeof raw === 'string' ? raw : JSON.stringify(raw));
+    return true;
   } catch {
-    return null;
+    return false;
+  }
+}
+
+/** The saved project, null when there is none, or `{ failed }` when it would not open. */
+export function loadLocal() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null; // storage disabled: nothing saved, nothing to lose
+  }
+  if (!raw) return null;
+  try {
+    return normalise(JSON.parse(raw));
+  } catch {
+    setAside(raw);
+    return { failed: true };
   }
 }
 
@@ -67,17 +92,25 @@ export function toShareUrl(model) {
   return `${location.origin}${location.pathname}#m=${b64}`;
 }
 
-export function fromShareUrl() {
+/** The model a share link carries, null without one, `{ failed }` when it is unreadable. */
+export function readShareUrl() {
   const m = location.hash.match(/#m=([A-Za-z0-9\-_]+)/);
   if (!m) return null;
+  let text = m[1];
   try {
     const b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
     const bin = atob(b64);
     const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    return normalise(JSON.parse(new TextDecoder().decode(bytes)));
+    text = new TextDecoder().decode(bytes);
+    return { model: normalise(JSON.parse(text)) };
   } catch {
-    return null;
+    setAside(text);
+    return { failed: true };
   }
+}
+
+export function fromShareUrl() {
+  return readShareUrl()?.model || null;
 }
 
 /** Take a share link off the address, so a reload keeps the edits made since. */
@@ -93,14 +126,18 @@ export function clearShareHash() {
  * autosave would then write it over them.
  */
 export function initialModel() {
-  const shared = fromShareUrl();
-  if (shared) {
-    clearShareHash();
+  const link = readShareUrl();
+  const saved = loadLocal();
+  const local = saved && !saved.failed ? saved : null;
+  // A project or a link that will not open never leaves the page blank: it is
+  // set aside, the default model opens instead, and `rejected` says which.
+  const rejected = link?.failed ? 'link' : saved?.failed ? 'local' : null;
+  if (link) clearShareHash();
+  if (link?.model) {
     // The project that was open is handed back too: opening a link must be
     // undoable, and the caller makes it the history entry before the link.
-    return { model: shared, source: 'link', previous: loadLocal() };
+    return { model: link.model, source: 'link', previous: local, rejected };
   }
-  const saved = loadLocal();
-  if (saved) return { model: saved, source: 'local' };
-  return { model: defaultModel(), source: 'default' };
+  if (local) return { model: local, source: 'local', rejected };
+  return { model: defaultModel(), source: rejected ? 'rejected' : 'default', rejected };
 }

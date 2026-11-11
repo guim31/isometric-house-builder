@@ -119,6 +119,15 @@ export class Store {
     this.update({ ...this.model, camera: next }, { silent: true });
   }
 
+  /** Start over on `model`, with an empty history: nothing to undo back into. */
+  reset(model) {
+    this.model = normalise(model);
+    this.past = [];
+    this.future = [];
+    this.selection = null;
+    this.emit('model');
+  }
+
   /** End a coalescing run, so the next edit starts a fresh history entry. */
   commit() {
     const last = this.past[this.past.length - 1];

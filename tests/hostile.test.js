@@ -6,6 +6,7 @@ import { Store } from '../src/ui/store.js';
 import { PlanView } from '../src/ui/plan.js';
 import { placeProp } from '../src/ui/actions.js';
 import { pointer } from './helpers.js';
+import { initialModel, clearLocal, saveLocal, REJECTED_KEY } from '../src/io/project.js';
 import { renderScene } from '../src/render/svg.js';
 import { hitLayer } from '../src/render/hit.js';
 import { buildMesh } from '../src/core/scene.js';
@@ -220,4 +221,40 @@ check('un projet à son plafond reste modifiable', () => {
   s.select({ type: 'prop', id: 'p3' });
   s.patchSelected({ x: 40 });
   return s.model.props[3].x === 40 || 'déplacement refusé';
+});
+
+/* ---------------- C5: a start that is never blank ---------------- */
+
+check('un projet local illisible est mis de côté, et le modèle par défaut s’ouvre', () => {
+  clearLocal();
+  localStorage.setItem('isometric-house-builder/current', '{"buildings": [ tronqué');
+  localStorage.removeItem(REJECTED_KEY);
+  let boot;
+  try {
+    boot = initialModel();
+  } finally {
+    clearLocal();
+  }
+  const kept = localStorage.getItem(REJECTED_KEY);
+  localStorage.removeItem(REJECTED_KEY);
+  if (boot.rejected !== 'local') return `rejet signalé : ${boot.rejected}`;
+  if (!boot.model.buildings[0].cells.length) return 'aucun modèle ouvert';
+  return kept === '{"buildings": [ tronqué' || 'le projet fautif n’a pas été gardé';
+});
+
+check('un lien illisible est mis de côté sans toucher au projet local', () => {
+  const local = normalise({ ...defaultModel(), name: 'Projet local' });
+  saveLocal(local);
+  const before = location.href;
+  history.replaceState(null, '', '#m=pas-du-base64-valide');
+  let boot;
+  try {
+    boot = initialModel();
+  } finally {
+    clearLocal();
+    history.replaceState(null, '', before.replace(/#.*$/, ''));
+  }
+  localStorage.removeItem(REJECTED_KEY);
+  if (boot.rejected !== 'link') return `rejet signalé : ${boot.rejected}`;
+  return boot.model.name === 'Projet local' || `projet ouvert : ${boot.model.name}`;
 });
