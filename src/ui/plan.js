@@ -503,6 +503,10 @@ export class PlanView {
       p0: this.toPx(a[0] + u[0] * run.lo, a[1] + u[1] * run.lo),
       p1: this.toPx(a[0] + u[0] * run.hi, a[1] + u[1] * run.hi),
       corner: Math.max(0, Math.min(c - w / 2 - run.lo, run.hi - (c + w / 2))),
+      // Beside an east or west wall, the text starts (or ends) off the wall:
+      // centred on its anchor, it was written across the wall and the very
+      // mark it measures.
+      anchor: n[0] > 0 ? ' side' : n[0] < 0 ? ' side-end' : '',
       // Further out than the wall's own dimension, which it would cover.
       label: (() => {
         const p = this.toPx(a[0] + u[0] * c, a[1] + u[1] * c);
@@ -525,12 +529,12 @@ export class PlanView {
     if (sel.type === 'opening' || sel.type === 'fixture') {
       const ctx = this.openingContext(it);
       if (ctx) {
-        add('text', { x: ctx.label[0], y: ctx.label[1] + 4, class: 'rect-size plan-dim' },
+        add('text', { x: ctx.label[0], y: ctx.label[1] + 4, class: `rect-size plan-dim${ctx.anchor}` },
           `${fmtMetres(Math.round(ctx.corner * 100) / 100)} m de l’angle`);
         // A fixture's other dimension is its height, which the plan cannot
         // show otherwise.
         if (sel.type === 'fixture') {
-          add('text', { x: ctx.label[0], y: ctx.label[1] + 18, class: 'rect-size plan-dim' },
+          add('text', { x: ctx.label[0], y: ctx.label[1] + 18, class: `rect-size plan-dim${ctx.anchor}` },
             `à ${fmtMetres(Math.round(this.fixtureZ(it) * 100) / 100)} m du plancher`);
         }
       }
@@ -601,7 +605,7 @@ export class PlanView {
       const ctx = this.openingContext(op);
       if (ctx) {
         add('line', { x1: ctx.p0[0], y1: ctx.p0[1], x2: ctx.p1[0], y2: ctx.p1[1], class: 'plan-wall-hover' });
-        add('text', { x: ctx.label[0], y: ctx.label[1] + 4, class: 'rect-size plan-dim' },
+        add('text', { x: ctx.label[0], y: ctx.label[1] + 4, class: `rect-size plan-dim${ctx.anchor}` },
           `${fmtMetres(Math.round(ctx.corner * 100) / 100)} m de l’angle`);
       }
       const [p0, p1] = this.openingEnds(op);
@@ -618,7 +622,7 @@ export class PlanView {
       const ctx = this.openingContext(f);
       if (ctx) {
         add('line', { x1: ctx.p0[0], y1: ctx.p0[1], x2: ctx.p1[0], y2: ctx.p1[1], class: 'plan-wall-hover' });
-        add('text', { x: ctx.label[0], y: ctx.label[1] + 4, class: 'rect-size plan-dim' },
+        add('text', { x: ctx.label[0], y: ctx.label[1] + 4, class: `rect-size plan-dim${ctx.anchor}` },
           `${fmtMetres(Math.round(ctx.corner * 100) / 100)} m de l’angle`);
       }
       const { a, u } = edgeFrame(f.edge, cs);

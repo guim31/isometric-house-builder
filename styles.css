@@ -639,6 +639,7 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12px; }
 
 /* Dimensions of the selection, in the style of the walls' own. */
 .plan-dim.side { text-anchor: start; }
+.plan-dim.side-end { text-anchor: end; }
 .plan-coords {
   fill: var(--ink-soft);
   font: 11px system-ui, sans-serif;

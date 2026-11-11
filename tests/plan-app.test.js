@@ -126,3 +126,36 @@ await checkAsync('dans l’application, le plan se recadre sur un nouveau projet
   if (!kept) return 'une modification a recadré le plan';
   return refitted || 'Nouveau n’a pas recadré le plan';
 });
+
+await checkAsync('dans l’application, la distance à l’angle sur un mur est ou ouest ne se lit pas sur le mur', async () => {
+  // Centred on its anchor, the label was written across the wall and the
+  // very mark it measures — for an opening as for a fixture.
+  const frame = await app();
+  const store = await appStore();
+  const win = frame.contentWindow;
+  const before = store.model;
+  store.reset(normalise({
+    ...stage(),
+    fixtures: [
+      { id: 'est', kind: 'camera', edge: '15,12,E', storey: 0, offset: 0.5, z: 2 },
+      { id: 'ouest', kind: 'camera', edge: '10,12,W', storey: 0, offset: 0.5, z: 2 },
+    ],
+    openings: [{ id: 'fen', edge: '15,11,E', kind: 'window', storey: 0, offset: 0.5, width: 1 }],
+  }));
+  store.setTool('select');
+  const out = [];
+  for (const [type, id, x] of [['fixture', 'est', 16], ['fixture', 'ouest', 10], ['opening', 'fen', 16]]) {
+    store.select({ type, id });
+    win.__app.render();
+    const plan = win.__app.plan;
+    const wall = plan.toPx(x, 0)[0];
+    const labels = [...frame.contentDocument.querySelectorAll('#plan .plan-overlay text.plan-dim')];
+    if (!labels.length) out.push(`${id} sans cote`);
+    for (const t of labels) {
+      const b = t.getBBox();
+      if (b.x - 2 < wall && b.x + b.width + 2 > wall) out.push(`${id} : « ${t.textContent} » sur le mur`);
+    }
+  }
+  store.reset(before);
+  return !out.length || out.join(' ; ');
+});
