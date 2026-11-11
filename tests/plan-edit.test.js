@@ -236,7 +236,10 @@ check('arbre : une poignée de rayon', () => {
   const m = normalise({ ...emptyModel(), props: [{ id: 'tr', kind: 'tree', x: 5, y: 5, r: 1.5 }] });
   const { s, view } = stagePlan(m);
   pull(s, view, 'tr', 'r', 5, 7.43);
-  return s.model.props[0].r === 2.4 || `rayon ${s.model.props[0].r}`;
+  if (s.model.props[0].r !== 2.4) return `rayon ${s.model.props[0].r}`;
+  // No further than the inspector's slider goes, which would sit pinned.
+  pull(s, view, 'tr', 'r', 5, 25);
+  return s.model.props[0].r === 4 || `rayon ${s.model.props[0].r} au-delà du curseur`;
 });
 
 check('objet de toit : des poignées aux coins', () => {

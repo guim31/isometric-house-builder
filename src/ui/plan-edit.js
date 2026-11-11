@@ -132,10 +132,15 @@ const RECT_HANDLES = {
 };
 const CORNERS = ['sw', 'se', 'ne', 'nw'];
 
+/*
+ * Sizes stay within what the inspector's own controls offer: a handle that
+ * went further left a slider pinned at its end, unable to show the value.
+ */
+
 /** Smallest size of a box, by what it is: a pool still holds water, a car a car. */
 function minSize(type, it) {
   if (type === 'focus') return [2, 2];
-  if (type === 'roofItem') return [0.2, 0.2];
+  if (type === 'roofItem') return [0.4, 0.4];
   if (it.kind === 'pool') return [1, 1];
   if (it.kind === 'car') return [1, 2];
   if (it.kind === 'gate') return [0.1, 0.1];
@@ -146,7 +151,7 @@ function maxSize(type, it) {
   if (type === 'focus') return [200, 200];
   if (type === 'roofItem') return [10, 8];
   if (it.kind === 'gate') return [LIMITS.gate, LIMITS.gate];
-  return [60, 60];
+  return [24, 24];
 }
 
 /** How an item is resized: its sides, its two ends, or its radius. */
@@ -185,7 +190,7 @@ export function resizeTo(type, it, handle, pt, lines, { magnet = true } = {}) {
   const shape = handleShape(type, it);
   if (shape === 'radius') {
     const r = Math.round(Math.hypot(pt[0] - it.x, pt[1] - it.y) * 10) / 10;
-    return { patch: { r: Math.max(0.3, Math.min(8, r)) }, guides };
+    return { patch: { r: Math.max(0.5, Math.min(4, r)) }, guides };
   }
   const [mw, md] = minSize(type, it);
   const [Mw, Md] = maxSize(type, it);
