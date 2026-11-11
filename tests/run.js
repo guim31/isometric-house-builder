@@ -13,7 +13,7 @@ import { finish, loadFailure } from './harness.js';
 export const FILES = [
   'grid', 'mesh', 'roof', 'projection', 'dimensions', 'viewpoints', 'render',
   'textures', 'presets', 'ordering', 'buildings', 'levels', 'garden', 'stacking',
-  'palette', 'model', 'store', 'plan', 'viewport', 'inspector',
+  'palette', 'model', 'store', 'plan', 'plan-view', 'plan-draw', 'plan-edit', 'viewport', 'inspector',
   'review-fixes', 'review-consistency', 'review-rest',
   'export', 'night', 'occlusion', 'focus', 'page', 'app', 'reliability', 'hostile', 'smoke',
 ];

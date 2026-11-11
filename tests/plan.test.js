@@ -89,13 +89,15 @@ check('le pincement à deux doigts zoome le plan', () => {
     pointerId: id, clientX: r.left + x, clientY: r.top + y,
     bubbles: true, isPrimary: id === 1, button: 0,
   });
+  const before = view.view.scale;
   view.svg.dispatchEvent(pev(1, 100, 100, 'pointerdown'));
   view.svg.dispatchEvent(pev(2, 200, 100, 'pointerdown'));
   view.svg.dispatchEvent(pev(2, 260, 100, 'pointermove'));
-  const zoomed = view.zoom > 1.2;
+  const zoom = view.view.scale / before;
+  const zoomed = zoom > 1.2;
   view.svg.dispatchEvent(pev(1, 100, 100, 'pointerup'));
   view.svg.dispatchEvent(pev(2, 260, 100, 'pointerup'));
-  return zoomed || `zoom resté à ${view.zoom.toFixed(2)}`;
+  return zoomed || `zoom resté à ${zoom.toFixed(2)}`;
 });
 
 check('dupliquer la sélection crée une copie décalée', () => {

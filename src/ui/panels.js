@@ -395,6 +395,22 @@ export class Inspector {
       })),
     );
 
+    // Whole-body actions, discreet: they are used now and then, not at every
+    // visit. Openings, roof items and a shed's slope follow the body.
+    const acts = h('div', 'body-actions');
+    for (const [label, title, run] of [
+      ['Dupliquer', 'Dupliquer ce corps à côté (Ctrl+D)', () => this.store.duplicateBuilding(b.id)],
+      ['Tourner ¼', 'Tourner ce corps d’un quart de tour, sens horaire', () => this.store.rotateBuilding(b.id)],
+      ['Miroir', 'Retourner ce corps, est et ouest échangés', () => this.store.mirrorBuilding(b.id)],
+    ]) {
+      const btn = h('button', 'body-action', label);
+      btn.type = 'button';
+      btn.title = title;
+      btn.disabled = !b.cells.length;
+      btn.addEventListener('click', run);
+      acts.appendChild(btn);
+    }
+    s.appendChild(acts);
     if (m.buildings.length > 1) {
       const del = h('button', 'danger', 'Supprimer ce corps');
       del.addEventListener('click', () => this.store.removeBuilding(b.id));

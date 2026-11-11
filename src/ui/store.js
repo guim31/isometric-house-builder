@@ -8,6 +8,7 @@
 
 import { normalise, newId, makeBuilding, fitOpening, limitBreach } from '../core/model.js';
 import { saveLocal } from '../io/project.js';
+import { moveBody, rotateBody, mirrorBody, duplicateBody } from '../core/bodies.js';
 
 const HISTORY_LIMIT = 80;
 
@@ -28,6 +29,46 @@ export class Store {
     this.saveFailed = false;
     this.onSaveError = null;
     this.onLimit = null;
+    this.onNotice = null;
+    // An open gesture: every edit until it ends is one history entry.
+    this.gesture = null;
+  }
+
+  /** A short message for the user — a refusal, say — through the page's toast. */
+  notify(message) {
+    this.onNotice?.(message);
+  }
+
+  /**
+   * Group every edit until `endGesture` into one history entry, however long
+   * the gesture lasts. Coalescing alone is bounded in time: a stroke paused
+   * for a second in the middle undid in two halves.
+   */
+  beginGesture() {
+    this.gesture = { pushed: false, future: [...this.future] };
+  }
+
+  endGesture() {
+    if (!this.gesture) return;
+    this.gesture = null;
+    this.commit();
+  }
+
+  /**
+   * Abandon the gesture under way: the model goes back to what it was when
+   * the gesture began, with nothing left in the history and the redo stack as
+   * it was. Returns whether anything had to be undone.
+   */
+  cancelGesture() {
+    const g = this.gesture;
+    this.gesture = null;
+    if (!g?.pushed) return false;
+    const entry = this.past.pop();
+    this.future = g.future;
+    this.model = { ...entry.model, camera: this.model.camera };
+    this.lastEditAt = 0;
+    this.emit('model');
+    return true;
   }
 
   subscribe(fn) {
@@ -90,7 +131,9 @@ export class Store {
       // single undo step, but returning to the same control after a pause
       // starts a fresh one — undo then rewinds the latest gesture, not every
       // adjustment ever made with that slider.
-      const merge = coalesce && last && last.coalesce === coalesce && now - this.lastEditAt < 900;
+      const merge = this.gesture ? this.gesture.pushed
+        : coalesce && last && last.coalesce === coalesce && now - this.lastEditAt < 900;
+      if (this.gesture) this.gesture.pushed = true;
       if (!merge) {
         this.past.push({ model: this.model, coalesce });
         if (this.past.length > HISTORY_LIMIT) this.past.shift();
@@ -125,6 +168,7 @@ export class Store {
     this.past = [];
     this.future = [];
     this.selection = null;
+    this.gesture = null;
     this.emit('model');
   }
 
@@ -250,6 +294,45 @@ export class Store {
     this.emit('selection');
   }
 
+  /**
+   * Move, turn, mirror or duplicate a whole body — its openings, roof items
+   * and shed slope along with it. Refused, and said, when the result would
+   * overlap another body. Returns whether the model changed.
+   */
+  moveBuilding(id, di, dj, coalesce = null) {
+    const next = moveBody(this.model, id, di, dj);
+    if (!next) { this.notify('Pas de place ici : un corps ne peut pas en recouvrir un autre'); return false; }
+    this.update(next, { coalesce });
+    return next !== this.model;
+  }
+
+  rotateBuilding(id) {
+    return this.transformBuilding(rotateBody(this.model, id), 'Pas la place de le tourner ici : il recouvrirait un autre corps');
+  }
+
+  mirrorBuilding(id) {
+    return this.transformBuilding(mirrorBody(this.model, id), 'Pas la place de le retourner ici : il recouvrirait un autre corps');
+  }
+
+  transformBuilding(next, refusal) {
+    if (!next) { this.notify(refusal); return false; }
+    const before = this.model;
+    this.update(next);
+    return this.model !== before;
+  }
+
+  duplicateBuilding(id) {
+    const out = duplicateBody(this.model, id);
+    if (!out) { this.notify('Aucune place libre à côté pour le dupliquer'); return null; }
+    const before = this.model;
+    this.update(out.model);
+    if (this.model === before) return null;
+    this.activeId = out.id;
+    this.select({ type: 'building', id: out.id });
+    this.emit('selection');
+    return out.id;
+  }
+
   /** The currently selected item, or null. */
   get selected() {
     if (!this.selection) return null;
@@ -279,6 +362,7 @@ export class Store {
   duplicateSelected() {
     const sel = this.selection;
     if (!sel) return;
+    if (sel.type === 'building') { this.duplicateBuilding(sel.id); return; }
     const list = LISTS[sel.type];
     if (!list) return;
     const src = (this.model[list] || []).find((it) => it.id === sel.id);

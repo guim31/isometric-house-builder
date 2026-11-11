@@ -13,6 +13,7 @@ import { Gallery } from './ui/gallery.js';
 import { emptyModel, defaultModel } from './core/model.js';
 import { SIZES, exportPng, exportSvg, exportFourViews, exportSavedViews, copyPngToClipboard } from './io/export.js';
 import { viewpointLabel, normaliseYaw } from './core/iso.js';
+import { nudgeSelection } from './ui/actions.js';
 
 const TOOL_GROUPS = [
   {
@@ -114,6 +115,7 @@ const boot = initialModel();
 const store = new Store(boot.source === 'link' && boot.previous ? boot.previous : boot.model);
 if (boot.source === 'link' && boot.previous) store.update(boot.model);
 store.onLimit = (message) => toast(message, 4000);
+store.onNotice = (message) => toast(message, 3200);
 store.onSaveError = () => toast('Sauvegarde automatique impossible dans ce navigateur : pensez à « Enregistrer »');
 const plan = new PlanView($('plan'), store);
 const viewport = new Viewport($('iso'), store);
@@ -149,6 +151,7 @@ window.addEventListener('hashchange', () => {
   store.update(link.model);
   store.select(null);
   viewport.resetView();
+  plan.refit();
   toast(LINK_OPENED, 6000);
 });
 
@@ -353,6 +356,7 @@ const gallery = new Gallery($('gallery-dialog'), (model) => {
   store.update(model);
   store.select(null);
   viewport.resetView();
+  plan.refit();
 });
 $('btn-gallery').addEventListener('click', () => gallery.open());
 
@@ -364,6 +368,7 @@ $('btn-new').addEventListener('click', () => {
   clearLocal();
   store.update(emptyModel());
   store.select(null);
+  plan.refit();
   toast('Nouveau projet');
 });
 
@@ -393,6 +398,7 @@ $('file-input').addEventListener('change', async (ev) => {
     store.update(model);
     store.select(null);
     viewport.resetView();
+    plan.refit();
     toast(newer
       ? 'Projet chargé — enregistré par une version plus récente : certains réglages peuvent manquer'
       : 'Projet chargé');
@@ -466,6 +472,9 @@ nameInput.addEventListener('input', () => {
 
 /* ---------- keyboard ---------- */
 
+/** Arrow keys as plan directions: north is up on the plan. */
+const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
+
 document.addEventListener('keydown', (ev) => {
   // Only a field one types into keeps the keyboard. A slider, a checkbox or a
   // button that merely has the focus after a click did too, and the shortcuts
@@ -498,6 +507,10 @@ document.addEventListener('keydown', (ev) => {
   }
   if (ev.key === 'Delete' || ev.key === 'Backspace') {
     if (store.deleteSelected()) ev.preventDefault();
+  } else if (ARROWS[ev.key] && !t.closest?.('input, select, textarea, [role="slider"]')) {
+    // The selection, nudged — a field with the focus keeps its own arrows.
+    const [dx, dy] = ARROWS[ev.key];
+    if (nudgeSelection(store, dx, dy, ev.shiftKey)) ev.preventDefault();
   } else if (ev.key === '[') rotate(-1);
   else if (ev.key === ']') rotate(1);
   else if (ev.key === 'Escape') store.select(null);
@@ -560,6 +573,7 @@ try {
   setAside(store.model);
   boot.rejected = 'local';
   store.reset(defaultModel());
+  plan.refit();
   renderAll();
 }
 if (boot.rejected) {

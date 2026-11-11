@@ -614,3 +614,85 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12px; }
 
 /* An unexpected error: the same toast, in the danger colour, held longer. */
 .toast.error { background: var(--danger); }
+
+/* ==========================================================================
+   Plan : manipulation directe — aperçus, poignées, repères, pavé du plan
+   ========================================================================== */
+
+/* What follows the pointer is drawn over the plan but never catches it —
+   only the handles do. */
+.plan-overlay > :not([data-handle]) { pointer-events: none; }
+.plan-svg.space-pan { cursor: grab; }
+
+/* Previews of what a click would make, where it would make it. */
+.plan-overlay .ghost { opacity: .55; stroke-dasharray: 4 3; }
+.plan-overlay .roof-item.ghost.refused { fill: var(--danger); stroke: var(--danger); }
+.plan-refused { fill: var(--danger); }
+.plan-wall-hover { stroke: var(--focus); stroke-width: 10; stroke-linecap: round; opacity: .28; }
+.plan-target { fill: none; stroke: var(--focus); stroke-width: 2; stroke-dasharray: 5 3; }
+.plan-cell-hover { fill: var(--accent); fill-opacity: .16; stroke: var(--accent); stroke-width: 1.2; }
+.plan-cell-hover.erase, .plan-cell-hover.refused { fill: var(--danger); stroke: var(--danger); }
+.plan-start { fill: var(--accent); opacity: .75; }
+
+/* The magnet's line, while it holds. */
+.plan-guide { stroke: var(--focus); stroke-width: 1; stroke-dasharray: 4 4; opacity: .9; }
+
+/* Dimensions of the selection, in the style of the walls' own. */
+.plan-dim.side { text-anchor: start; }
+.plan-coords {
+  fill: var(--ink-soft);
+  font: 11px system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 3px;
+}
+
+/* Handles: the same few pixels whatever the zoom, on a wider disc a finger
+   can land on. */
+.plan-handle { fill: var(--panel); stroke: var(--focus); stroke-width: 1.6; }
+.plan-handle-hit { fill: transparent; }
+.plan-handle, .plan-handle-hit { cursor: move; }
+[data-handle="n"], [data-handle="s"] { cursor: ns-resize; }
+[data-handle="e"], [data-handle="w"], [data-handle="r"] { cursor: ew-resize; }
+[data-handle="ne"], [data-handle="sw"] { cursor: nesw-resize; }
+[data-handle="nw"], [data-handle="se"] { cursor: nwse-resize; }
+@media (pointer: coarse) { .plan-handle-hit { r: 22px; } }
+
+/* The plan's zoom pad, after the render's navigation pad. */
+.plan-nav {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+  box-shadow: var(--shadow);
+}
+.plan-nav .nav-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-soft);
+}
+.plan-nav .nav-btn:hover { background: var(--bg); color: var(--ink); }
+.plan-nav .nav-btn svg { width: 15px; height: 15px; display: block; }
+@media (pointer: coarse) { .plan-nav .nav-btn { width: 34px; height: 34px; } }
+
+/* Whole-body actions in the inspector, beside « Supprimer ce corps ». */
+.body-actions { display: flex; gap: 4px; margin-top: 10px; }
+.body-action {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: transparent;
+}
+.body-action:hover:not(:disabled) { color: var(--ink); }
