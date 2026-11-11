@@ -335,3 +335,63 @@ for (const type of Object.keys(FIXTURE_ITEMS)) {
     });
   }
 }
+
+/* ---------------- B7 / D2: a cell belongs to one body ---------------- */
+
+function twoBodies() {
+  const s = new Store(normalise({
+    ...emptyModel(),
+    buildings: [
+      makeBuilding({ id: 'maison', cells: [...rectCells(10, 10, 14, 14)] }),
+      makeBuilding({ id: 'abri', name: 'Abri', cells: [...rectCells(20, 10, 21, 11)] }),
+    ],
+  }));
+  const view = new PlanView(document.getElementById('plan'), s);
+  view.render();
+  return { s, view };
+}
+
+const owners = (m) => {
+  const seen = new Map();
+  for (const b of m.buildings) for (const c of b.cells) seen.set(c, (seen.get(c) || 0) + 1);
+  return [...seen.values()].filter((n) => n > 1).length;
+};
+
+check('le pinceau et le rectangle ne prennent pas les cases d’un autre corps', () => {
+  const { s, view } = twoBodies();
+  s.setActiveBuilding('abri');
+  s.setTool('paint');
+  view.svg.dispatchEvent(pointer(view, 12.5, 12.5, 'pointerdown'));
+  view.svg.dispatchEvent(pointer(view, 13.5, 12.5, 'pointermove'));
+  view.svg.dispatchEvent(pointer(view, 13.5, 12.5, 'pointerup'));
+  s.setTool('rect');
+  view.svg.dispatchEvent(pointer(view, 8.5, 8.5, 'pointerdown'));
+  view.svg.dispatchEvent(pointer(view, 22.5, 12.5, 'pointermove'));
+  view.svg.dispatchEvent(pointer(view, 22.5, 12.5, 'pointerup'));
+  view.svg.remove();
+  const shared = owners(s.model);
+  if (shared) return `${shared} case(s) à deux corps`;
+  const house = s.model.buildings[0].cells.length;
+  return house === 25 || `la maison a ${house} cases`;
+});
+
+check('la gomme retire la case du corps qui la possède', () => {
+  const { s, view } = twoBodies();
+  s.setActiveBuilding('abri');
+  s.setTool('erase');
+  view.svg.dispatchEvent(pointer(view, 12.5, 12.5, 'pointerdown'));
+  view.svg.dispatchEvent(pointer(view, 12.5, 12.5, 'pointerup'));
+  view.svg.remove();
+  return !s.model.buildings[0].cells.includes('12,12') || 'la case de la maison est restée';
+});
+
+check('un fichier où deux corps se disputent une case la laisse au premier', () => {
+  const m = normalise({
+    buildings: [
+      { id: 'a', cells: ['0,0', '1,0'] },
+      { id: 'b', cells: ['1,0', '2,0'] },
+    ],
+  });
+  return (m.buildings[0].cells.join() === '0,0,1,0' && m.buildings[1].cells.join() === '2,0')
+    || JSON.stringify(m.buildings.map((b) => b.cells));
+});

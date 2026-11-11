@@ -279,7 +279,14 @@ function normaliseBuildings(input, themePlinth) {
   const declaredHasCells = declared && declared.some((b) => (b.cells || []).length);
   const legacyCells = Array.isArray(input?.cells) && input.cells.length;
   if (declared && declared.length && (declaredHasCells || !legacyCells)) {
-    return declared.map((b, i) => clean(b, i ? `Bâtiment ${i + 1}` : 'Corps principal'));
+    // A cell belongs to one body. A file in which two claim it — painted over
+    // before the plan prevented it — keeps it with the first.
+    const owned = new Set();
+    return declared.map((b, i) => {
+      const out = clean(b, i ? `Bâtiment ${i + 1}` : 'Corps principal');
+      out.cells = out.cells.filter((c) => !owned.has(c) && owned.add(c));
+      return out;
+    });
   }
 
   const legacy = clean({
