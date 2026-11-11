@@ -36,10 +36,60 @@ const TYPES = {
   '.ico': 'image/x-icon',
 };
 
+/*
+ * A release, played back for the boot guard of index.html: under
+ * /__boot/<scenario>-<run>/ the repository is served as GitHub Pages serves
+ * it — ten minutes of cache — except that roof.js may be the previous
+ * version, which lacks an export main.js now needs. `deploy`: stale on the
+ * first request only, the release landing just after it. `stuck`: stale
+ * every time. `slow`: main.js first comes without its ready signal, and the
+ * guard waits a second and a half instead of twenty. `ok`: nothing stale.
+ * /__boot-log/<scenario>-<run> tells what each path was asked for, and how.
+ */
+const bootRuns = new Map();
+
+function bootServe(url, res) {
+  const log = url.pathname.match(/^\/__boot-log\/([\w-]+)$/);
+  if (log) {
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(bootRuns.get(log[1]) || {}));
+    return true;
+  }
+  const m = url.pathname.match(/^\/__boot\/((ok|deploy|stuck|slow)-[\w]+)(\/.*)$/);
+  if (!m) return false;
+  const [, run, scenario, rest] = m;
+  const file = path.normalize(path.join(ROOT, decodeURIComponent(rest === '/' ? '/index.html' : rest)));
+  if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404).end(); return true; }
+  return { run, scenario, rest: path.relative(ROOT, file), file };
+}
+
+function bootRespond(req, res, { run, scenario, rest, file }) {
+  const seen = bootRuns.get(run) || {};
+  bootRuns.set(run, seen);
+  const entry = seen[rest] ||= { count: 0, bypass: 0 };
+  entry.count++;
+  if (/no-cache/.test(req.headers['cache-control'] || '') || /no-cache/.test(req.headers.pragma || '')) entry.bypass++;
+  let body = fs.readFileSync(file, 'utf8');
+  const first = entry.count === 1;
+  if (rest === 'src/core/roof.js' && (scenario === 'stuck' || (scenario === 'deploy' && first))) {
+    body = body.replace('export const RIDGES', 'const RIDGES');
+  }
+  if (scenario === 'slow' && rest === 'src/main.js' && first) body = body.replace('window.__bootReady?.();', '');
+  if (scenario === 'slow' && rest === 'index.html') body = body.replace('data-timeout="20000"', 'data-timeout="1500"');
+  res.writeHead(200, {
+    'content-type': TYPES[path.extname(file)] || 'application/octet-stream',
+    'cache-control': 'max-age=600',
+  });
+  res.end(body);
+}
+
 function serve() {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (url.pathname === '/favicon.ico') { res.writeHead(204).end(); return; }
+    const boot = bootServe(url, res);
+    if (boot === true) return;
+    if (boot) { bootRespond(req, res, boot); return; }
     let file = path.normalize(path.join(ROOT, decodeURIComponent(url.pathname)));
     if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
     if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
@@ -158,13 +208,19 @@ async function main() {
     const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
     const s = (method, params) => cdp.send(method, params, sessionId);
 
-    cdp.on('Runtime.exceptionThrown', (p) => errors.push(`exception : ${describeException(p.exceptionDetails)}`));
+    // The boot guard's playback breaks its page on purpose: what it raises
+    // there is the test's to judge, not an error of the suite.
+    const staged = (u) => /\/__boot\//.test(u || '');
+    cdp.on('Runtime.exceptionThrown', (p) => {
+      if (staged(p.exceptionDetails.url)) return;
+      errors.push(`exception : ${describeException(p.exceptionDetails)}`);
+    });
     cdp.on('Runtime.consoleAPICalled', (p) => {
       if (p.type !== 'error' && p.type !== 'assert') return;
       errors.push(`console.error : ${p.args.map((a) => a.value ?? a.description ?? '').join(' ')}`);
     });
     cdp.on('Log.entryAdded', (p) => {
-      if (p.entry.level === 'error') errors.push(`journal : ${p.entry.text}${p.entry.url ? ` (${p.entry.url})` : ''}`);
+      if (p.entry.level === 'error' && !staged(p.entry.url)) errors.push(`journal : ${p.entry.text}${p.entry.url ? ` (${p.entry.url})` : ''}`);
     });
     await s('Runtime.enable');
     await s('Log.enable');

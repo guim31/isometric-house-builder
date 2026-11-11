@@ -16,7 +16,7 @@ export const FILES = [
   'palette', 'model', 'store', 'plan', 'plan-view', 'plan-draw', 'plan-edit', 'viewport', 'inspector',
   'review-fixes', 'review-consistency', 'review-rest',
   'export', 'night', 'occlusion', 'focus', 'rendu-gestes', 'moteur', 'equipements', 'croisements',
-  'page', 'app', 'rendu-app', 'reliability', 'hostile', 'smoke', 'plan-app',
+  'page', 'app', 'rendu-app', 'reliability', 'hostile', 'smoke', 'plan-app', 'demarrage',
 ];
 
 // `?only=roof,rendu-gestes` runs those files alone — a quick loop while
