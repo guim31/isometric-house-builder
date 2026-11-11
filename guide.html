@@ -136,10 +136,27 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   <li>Outil <strong>Rectangle</strong> : glissez dans le plan pour poser un
     volume. Les dimensions s’affichent pendant le tracé.</li>
   <li>Outil <strong>Pinceau</strong> pour ajouter case par case,
-    <strong>Gomme</strong> pour retirer. <kbd>Alt</kbd> inverse l’outil.</li>
+    <strong>Gomme</strong> pour retirer. <kbd>Alt</kbd> inverse l’outil. Un
+    geste rapide ne saute aucune case, et tout un trait s’annule d’un seul
+    <kbd>Ctrl</kbd>+<kbd>Z</kbd>. Une case qui appartient à un autre corps est
+    laissée de côté, et l’outil le signale.</li>
+  <li><kbd>Échap</kbd> pendant un geste — rectangle, muret, cadrage,
+    déplacement, redimensionnement — l’annule sans rien modifier.</li>
   <li>Chaque pan de mur affiche sa longueur : c’est ainsi qu’on cale les
     dimensions réelles sans compter les cases.</li>
 </ol>
+<h3>Se déplacer dans le plan</h3>
+<p>
+  Le plan ne bouge que quand vous le demandez : il s’ajuste à la maison à
+  l’ouverture d’un projet, puis garde son échelle pendant que vous dessinez.
+  La <strong>molette</strong> zoome autour du curseur, deux doigts pincent ou
+  glissent, et l’on déplace le plan en glissant avec <kbd>Maj</kbd>, le bouton
+  du milieu, <kbd>Espace</kbd> enfoncé, ou sur un endroit vide avec l’outil
+  <em>Sélection</em>. Le petit pavé en bas à droite du plan zoome, dézoome et
+  <strong>ajuste</strong> la vue à tout le projet. Les coordonnées du pointeur,
+  en mètres, s’affichent en bas à gauche.
+</p>
+
 <div class="note">
   <strong>Pour des cotes justes,</strong> passez la <em>Trame</em> à 0,50 m dans
   <em>Bâtiment → Tous les corps</em>. La maison déjà dessinée est conservée à
@@ -170,7 +187,9 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   <em>Porte de garage</em>, puis cliquez le long d’un mur — dans le plan
   <em>ou directement sur le rendu</em>. Une ouverture sélectionnée se règle
   (largeur, hauteur, allège) et se fait glisser le long des murs, en passant
-  les angles.
+  les angles. Avant le clic, le pan visé est surligné et le gabarit de
+  l’ouverture apparaît là où elle se posera, avec sa distance à l’angle.
+  Les flèches du clavier la font coulisser de 5 cm (25 cm avec <kbd>Maj</kbd>).
 </p>
 <p>
   <strong>Position</strong> se compte depuis l’angle du mur jusqu’au bord de
@@ -189,7 +208,8 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <p>
   Ce qui se pose sur le toit — panneaux solaires, cheminée, fenêtre de toit,
   parabole — se place dans le plan, d’un clic sur l’emprise. Ils épousent la
-  pente.
+  pente. Hors de tout toit, le gabarit vire au rouge et le clic est refusé.
+  Une fois sélectionnés, leurs coins se tirent pour les redimensionner.
 </p>
 
 <h2 id="corps">6. Plusieurs corps de bâtiment</h2>
@@ -203,6 +223,15 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   Cliquer un volume dans le plan, avec l’outil <em>Sélection</em>, ou un mur
   ou un toit dans le rendu, rend son corps actif — pratique pour passer de l’un
   à l’autre.
+</p>
+<p>
+  Avec l’outil <em>Sélection</em>, <strong>glissez un corps</strong> pour le
+  déplacer tout entier, par cases, avec ses ouvertures et ce qui est posé sur
+  son toit ; les flèches le décalent d’une case. Les boutons
+  <strong>Dupliquer</strong>, <strong>Tourner ¼</strong> et
+  <strong>Miroir</strong> de la section <em>Corps</em> (et
+  <kbd>Ctrl</kbd>+<kbd>D</kbd>) font le reste ; la pente d’un appentis suit.
+  Deux corps ne se recouvrent jamais : un geste qui y mènerait est refusé.
 </p>
 
 <h2 id="abords">7. Les abords : muret, portail, piscine, escalier</h2>
@@ -230,6 +259,18 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   Largeur et profondeur d’un extérieur se règlent par quarts de mètre, à partir
   de 0,25 m : une terrasse de 3 × 4 m se cale donc exactement sur le bâtiment
   qu’elle borde.
+</p>
+<p>
+  Avant le clic, l’objet apparaît en transparence à l’endroit exact où il se
+  posera ; le portail montre le muret qu’il va ouvrir, l’escalier la terrasse
+  qu’il dessert. Sélectionné, un objet porte ses cotes et des
+  <strong>poignées</strong> : coins et milieux des côtés pour une terrasse,
+  une piscine ou une voiture, un bout de chaque côté pour un muret, une haie
+  ou une clôture, le rayon pour un arbre ou un buisson. En déplaçant ou en
+  redimensionnant, les bords <strong>s’aimantent</strong> aux murs et aux
+  autres objets à moins de 30 cm — un trait pointillé le signale —, et
+  <kbd>Alt</kbd> suspend l’aimantation. Les flèches décalent la sélection de
+  25 cm (1 m avec <kbd>Maj</kbd>).
 </p>
 
 <h2 id="couleurs">8. Couleurs et matières</h2>
@@ -277,7 +318,8 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   Un widget qui pilote un seul appareil ne gagne rien à montrer toute la
   propriété : le portail y fait quelques pixels. L’outil <strong>Zone de
   cadrage</strong> (dernière famille, à gauche) trace un rectangle sur le plan ;
-  l’export s’y recadre.
+  l’export s’y recadre. Avec le même outil, on déplace la zone en la faisant
+  glisser et on la redimensionne par ses poignées.
 </p>
 <img src="assets/focus.png" alt="Une vue d’ensemble, puis deux cadrages : le portail, la piscine">
 <p>Ce qu’il faut savoir :</p>
@@ -351,9 +393,12 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <table>
   <tr><th>Touche</th><th>Effet</th></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>Z</kbd></td><td>Annuler, rétablir — dans un champ texte, annule la saisie. Tourner ou déplacer la vue n’est pas une modification : l’historique l’ignore, et la vue reste où elle est quand on annule</td></tr>
-  <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Dupliquer la sélection</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Dupliquer la sélection — un corps sélectionné est dupliqué à côté</td></tr>
+  <tr><td>Flèches</td><td>Décaler la sélection de 25 cm (1 m avec <kbd>Maj</kbd>) ; une ouverture de 5 cm le long de son mur ; un corps d’une case. Un champ qui a le focus garde ses flèches</td></tr>
+  <tr><td><kbd>Espace</kbd> + glisser</td><td>Déplacer le plan</td></tr>
+  <tr><td><kbd>Alt</kbd> en glissant</td><td>Suspendre l’aimantation (dans le plan)</td></tr>
   <tr><td><kbd>Suppr</kbd></td><td>Supprimer l’élément sélectionné (un corps se supprime depuis l’inspecteur)</td></tr>
-  <tr><td><kbd>Échap</kbd></td><td>Désélectionner</td></tr>
+  <tr><td><kbd>Échap</kbd></td><td>Annuler le geste en cours dans le plan ; sinon, désélectionner</td></tr>
   <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Tourner d’un quart de tour</td></tr>
 </table>
 

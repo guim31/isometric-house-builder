@@ -45,12 +45,15 @@ src/core/          le modèle et la géométrie, sans DOM
   roof.js          champ de hauteur et maillage de la toiture
   scene.js         assemblage du maillage : sol, murs, ouvertures, toit, objets
   props.js         objets extérieurs
+  bodies.js        déplacer, tourner, retourner, dupliquer un corps entier
   mesh.js          fusion des faces coplanaires
   iso.js           projection, orbite, profondeur
   focus.js         zone de cadrage
   palette.js       palettes et éclairage
 src/render/        SVG (svg.js), matières (texture.js), calque de sélection (hit.js)
 src/ui/            plan, rendu, inspecteur, galerie, magasin (store.js), actions
+  plan.js          la vue de dessus : vue, gestes, calque d'aperçus
+  plan-edit.js     géométrie des gestes, sans DOM : trait, aimantation, poignées
 src/io/            export d'images, fichiers de projet, lien de partage
 src/data/          les dix modèles de départ
 tests/             la suite, exécutée dans le navigateur
@@ -61,7 +64,11 @@ Les tests sont des fichiers `tests/*.test.js` par domaine, chargés dans l'ordre
 par `tests/run.js` (la liste `FILES`). `tests/harness.js` fournit `check`,
 `checkAsync` et `uncaught` ; `tests/helpers.js` les aides partagées ;
 `tests/app-frame.js` charge l'application réelle dans une iframe, partagée par
-`page`, `app`, `reliability` et `smoke`. `window.__app` expose le magasin de
+`page`, `app`, `reliability`, `smoke` et `plan-app`. Les tests du plan
+(`plan-view`, `plan-draw`, `plan-edit`) montent une `PlanView` dans le
+`#stage` (`stagePlan` de `plan-view.test.js`) et lui envoient de vrais
+événements de pointeur ; `fireOn` vise l'élément dessiné, comme le ferait un
+clic. `window.__app` expose le magasin de
 l'application au banc d'essai.
 
 ## Commandes
@@ -93,6 +100,14 @@ de rendu voulu.
 - Le modèle est immuable : chaque modification produit un nouvel objet, ce que
   les caches comparent par identité (`geometryOf` dans `viewport.js`,
   `focusModel`).
+- La vue du plan (centre, échelle) est hors du modèle : elle s'ajuste par
+  `plan.refit()` à l'ouverture d'un projet (galerie, fichier, lien, nouveau),
+  jamais sur une modification.
+- Un geste du plan qui modifie le modèle en continu s'ouvre par
+  `store.beginGesture()` et se ferme par `endGesture()` : une seule entrée
+  d'historique, quelle que soit sa durée ; `cancelGesture()` (Échap, second
+  doigt) rend le modèle d'avant le geste. Les refus se disent par
+  `store.notify`.
 - La caméra est hors de l'historique : on la change par `store.setCamera`,
   jamais par `store.update`. Le cadrage et les vues enregistrées, eux, sont du
   contenu.
@@ -124,5 +139,17 @@ de rendu voulu.
   l'ordre de l'ancienne énumération exhaustive.
 - Dans le rendu, les identifiants de `clipPath` portent une marque de session
   aléatoire : comparer deux SVG demande de les ôter (`stripIds`).
+- Le plan a deux couches : le dessin (`render`, tout reconstruit) et le calque
+  `.plan-overlay` (`renderOverlay`, seul redessiné au survol). Rien du calque
+  ne capte le pointeur, sauf les poignées (`data-handle`).
+- `#plan` contient plusieurs `svg` (le plan et les icônes de son pavé) :
+  viser `#plan .plan-svg`.
+- Échap est intercepté par le plan en phase de capture sur `window`, pour
+  qu'annuler un geste ne désélectionne pas aussi. Chaque `PlanView` des tests
+  garde ses écouteurs : un test qui laisse un geste ouvert le voit annulé par
+  l'Échap d'un test suivant.
+- Le coloriage d'une face dépend de sa normale, au bruit d'arrondi près : comparer
+  deux rendus « identiques » par géométries différentes tolère une unité de
+  couleur (`sameColour` dans `plan-edit.test.js`).
 - Le fragment `#m=…` d'un lien de partage est retiré de l'adresse par
   `history.replaceState`, qui ne déclenche pas `hashchange`.

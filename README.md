@@ -219,8 +219,10 @@ la saisie) — **regarder n'est pas modifier** : tourner, incliner ou changer de
 projection ne crée pas d'entrée d'historique, et annuler laisse la vue où elle
 est, si bien qu'on peut annuler, tourner la maison pour juger, puis rétablir ;
 la caméra reste enregistrée avec le projet, et le cadrage comme les vues
-enregistrées restent, eux, dans l'historique — `Ctrl+D` dupliquer la sélection, `[` et `]` tourner d'un quart de
-tour, `Suppr` supprimer l'élément sélectionné, `Échap` désélectionner. Le pavé
+enregistrées restent, eux, dans l'historique — `Ctrl+D` dupliquer la sélection (un corps compris), `[` et `]`
+tourner d'un quart de tour, les flèches décaler la sélection, `Suppr`
+supprimer l'élément sélectionné, `Échap` annuler le geste en cours dans le
+plan, sinon désélectionner. Le pavé
 de navigation se commande aussi au clavier.
 
 Dans le rendu, **glisser fait pivoter** la maison — où qu'on la prenne, sur le
@@ -245,6 +247,25 @@ Le ciel, lui, reste horizontal.
 Dans le plan, une ouverture sélectionnée **coulisse le long des murs** quand on
 la fait glisser ; les éléments d'extérieur se posent aussi d'un clic
 directement sur le rendu. Une boussole dans chaque vue rappelle où est le nord.
+
+Le plan est un outil de dessin à part entière :
+
+- **La vue ne bouge que sur demande.** Elle s'ajuste à l'ouverture d'un projet
+  et par le bouton *Ajuster* de son pavé (avec zoom avant et arrière), jamais
+  pendant un geste : une case garde sa taille sous le pinceau. Molette,
+  pincement, `Maj` + glisser, bouton du milieu, `Espace` + glisser, ou glisser
+  sur le vide en *Sélection* la déplacent.
+- **Dessiner.** Pinceau et gomme ne sautent aucune case, un trait s'annule en
+  une fois, `Échap` annule le geste en cours. Avant le clic, l'outil montre ce
+  qu'il va faire : le pan de mur visé et le gabarit de l'ouverture avec sa
+  distance à l'angle, l'emprise d'un objet d'extérieur, le muret où s'aligne
+  un portail, la terrasse que dessert un escalier, un objet de toit refusé hors
+  toit. Coordonnées du pointeur et cotes de la sélection s'affichent.
+- **Manipuler.** Un corps se déplace en le faisant glisser, avec ses
+  ouvertures et ses objets de toit ; il se duplique, se tourne d'un quart de
+  tour ou se retourne depuis l'inspecteur. La sélection porte des poignées, la
+  zone de cadrage aussi ; les bords s'aimantent aux murs et aux objets voisins
+  (`Alt` suspend l'aimantation) ; les flèches décalent la sélection.
 
 Le projet en cours est conservé dans le navigateur. *Enregistrer* produit un
 fichier `.house.json` lisible et versionnable, qu'*Ouvrir* relit ; c'est aussi
