@@ -380,3 +380,26 @@ export function snapOntoBuilding(b, cs, x, y) {
   sy = Math.min(Math.max(sy, j * cs), (j + 1) * cs - 0.25);
   return [sx, sy];
 }
+
+/**
+ * Equipment drawn at a screen point — or within a few pixels of it, since a
+ * camera is a fifth of a metre wide — as a selection, or null.
+ *
+ * Asked of the drawing itself, before the roof and before the pick layer: a
+ * camera hung high under the eaves sits right against the overhang, its pick
+ * patch reaches up behind the roof's edge, and the roof took every click
+ * meant for it. What the eye sees there is the camera.
+ */
+export function equipmentAt(render, sx, sy, reach = 3) {
+  const { model } = render;
+  const ids = new Map();
+  for (const f of model.fixtures || []) ids.set(f.id, 'fixture');
+  for (const p of model.props || []) ids.set(p.id, 'prop');
+  const spots = [[0, 0], [reach, 0], [-reach, 0], [0, reach], [0, -reach]];
+  for (const [dx, dy] of spots) {
+    const f = faceAt(render, sx + dx, sy + dy);
+    const m = /^equip:(.+)$/.exec(f?.group || '');
+    if (m && ids.get(m[1]) === 'fixture') return { type: 'fixture', id: m[1] };
+  }
+  return null;
+}

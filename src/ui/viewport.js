@@ -4,7 +4,7 @@
 
 import { renderScene } from '../render/svg.js';
 import {
-  hitLayer, screenToGround, roofItemCorners, roofAt, rayOnRoof, snapOntoBuilding, fixtureOutline,
+  hitLayer, screenToGround, roofItemCorners, roofAt, rayOnRoof, equipmentAt, snapOntoBuilding, fixtureOutline,
 } from '../render/hit.js';
 import { boundaryEdges } from '../core/grid.js';
 import {
@@ -223,11 +223,14 @@ export class Viewport {
       // What is drawn under the pointer, when it is a roof: the pick layer has
       // nothing there, and must not answer for it — a tree standing behind the
       // house got selected through its roof.
-      const roof = this.lastRender ? roofAt(this.lastRender, sx, sy) : null;
+      // A wall fixture drawn there comes first: hung under the eaves, it is
+      // drawn against the roof's edge, and the roof took its clicks.
+      const fixture = this.lastRender && !ROOF_ITEM_DEFAULTS[tool] ? equipmentAt(this.lastRender, sx, sy) : null;
+      const roof = !fixture && this.lastRender ? roofAt(this.lastRender, sx, sy) : null;
 
-      const target = roof
+      const target = fixture || (roof
         ? (roof.item ? { type: 'roofItem', id: roof.item.id } : { type: 'building', id: roof.building.id })
-        : pickTarget(pick, ev.target.dataset);
+        : pickTarget(pick, ev.target.dataset));
 
       // A press on what is already selected takes hold of it, whatever the
       // tool — a freshly placed item is selected with its tool still active.
