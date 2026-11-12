@@ -66,7 +66,7 @@ tout moment, et *Page blanche* reste disponible.
 | **Dans le rendu** | Cliquer un toit choisit son corps ; l'élément sélectionné **se déplace au glisser** — au sol, le long de son mur, sur son toit |
 | **Caméra** | **Orbite libre** : on fait tourner la maison à la souris, sur 360° et de la vue rasante à la quasi-verticale — plus une inclinaison de l'image ; pavé de navigation à l'écran, et les quatre faces à un clic |
 | **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, ce qui la traverse est coupé, rien n'est tranché par le bord, et chaque cadrage se garde comme **vue nommée** |
-| **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, toutes les vues enregistrées en lot, copie directe dans le presse-papier |
+| **Export** | Aperçu fidèle avant téléchargement ; PNG 1×/2×/4× ou taille libre, fond transparent ou au choix, SVG, les 4 faces et toutes les vues enregistrées en une archive ZIP, copie directe dans le presse-papier |
 
 ## Les équipements
 
@@ -180,11 +180,15 @@ régénère toutes en une passe quand la maison change.
 
 Trois colonnes, trois rôles, et rien qui les mélange :
 
-- **À gauche, créer.** Les outils qui ajoutent quelque chose au modèle, par
-  familles repliables. Trois d'entre elles — les objets de toit, les équipements et le cadrage —
-  arrivent repliées : on les règle une fois et on n'y revient pas.
+- **À gauche, créer.** Les outils qui ajoutent quelque chose au modèle, chacun
+  avec son icône et, pour les plus courants, sa touche, par familles
+  repliables. Trois d'entre elles — les objets de toit, les équipements et le
+  cadrage — arrivent repliées : on les règle une fois et on n'y revient pas.
 - **Au centre, dessiner et regarder.** Le plan pour construire, le rendu pour
-  juger et exporter. Le **pavé de navigation**, en bas à droite du rendu, donne
+  juger et exporter — le rendu, qui est le produit fini, a la plus grande
+  part. Un séparateur se fait glisser entre les deux, et une bascule montre le
+  plan seul, les deux, ou le rendu seul (`1`, `2`, `3`). L'aide de l'outil
+  actif tient sur une ligne au-dessus. Le **pavé de navigation**, en bas à droite du rendu, donne
   un bouton pour chacun des gestes que la souris sait faire : tourner autour de
   la maison, monter ou descendre la caméra, zoomer, recadrer, et choisir ce que
   fait un simple glisser — pivoter ou déplacer, les flèches suivant ce choix.
@@ -198,8 +202,28 @@ Trois colonnes, trois rôles, et rien qui les mélange :
 Chaque section se replie, et **dit ce qu'elle contient tant qu'elle est
 fermée** : la palette en cours, l'orientation de la caméra, le nombre de corps.
 Sans cela il faudrait tout ouvrir pour se souvenir de ce qu'il y a dedans, ce
-qui annule l'intérêt de replier. L'état des sections tient pour la durée de la
-session.
+qui annule l'intérêt de replier. L'état des sections, la disposition des
+dessins et la taille d'export sont retrouvés d'une visite à l'autre — dans le
+navigateur, hors du projet : un fichier partagé emporte une maison, pas la
+façon dont on aime son écran.
+
+Chaque curseur de dimension ou de position est doublé d'un **champ exact** :
+on tape `3,40` — virgule ou point — et c'est 3,40 m, dans les bornes du
+curseur. `?` affiche tous les raccourcis.
+
+![La fenêtre d'export : l'image telle qu'elle sera téléchargée](assets/export.png)
+
+La **fenêtre d'export** montre l'image telle qu'elle sera téléchargée, aux
+proportions de la taille choisie, et c'est là que se choisit le fond. Les
+séries — les quatre faces, les vues enregistrées — partent en **une archive
+ZIP**, que le navigateur ne bloque pas comme une rafale de téléchargements.
+**Enregistrer** réécrit le même fichier là où le navigateur le permet (Chrome,
+Edge), et un fichier `.house.json` glissé sur la fenêtre s'ouvre.
+
+Sur **tablette**, les outils passent en icônes et les réglages restent à côté
+des dessins ; sur **téléphone**, l'outil devient une application à trois
+onglets — Plan, Rendu, Réglages — avec un bandeau d'outils qui défile. Les
+changements de version sont résumés dans [CHANGELOG.md](CHANGELOG.md).
 
 ## Prise en main
 

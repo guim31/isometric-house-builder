@@ -122,16 +122,41 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <img src="assets/screenshot.png" alt="L’interface : outils à gauche, plan et rendu au centre, réglages à droite">
 <ul>
   <li><strong>À gauche, créer.</strong> Les outils qui ajoutent quelque chose,
-    rangés par familles qui se replient. Trois arrivent repliées — <em>Sur le
-    toit</em>, <em>Équipements</em> et <em>Cadrage</em> — parce qu’on les pose
-    une fois et qu’on n’y revient guère.</li>
+    chacun avec son icône, rangés par familles qui se replient. Trois arrivent
+    repliées — <em>Sur le toit</em>, <em>Équipements</em> et <em>Cadrage</em> —
+    parce qu’on les pose une fois et qu’on n’y revient guère. Les plus courants
+    ont une touche, affichée à côté de leur nom ; l’info-bulle d’un outil donne
+    toute son aide.</li>
   <li><strong>Au centre, dessiner et regarder.</strong> Le plan pour
-    construire, le rendu pour juger et exporter.</li>
+    construire, le rendu pour juger et exporter. Au-dessus, une ligne rappelle
+    ce que fait l’outil actif, et une bascule montre le <em>plan seul</em>,
+    <em>les deux</em> ou le <em>rendu seul</em> (touches <kbd>1</kbd>
+    <kbd>2</kbd> <kbd>3</kbd>). Entre les deux dessins, un séparateur se fait
+    glisser pour donner plus de place à l’un ou à l’autre (double-clic : retour
+    au partage par défaut). Ces choix sont retrouvés à la visite suivante.</li>
   <li><strong>À droite, régler</strong>, en quatre familles : <em>Sélection</em>
     (ce qu’on vient de cliquer), <em>Bâtiment</em>, <em>Projet</em>,
-    <em>Vue et export</em>. Chaque section se replie et indique ce qu’elle
-    contient tant qu’elle est fermée.</li>
+    <em>Vue et export</em>. Chaque section se replie, indique ce qu’elle
+    contient tant qu’elle est fermée, et reste ouverte ou fermée d’une visite à
+    l’autre.</li>
 </ul>
+<p>
+  <strong>Au centimètre près.</strong> Chaque curseur de dimension ou de
+  position est doublé d’un champ : tapez <code>3,40</code> (ou <code>3.40</code>)
+  puis <kbd>Entrée</kbd>, et c’est 3,40 m — dans les bornes du curseur. Les
+  flèches <kbd>↑</kbd> <kbd>↓</kbd> du champ ajustent d’un pas, <kbd>Échap</kbd>
+  rend la valeur d’avant.
+</p>
+<p>
+  <strong>Sur tablette et téléphone.</strong> Jusqu’à 1100 px de large, les
+  outils passent en icônes et les réglages restent à côté des dessins. Sur un
+  téléphone, l’outil devient une application : une barre compacte (le bouton
+  <strong>⋯</strong> réunit Modèles, Nouveau, Ouvrir, Enregistrer, Partager et
+  le guide), un bandeau d’outils qui défile, et trois onglets en bas —
+  <em>Plan</em>, <em>Rendu</em>, <em>Réglages</em>. Un point sur l’onglet
+  Réglages signale qu’un élément est sélectionné.
+</p>
+<img src="assets/telephone.png" alt="Sur un téléphone : la barre compacte, le bandeau d’outils, le rendu et les onglets" style="max-width:320px">
 
 <h2 id="emprise">3. Dessiner l’emprise</h2>
 <ol>
@@ -368,6 +393,12 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   qui, sur un tableau de bord, dit si la maison est éveillée.
 </p>
 <img src="assets/night.png" alt="La même maison de jour et deux maisons de nuit">
+<p>
+  Chaque vue enregistrée a trois petits boutons : <strong>renommer</strong>,
+  <strong>mettre à jour</strong> avec l’angle et le cadrage du moment, et
+  <strong>supprimer</strong> — le message qui suit propose <em>Annuler</em>
+  pour la faire revenir.
+</p>
 
 <h2 id="cadrage">11. Cadrer sur une zone, pour un widget</h2>
 <p>
@@ -399,10 +430,15 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 
 <h2 id="export">12. Exporter et poser dans Gladys</h2>
 <ol>
-  <li><strong>Exporter une image</strong>, en haut à droite (ou le bouton au
-    pied de la section <em>Cadrage</em>).</li>
+  <li><strong>Exporter</strong>, en haut à droite (ou <kbd>Ctrl</kbd>+<kbd>E</kbd>,
+    ou le bouton au pied de la section <em>Cadrage</em>). La fenêtre montre
+    l’image <strong>telle qu’elle sera téléchargée</strong>, aux proportions de
+    la taille choisie, sur un damier quand le fond est transparent.</li>
   <li>Taille <strong>Gladys — 2560 × 1600</strong>, format <strong>PNG</strong>,
-    fond transparent.</li>
+    fond <strong>Transparent</strong>. Le fond se choisit dans cette fenêtre :
+    transparent, blanc, gris clair, sombre ou une couleur libre ; la vue de
+    nuit impose son ciel étoilé. <em>Personnalisée…</em> donne une largeur et
+    une hauteur libres, jusqu’à 8192 px de côté.</li>
   <li>Dans Gladys : ajoutez un widget <em>Vue de la maison</em>,
     <strong>téléversez l’image</strong>, puis cliquez dessus pour poser vos
     pastilles liées aux appareils.</li>
@@ -414,9 +450,11 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   rééchantillonnée à l’arrivée. Le préréglage <em>Gladys</em> vise ce plafond.
 </div>
 <p>
-  Les autres sorties : <em>Les 4 faces</em> produit les quatre orientations en
-  un lot, <em>Vues enregistrées</em> régénère toutes vos vues nommées d’un coup,
-  et <em>SVG</em> donne du vectoriel éditable. Rien n’oblige à passer par le
+  Les autres sorties : <em>Les 4 faces</em> produit les quatre orientations,
+  <em>Vues enregistrées</em> régénère toutes vos vues nommées d’un coup — chacune
+  en <strong>une seule archive ZIP</strong>, que le navigateur ne bloque pas
+  comme une rafale de téléchargements —, <em>Copier</em> met l’image dans le
+  presse-papier et <em>SVG</em> donne du vectoriel éditable. Rien n’oblige à passer par le
   widget <em>Vue de la maison</em> : une simple carte <em>Image</em> convient,
   et l’export reste du PNG ordinaire pour Home Assistant, Jeedom ou un wiki.
 </p>
@@ -430,8 +468,13 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   galerie de modèles et ne voit rien de ce que vous avez dessiné.
 </p>
 <ul>
-  <li><strong>Enregistrer</strong> produit un fichier <code>.house.json</code>
-    lisible et versionnable, qu’<strong>Ouvrir</strong> relit.</li>
+  <li><strong>Enregistrer</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) produit un
+    fichier <code>.house.json</code> lisible et versionnable,
+    qu’<strong>Ouvrir</strong> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) relit — on peut
+    aussi <strong>glisser le fichier sur la fenêtre</strong>. Dans Chrome et
+    Edge, Enregistrer réécrit le même fichier au lieu d’en télécharger un
+    nouveau ; <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>S</kbd> en choisit un autre.
+    Ailleurs, c’est un téléchargement.</li>
   <li><strong>Partager</strong> copie un lien qui <strong>contient tout le
     projet</strong> dans son adresse. Pratique pour envoyer une maison à
     quelqu’un — et à ne pas confondre avec le lien de l’outil si vous ne
@@ -439,22 +482,35 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
     cours, mais <strong>Annuler</strong> le ramène — y compris pour un lien
     collé dans l’outil déjà ouvert ; le lien est ensuite retiré de la barre d’adresse, pour qu’un
     rechargement garde vos retouches.</li>
-  <li><strong>Nouveau</strong> repart d’une page blanche et efface le projet
-    conservé localement. Si le navigateur refuse la sauvegarde locale
+  <li><strong>Nouveau</strong> repart d’une page blanche, après confirmation ;
+    <kbd>Ctrl</kbd>+<kbd>Z</kbd> ramène le projet d’avant, comme après le choix
+    d’un modèle. Si le navigateur refuse la sauvegarde locale
     (navigation privée, stockage plein), l’outil le signale : pensez alors à
     <strong>Enregistrer</strong>.</li>
 </ul>
 
 <h2 id="raccourcis">14. Raccourcis</h2>
+<p>
+  <kbd>?</kbd> ou le bouton clavier de l’en-tête affiche cette liste dans
+  l’outil. Aucun raccourci à une touche n’agit pendant une saisie dans un
+  champ ; <kbd>Ctrl</kbd>+<kbd>S</kbd>, <kbd>Ctrl</kbd>+<kbd>O</kbd> et
+  <kbd>Ctrl</kbd>+<kbd>E</kbd> restent actifs, pour ne pas ouvrir à la place
+  l’enregistrement de la page du navigateur.
+</p>
 <table>
   <tr><th>Touche</th><th>Effet</th></tr>
+  <tr><td><kbd>V</kbd> <kbd>B</kbd> <kbd>R</kbd> <kbd>E</kbd></td><td>Sélectionner, Pinceau, Rectangle, Gomme</td></tr>
+  <tr><td><kbd>F</kbd> <kbd>P</kbd> <kbd>G</kbd></td><td>Fenêtre, Porte, Porte de garage</td></tr>
+  <tr><td><kbd>S</kbd> <kbd>A</kbd> <kbd>H</kbd> <kbd>M</kbd> <kbd>C</kbd></td><td>Panneaux solaires, Arbre, Haie, Muret, Zone de cadrage</td></tr>
+  <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Plan seul, les deux, rendu seul</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>Ctrl</kbd>+<kbd>O</kbd> / <kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Enregistrer, ouvrir, exporter</td></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>Z</kbd></td><td>Annuler, rétablir — dans un champ texte, annule la saisie. Tourner ou déplacer la vue n’est pas une modification : l’historique l’ignore, et la vue reste où elle est quand on annule</td></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Dupliquer la sélection — un corps sélectionné est dupliqué à côté</td></tr>
   <tr><td>Flèches</td><td>Décaler la sélection de 25 cm (1 m avec <kbd>Maj</kbd>) ; une ouverture ou un équipement mural de 5 cm le long de son mur ; un corps d’une case. Un champ qui a le focus garde ses flèches</td></tr>
   <tr><td><kbd>Espace</kbd> + glisser</td><td>Déplacer le plan</td></tr>
   <tr><td><kbd>Alt</kbd> en glissant</td><td>Suspendre l’aimantation (dans le plan)</td></tr>
   <tr><td><kbd>Suppr</kbd></td><td>Supprimer l’élément sélectionné (un corps se supprime depuis l’inspecteur)</td></tr>
-  <tr><td><kbd>Échap</kbd></td><td>Annuler le geste en cours, dans le plan ou le rendu ; sinon, désélectionner</td></tr>
+  <tr><td><kbd>Échap</kbd></td><td>Annuler le geste en cours, dans le plan ou le rendu ; sinon, revenir à Sélectionner ; sinon, désélectionner</td></tr>
   <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Tourner d’un quart de tour</td></tr>
 </table>
 

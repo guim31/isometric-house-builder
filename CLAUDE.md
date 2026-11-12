@@ -38,7 +38,8 @@ enregistrés dans leur navigateur et des liens partagés en circulation.
 ```
 index.html, styles.css, guide.html   la page, ses styles, le guide utilisateur ;
                    index.html porte aussi la garde de démarrage (voir plus bas)
-src/main.js        câblage : magasin, vues, barre d'outils, clavier, filet d'erreurs
+src/main.js        câblage : magasin, vues, en-tête, clavier, dépôt de fichier, filet d'erreurs
+src/version.js     le numéro de version affiché (= première entrée de CHANGELOG.md)
 src/core/          le modèle et la géométrie, sans DOM
   model.js         format du projet, normalise (liste blanche, plafonds LIMITS),
                    valeurs par défaut, géométrie des ouvertures
@@ -56,10 +57,23 @@ src/render/        SVG (svg.js), matières (texture.js), sélection (hit.js) : c
 src/ui/            plan, rendu, inspecteur, galerie, magasin (store.js), actions
   plan.js          la vue de dessus : vue, gestes, calque d'aperçus
   plan-edit.js     géométrie des gestes, sans DOM : trait, aimantation, poignées
-src/io/            export d'images, fichiers de projet, lien de partage
+  texts.js         les textes de l'interface (outils, aides, raccourcis, dialogues,
+                   export) : le fichier à traduire au lot 5
+  icons.js         les icônes, tracés SVG en ligne d'un seul trait
+  prefs.js         réglages de l'interface (disposition, sections, taille d'export),
+                   en localStorage sous leur propre clé, hors du projet
+  layout.js        plan / les deux / rendu, séparateur, onglets du téléphone
+  toolbar.js       la palette d'outils
+  dialogs.js       ask, askText, showText : les <dialog> qui remplacent confirm/prompt
+  numeric.js       lecture des nombres tapés (virgule ou point), bornes, pas
+  export-dialog.js la fenêtre d'export : aperçu, tailles, fond, archives
+src/io/            export d'images, fichiers de projet (enregistrement en place par
+                   File System Access), lien de partage, zip.js (archive sans
+                   compression écrite à la main)
 src/data/          les dix modèles de départ
 tests/             la suite, exécutée dans le navigateur
 dev/               lanceur de tests et pages de visuels
+CHANGELOG.md       ce qui change pour l'utilisateur, version par version
 ```
 
 Les tests sont des fichiers `tests/*.test.js` par domaine, chargés dans l'ordre
@@ -68,7 +82,9 @@ par `tests/run.js` (la liste `FILES`). `tests/harness.js` fournit `check`,
 `tests/app-frame.js` charge l'application réelle dans une iframe, partagée par
 `page`, `app`, `reliability`, `smoke` et `plan-app`. `croisements` vérifie ce
 que le plan et le rendu se doivent (même action, même modèle) et ce que les
-transformations de corps doivent aux équipements ; `demarrage`, la garde de
+transformations de corps doivent aux équipements ; `interface`, ce que le lot 4 a
+ajouté (archive relue octet par octet, saisie exacte, disposition, dialogues,
+raccourcis, export) ; `demarrage`, la garde de
 démarrage, devant une mise en ligne rejouée par le lanceur. Les tests du plan
 (`plan-view`, `plan-draw`, `plan-edit`) montent une `PlanView` dans le
 `#stage` (`stagePlan` de `plan-view.test.js`) et lui envoient de vrais
@@ -108,6 +124,13 @@ chaque pull request.
 
 `dev/equipment-shot.html` produit `assets/equipment.png` (capture de la
 grille, 1280 px de large).
+
+`dev/ui-shot.html` monte l'application dans un cadre de taille donnée, réglée
+comme sur les captures (modèle, sélection, fenêtre ouverte) ; Chrome sans
+fenêtre en fait `assets/screenshot.png`, `assets/export.png` et
+`assets/telephone.png` (la commande est en tête du fichier, par exemple
+`?w=1440&h=900&preset=provence&select=opening`, `&open=export`,
+`?w=390&h=844&preset=provence&tab=render`).
 
 `dev/reference-svg.html` affiche les empreintes de référence des modèles de
 départ, à recopier dans `tests/fixtures/reference-svg.json` après un changement
@@ -159,6 +182,20 @@ de rendu voulu.
   groupe `stack:<id>:<étage>` (le conifère).
 - Toute valeur venue d'un fichier ou d'un lien passe par `normalise` ;
   `svg.js` n'écrit encore dans un attribut qu'un nombre ou une couleur vérifiés.
+- Les réglages de l'interface (disposition, partage plan / rendu, sections
+  ouvertes, familles d'outils repliées, taille d'export) passent par
+  `prefs.js`, jamais par le modèle ni par l'historique. Le fond de l'image,
+  lui, reste `model.style.background` : il se choisit dans la fenêtre
+  d'export, et s'annule comme toute modification.
+- Pas de `confirm()` ni de `prompt()` : `dialogs.js`. Un texte nouveau va dans
+  `texts.js`.
+- Un champ exact (`numberField` dans `panels.js`) n'écrit qu'au `change`
+  (Entrée, sortie du champ), jamais à la frappe ; ce qui ne se lit pas est
+  refusé et la valeur remise. `onChange` peut renvoyer `false` pour refuser
+  (un objet de toit tapé hors de son toit).
+- Les raccourcis à une touche n'agissent jamais dans un champ de saisie ni dans
+  un dialogue ; `Ctrl+S`, `Ctrl+O`, `Ctrl+E` agissent partout. Les touches des
+  outils sont dans `TOOL_GROUPS` (`texts.js`), l'aide `?` les lit là.
 - Les plafonds (`LIMITS`) valent à l'ouverture comme à l'édition : `Store.update`
   refuse la modification qui en franchirait un et le dit.
 
@@ -228,5 +265,24 @@ de rendu voulu.
   `import`/`export … from` relatifs. Un import d'une autre forme (chemin
   absolu, construit) lui échapperait. Un démarrage réussi pose
   `data-boot="ready"` sur `<html>`.
+- **Les tests de l'application démarrent sur des réglages d'interface vides**
+  (`clearPrefs()` dans `app-frame.js` et `run.js`) : un test qui change la
+  disposition ou ouvre une section doit savoir qu'un rechargement du cadre la
+  remet à zéro, et qu'un test de la page de tests partage le même
+  `localStorage` que le cadre.
+- Les questions posées dans un `<dialog>` se résolvent sur son événement
+  `close`, qui est une tâche à part : `answerDialog` (`helpers.js`) attend que
+  le dialogue ait quitté la page.
+- **`[hidden]` ne cache pas un élément auquel une classe donne `display`** :
+  la feuille de style le force (`[hidden] { display: none !important }`).
+- Sur écran tactile, un second tapotement rapide passait pour la fin d'un
+  double-tapotement et perdait son clic : les contrôles ont
+  `touch-action: manipulation`.
+- Le test de fumée de l'inspecteur parcourt les contrôles par rang : un
+  réglage qui fait disparaître un champ (Étages à 1 retire « Étage ») décale
+  les suivants. Il vérifie le type du contrôle avant chaque action.
+- Le rendu demande au dessin s'il montre un équipement mural sous le pointeur
+  (`equipmentAt` dans `hit.js`, à trois pixels près) avant le toit et le
+  calque : une caméra sous le débord est dessinée contre la rive.
 - Le fragment `#m=…` d'un lien de partage est retiré de l'adresse par
   `history.replaceState`, qui ne déclenche pas `hashchange`.
