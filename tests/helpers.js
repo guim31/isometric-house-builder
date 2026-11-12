@@ -207,7 +207,9 @@ export async function answerDialog(doc, text = null, confirm = true) {
   if (text != null && input) input.value = text;
   const btn = confirm ? dlg.querySelector('button[type="submit"]') : dlg.querySelector('button[value="cancel"]');
   btn.click();
-  // The dialog resolves on its close event, then the caller carries on.
-  await new Promise((r) => setTimeout(r, 0));
-  await new Promise((r) => setTimeout(r, 0));
+  // The dialog resolves on its close event, a task of its own, and removes
+  // itself; then the caller's continuation runs.
+  const until = Date.now() + 2000;
+  while (dlg.isConnected && Date.now() < until) await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => setTimeout(r, 10));
 }
