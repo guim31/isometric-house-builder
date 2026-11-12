@@ -26,8 +26,10 @@ enregistrés dans leur navigateur et des liens partagés en circulation.
   dans le rendu, pas de filtre SVG. Les dix modèles de départ et l'exemple
   rendent exactement le SVG de référence (`tests/fixtures/reference-svg.json`) ;
   un changement de rendu voulu régénère la référence et le dit.
-- **Interface en français**, au niveau d'un produit fini, en clair comme en
-  sombre. **Commentaires de code en anglais**, qui disent pourquoi, pas quoi.
+- **Interface en français et en anglais**, au niveau d'un produit fini, en
+  clair comme en sombre. Le français est la langue de référence ; un
+  utilisateur français ne doit voir aucune différence d'une version à
+  l'autre hormis ce qui est voulu. **Commentaires de code en anglais**, qui disent pourquoi, pas quoi.
 - **Chaque correction arrive avec un test qui échoue sans elle**, chaque
   fonction nouvelle avec ses tests. La suite complète passe avant chaque push.
 - **Vérifier dans un vrai navigateur**, avec de vrais clics : la plupart des
@@ -57,8 +59,11 @@ src/render/        SVG (svg.js), matières (texture.js), sélection (hit.js) : c
 src/ui/            plan, rendu, inspecteur, galerie, magasin (store.js), actions
   plan.js          la vue de dessus : vue, gestes, calque d'aperçus
   plan-edit.js     géométrie des gestes, sans DOM : trait, aimantation, poignées
-  texts.js         les textes de l'interface (outils, aides, raccourcis, dialogues,
-                   export) : le fichier à traduire au lot 5
+  texts.js         la forme des textes : familles d'outils et leurs touches,
+                   indications partagées, grammaire des raccourcis (les mots
+                   eux-mêmes sont dans src/i18n/)
+  naming.js        les noms par défaut de ce que l'outil crée, dans la langue du moment
+  words.js         petites phrases partagées (le point de la rose d'une caméra)
   icons.js         les icônes, tracés SVG en ligne d'un seul trait
   prefs.js         réglages de l'interface (disposition, sections, taille d'export),
                    en localStorage sous leur propre clé, hors du projet
@@ -67,6 +72,7 @@ src/ui/            plan, rendu, inspecteur, galerie, magasin (store.js), actions
   dialogs.js       ask, askText, showText : les <dialog> qui remplacent confirm/prompt
   numeric.js       lecture des nombres tapés (virgule ou point), bornes, pas
   export-dialog.js la fenêtre d'export : aperçu, tailles, fond, archives
+src/i18n/          index.js (t, langue, nombres, pluriels), fr.js (référence), en.js
 src/io/            export d'images, fichiers de projet (enregistrement en place par
                    File System Access), lien de partage, zip.js (archive sans
                    compression écrite à la main)
@@ -84,7 +90,8 @@ par `tests/run.js` (la liste `FILES`). `tests/harness.js` fournit `check`,
 que le plan et le rendu se doivent (même action, même modèle) et ce que les
 transformations de corps doivent aux équipements ; `interface`, ce que le lot 4 a
 ajouté (archive relue octet par octet, saisie exacte, disposition, dialogues,
-raccourcis, export) ; `demarrage`, la garde de
+raccourcis, export) ; `langues`, les dictionnaires contre les sources et
+l'application qui change de langue ; `demarrage`, la garde de
 démarrage, devant une mise en ligne rejouée par le lanceur. Les tests du plan
 (`plan-view`, `plan-draw`, `plan-edit`) montent une `PlanView` dans le
 `#stage` (`stagePlan` de `plan-view.test.js`) et lui envoient de vrais
@@ -106,7 +113,7 @@ complète passe toujours avant un push.
 
 Le lanceur cherche Chrome dans `CHROME`, puis `google-chrome`, `chromium`,
 `chromium-browser`, puis sous `/opt/pw-browsers/`. Il échoue sur un test en
-échec, sur une suite qui ne se termine pas en trois minutes, et **sur toute
+échec, sur une suite qui ne se termine pas en quatre minutes, et **sur toute
 exception non rattrapée ou erreur de console de la page**. Il signale les tests
 de plus de trois secondes. `dev/run-tests.sh` n'en est qu'un relais.
 
@@ -187,8 +194,34 @@ de rendu voulu.
   `prefs.js`, jamais par le modèle ni par l'historique. Le fond de l'image,
   lui, reste `model.style.background` : il se choisit dans la fenêtre
   d'export, et s'annule comme toute modification.
-- Pas de `confirm()` ni de `prompt()` : `dialogs.js`. Un texte nouveau va dans
-  `texts.js`.
+- Pas de `confirm()` ni de `prompt()` : `dialogs.js`.
+- **Un texte nouveau** va dans `src/i18n/fr.js` **et** `src/i18n/en.js`, même
+  clé (`domaine.quoi`), et s'affiche par `t('clé', { paramètres })` au moment
+  où il est dessiné — jamais calculé une fois pour toutes au chargement d'un
+  module, sinon un changement de langue ne le verrait pas. `{nom}` est
+  rempli par les paramètres, un nombre écrit avec la marque décimale de la
+  langue ; un texte qui dépend d'un compte est un objet `{ one, other }` choisi
+  par `n` (`Intl.PluralRules`). Une clé construite (`` t(`tool.${id}`) ``)
+  doit nommer au moins une clé, et une clé doit servir : `langues.test.js`
+  le vérifie sur les sources, et qu'aucune chaîne française ne reste en dur
+  dans `src/ui/` ni `src/main.js`. Les mots de `index.html` portent
+  `data-i18n` (texte), `data-i18n-title`, `data-i18n-aria` ; leur français y
+  reste écrit pour l'instant d'avant les modules.
+- **Une langue nouvelle** : un dictionnaire `src/i18n/xx.js` avec exactement
+  les clés de `fr.js`, déclaré dans `DICTIONARIES` et `LANGUAGES` (nom dans
+  la langue même, locale, marque décimale) ; les mots de la garde de
+  démarrage (`WORDS`, dans `index.html`) ; un `guide.xx.html` et la clé
+  `page.guide`. Le sélecteur la propose seul.
+- Changer de langue (`setLanguage`) prévient `onLanguageChange` : `main.js`
+  réécrit la page sur place (`applyPageWords`, palette, pavé, aide,
+  `relabel()` de la disposition, du plan, de l'export et de la galerie, puis
+  tout le rendu). Un composant qui écrit des mots une seule fois à sa
+  construction doit avoir son `relabel()`.
+- **Les données ne se traduisent pas.** Le moteur (`src/core/`) n'a pas de
+  langue : `normalise` nomme un corps sans nom en français, `limitBreach`
+  rend `{ key, max }`, `duplicateBody` reçoit le nom de la copie. Ce que
+  l'interface crée est nommé dans la langue du moment (`naming.js`), et un
+  nom donné ne change plus. Les noms de fichiers exportés suivent la langue.
 - Un champ exact (`numberField` dans `panels.js`) n'écrit qu'au `change`
   (Entrée, sortie du champ), jamais à la frappe ; ce qui ne se lit pas est
   refusé et la valeur remise. `onChange` peut renvoyer `false` pour refuser
@@ -286,3 +319,16 @@ de rendu voulu.
   calque : une caméra sous le débord est dessinée contre la rive.
 - Le fragment `#m=…` d'un lien de partage est retiré de l'adresse par
   `history.replaceState`, qui ne déclenche pas `hashchange`.
+- **Chrome sans fenêtre dit `en-US`** : sans langue choisie, l'application y
+  démarrerait en anglais. Le banc la force en français (`setLanguage('fr')`
+  dans `run.js`, `lang: 'fr'` dans les réglages avant de charger le cadre) ;
+  la passe anglaise des tests de fumée change de langue par le sélecteur de
+  la page, puis revient au français. Un test qui charge `index.html` lui-même
+  doit poser la langue qu'il attend.
+- Les sections de l'inspecteur sont retenues ouvertes ou fermées sous leur
+  ancien titre français (`id` de `section()` : « Tous les corps », « Vue »…),
+  jamais affiché : changer ces identifiants refermerait les sections de chaque
+  utilisateur. `langues.test.js` les laisse passer nommément.
+- Les guillemets et apostrophes du français d'origine sont gardés tels quels,
+  droits ou courbes (« vers l'ouest », « vue d'ensemble ») : un utilisateur
+  français ne doit voir aucune différence.

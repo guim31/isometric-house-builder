@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide — Isometric House Builder</title>
+<meta name="description" content="Getting started: draw your house in isometric view and export an image of it for a home-automation dashboard.">
+<link rel="alternate" hreflang="fr" href="guide.html">
+<link rel="alternate" hreflang="en" href="guide.en.html">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M4 18 16 11l12 7-12 7z' fill='%23c8663c'/><path d='M4 18v5l12 7v-5z' fill='%23e9c98d'/><path d='M28 18v5l-12 7v-5z' fill='%23c8a76d'/></svg>">
+<style>
+/* Same palette as the application, so the two read as one thing. */
+:root {
+  --bg: #eef1f5; --panel: #ffffff; --ink: #1d2733; --ink-soft: #5a6b7d;
+  --line: #d8e0e8; --accent: #c8663c; --accent-soft: #f6e7e0; --focus: #2f6fb5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #10161d; --panel: #18212b; --ink: #e6edf4; --ink-soft: #93a4b5;
+    --line: #2a3744; --accent: #e0794c; --accent-soft: #33231c; --focus: #5fa4e8;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+header {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 20px; background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 650; }
+.mark {
+  width: 22px; height: 22px; border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent), #e9c98d);
+}
+header .spacer { flex: 1; }
+.btn {
+  display: inline-block; padding: 7px 14px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink); text-decoration: none; font-size: 14px;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+main { max-width: 860px; margin: 0 auto; padding: 26px 20px 80px; }
+h1 { font-size: 30px; line-height: 1.25; margin: 10px 0 6px; }
+h2 {
+  font-size: 21px; margin: 42px 0 10px; padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+h3 { font-size: 16px; margin: 22px 0 4px; }
+p, ul, ol { margin: 10px 0; }
+li { margin: 5px 0; }
+.lead { font-size: 18px; color: var(--ink-soft); }
+img { max-width: 100%; border-radius: 10px; display: block; margin: 14px 0; }
+figure { margin: 16px 0; }
+figcaption { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+code, kbd {
+  font: 500 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 5px; padding: 2px 5px;
+}
+.note {
+  border-left: 3px solid var(--accent); background: var(--accent-soft);
+  padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0;
+}
+.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; }
+.toc ol { margin: 6px 0 0; padding-left: 20px; }
+.toc a { color: var(--ink); }
+a { color: var(--focus); }
+table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 15px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--ink-soft); font-weight: 600; font-size: 13px; }
+footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand"><span class="mark" aria-hidden="true"></span> Isometric House Builder</span>
+  <span class="spacer"></span>
+  <a class="btn" href="guide.html" hreflang="fr" lang="fr">Français</a>
+  <a class="btn" href="https://github.com/guim31/isometric-house-builder">Source code</a>
+  <a class="btn primary" href="./">Open the tool</a>
+</header>
+
+<main>
+<h1>Getting started</h1>
+<p class="lead">
+  Draw your house in isometric view and turn it into an image for a
+  home-automation dashboard. Everything happens in your browser: nothing is
+  sent anywhere, and there is no account to create.
+</p>
+
+<div class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#depart">Start from a template</a></li>
+    <li><a href="#interface">The three columns</a></li>
+    <li><a href="#emprise">Draw the footprint</a></li>
+    <li><a href="#toiture">Set up the roof</a></li>
+    <li><a href="#ouvertures">Windows, doors, roof items</a></li>
+    <li><a href="#corps">Several building volumes</a></li>
+    <li><a href="#abords">Outdoors: garden wall, gate, pool, steps</a></li>
+    <li><a href="#equipements">Equipment, for the dashboard</a></li>
+    <li><a href="#couleurs">Colours and materials</a></li>
+    <li><a href="#vue">Looking at your house</a></li>
+    <li><a href="#cadrage">Framing an area, for a widget</a></li>
+    <li><a href="#export">Exporting, and adding it to Gladys</a></li>
+    <li><a href="#fichiers">Saving, sharing, privacy</a></li>
+    <li><a href="#raccourcis">Shortcuts</a></li>
+  </ol>
+</div>
+
+<h2 id="depart">1. Start from a template</h2>
+<p>
+  The tool opens on a gallery of ten houses rather than on an empty grid.
+  Pick the one closest to yours and reshape it: it is quicker than starting
+  from nothing, and nothing in it is final. The <strong>Templates</strong>
+  button reopens the gallery at any time, and <em>Blank page</em> is always
+  there too.
+</p>
+<img src="assets/presets.png" alt="The ten starter templates">
+
+<h2 id="interface">2. The three columns</h2>
+<img src="assets/screenshot.png" alt="The interface: tools on the left, plan and render in the middle, settings on the right">
+<ul>
+  <li><strong>On the left, create.</strong> The tools that add something,
+    each with its icon, grouped in families that fold away. Three start
+    folded — <em>On the roof</em>, <em>Equipment</em> and <em>Framing</em> —
+    because you place those once and rarely come back to them. The most
+    common tools have a key, shown next to their name; a tool’s tooltip gives
+    its full help.</li>
+  <li><strong>In the middle, draw and look.</strong> The plan to build, the
+    render to judge and export. Above them, a line reminds you what the
+    active tool does, and a switch shows the <em>Plan</em> alone,
+    <em>Both</em> or the <em>Render</em> alone (keys <kbd>1</kbd>
+    <kbd>2</kbd> <kbd>3</kbd>). Between the two drawings, a divider can be
+    dragged to give more room to one or the other (double-click: back to the
+    default split). These choices are remembered for your next visit.</li>
+  <li><strong>On the right, adjust</strong>, in four families:
+    <em>Selection</em> (what you have just clicked), <em>Building</em>,
+    <em>Project</em>, <em>View and export</em>. Each section folds away, shows
+    what it holds while it is closed, and stays open or closed from one visit
+    to the next.</li>
+</ul>
+<p>
+  The language selector in the header switches the interface between French
+  and English; your project is not affected.
+</p>
+<p>
+  <strong>To the centimetre.</strong> Every size or position slider comes
+  with a field: type <code>3.40</code> (or <code>3,40</code>) then
+  <kbd>Enter</kbd>, and it is 3.40 m — within the slider’s range. The
+  <kbd>↑</kbd> <kbd>↓</kbd> arrows in the field adjust it by one step, and
+  <kbd>Esc</kbd> brings back the previous value.
+</p>
+<p>
+  <strong>On tablets and phones.</strong> Up to 1100 px wide, the tools
+  shrink to icons and the settings stay beside the drawings. On a phone, the
+  tool becomes an app: a compact bar (the <strong>⋯</strong> button gathers
+  Templates, New, Open…, Save, Share and the Guide), a scrolling strip of
+  tools, and three tabs at the bottom — <em>Plan</em>, <em>Render</em>,
+  <em>Settings</em>. A dot on the Settings tab tells you that an item is
+  selected.
+</p>
+<img src="assets/telephone.png" alt="On a phone: the compact bar, the tool strip, the render and the tabs" style="max-width:320px">
+
+<h2 id="emprise">3. Draw the footprint</h2>
+<ol>
+  <li><strong>Rectangle</strong> tool: drag on the plan to lay down a
+    volume. Its dimensions show as you draw.</li>
+  <li><strong>Brush</strong> tool to add square by square,
+    <strong>Eraser</strong> to remove. <kbd>Alt</kbd> reverses the tool. A
+    quick stroke skips no square, and a whole stroke is undone with a single
+    <kbd>Ctrl</kbd>+<kbd>Z</kbd>. A square that belongs to another volume is
+    left out, and the tool says so.</li>
+  <li><kbd>Esc</kbd> during a gesture — rectangle, garden wall, framing,
+    moving, resizing — cancels it without changing anything.</li>
+  <li>Each stretch of wall shows its length: that is how you match the real
+    dimensions without counting squares.</li>
+</ol>
+<h3>Moving around the plan</h3>
+<p>
+  The plan only moves when you ask it to: it fits itself to the house when a
+  project opens, then keeps its scale while you draw. The
+  <strong>wheel</strong> zooms around the pointer, two fingers pinch or
+  slide, and you move the plan by dragging with <kbd>Shift</kbd>, with the
+  middle button, with <kbd>Space</kbd> held down, or on an empty spot with the
+  <em>Select</em> tool. The small pad at the bottom right of the plan zooms
+  in, zooms out and <strong>fits</strong> the view to the whole project. The
+  pointer’s coordinates, in metres, show at the bottom left.
+</p>
+
+<div class="note">
+  <strong>For accurate dimensions,</strong> set the <em>Grid</em> to 0.50 m
+  in <em>Building → All volumes</em>. The house already drawn is kept exactly
+  as it is, openings included — a finer grid only changes the drawing step.
+</div>
+
+<div class="note">
+  <strong>A lower top storey</strong> makes the attic floor — the one where
+  the roof already begins. As soon as a volume has more than one storey, the
+  <em>Volume</em> section offers a height for each level.
+</div>
+
+<h2 id="toiture">4. Set up the roof</h2>
+<p>
+  The <em>Roof</em> section, on the right. Four shapes — hip, gable, lean-to,
+  flat — then the pitch, the overhang and the fascia depth. Valleys between
+  two wings are worked out on their own: draw an L-shaped plan and the roof
+  joins up.
+</p>
+<p>
+  The overhang is set in steps of 25 cm, so that the eaves land on the grid.
+</p>
+<p>
+  A gable roof runs its <strong>ridge</strong> along the long side of the
+  volume. The <em>Ridge</em> list forces it <em>East–west</em> or
+  <em>North–south</em> — for an almost square house, or for gables facing a
+  street that is not on the long side.
+</p>
+
+<h2 id="ouvertures">5. Windows, doors, roof items</h2>
+<p>
+  Choose <em>Window</em>, <em>Shuttered window</em>, <em>Door</em> or
+  <em>Garage door</em>, then click along a wall — on the plan <em>or straight
+  on the render</em>. A selected opening can be adjusted (width, height,
+  sill height) and dragged along the walls, round the corners. Before you
+  click, the wall you are aiming at is highlighted and the outline of the
+  opening appears where it will go, with its distance from the corner. The
+  arrow keys slide it by 5 cm (25 cm with <kbd>Shift</kbd>).
+</p>
+<p>
+  <strong>Position</strong> is measured from the corner of the wall to the
+  edge of the opening: 0 puts it right against the corner, and the slider
+  stops at the far end of the stretch of wall. The whole stretch, not the
+  square: a ten-metre front gives ten metres of travel.
+</p>
+<p>
+  The <strong>Recess</strong> setting sets an opening back into the wall —
+  the French window tucked in, with the storey above carrying on over it.
+  This is real geometry: the back and the reveals of the recess are shaded
+  and hidden correctly from every angle. Once the recess is in place, two
+  settings widen it beyond the opening, <strong>Recess sides</strong> and
+  <strong>Recess head</strong> — enough to draw a porch, with the door at the
+  back.
+</p>
+<p>
+  What goes on the roof — solar panels, chimney, roof window, satellite
+  dish — is placed with a click on the footprint in the plan, or <em>on the
+  roof slope itself</em> in the render: the item lands where you clicked.
+  They follow the slope. Off any roof, the outline on the plan turns red and
+  the click is refused. Once selected, their corners can be dragged on the
+  plan to resize them. A roof takes as many as you care to place one by
+  one — the limit, a hundred items and 800 m² of panels and roof windows,
+  only gets in the way of an outsized file.
+</p>
+
+<h2 id="corps">6. Several building volumes</h2>
+<p>
+  A garden shed is not a smaller copy of the house: it has its own flat roof
+  and its cladding. Use the <strong>+ New volume</strong> button in
+  <em>Building → All volumes</em>. Each volume has its own height, roof,
+  materials and colours.
+</p>
+<p>
+  Clicking a volume on the plan with the <em>Select</em> tool, or a wall or
+  a roof in the render, makes its volume the active one — handy for moving
+  from one to another.
+</p>
+<p>
+  With the <em>Select</em> tool, <strong>drag a volume</strong> to move it
+  as a whole, square by square, with its openings, its wall fittings and
+  whatever sits on its roof; the arrow keys shift it by one square. The
+  <strong>Duplicate</strong>, <strong>Turn ¼</strong> and
+  <strong>Mirror</strong> buttons in the <em>Volume</em> section (and
+  <kbd>Ctrl</kbd>+<kbd>D</kbd>) do the rest; a lean-to’s slope follows, and
+  a forced ridge turns with the volume.
+  Two volumes never overlap: a gesture that would make them is refused.
+</p>
+
+<h2 id="abords">7. Outdoors: garden wall, gate, pool, steps</h2>
+<p>
+  Garden walls, fences and hedges are <strong>drawn by dragging</strong>,
+  their length showing as you go. A gate placed near a garden wall lines up
+  with it and opens it automatically — there is no link to maintain between
+  the two: move the gate and the wall closes up behind it.
+</p>
+<p>
+  Terraces and pools can be <strong>raised</strong>, up to 3 m: they then
+  get their sides and stop blending into the ground. On a sloping plot, this
+  is how you put a terrace level with the first floor, with the garage
+  opening underneath — the ground itself stays flat.
+</p>
+<p>
+  The <strong>Steps</strong> tool comes down from a raised terrace. Place it
+  at the foot of the terrace: it takes its height, turns to face it and
+  lengthens on its own — about 18 cm of rise and 28 cm of going per step.
+  The inspector shows the number of steps and their going, and warns you
+  when the flight gets too steep. It stands against the terrace; it does not
+  cut into it.
+</p>
+<p>
+  The width and depth of outdoor items are set in quarters of a metre, from
+  0.25 m: a 3 × 4 m terrace therefore lines up exactly with the building it
+  runs along. The <strong>Turn a quarter turn</strong> button turns a
+  terrace, a path, a pool, a flight of steps — and the direction it rises
+  with it —, a gate, a garden wall, a hedge, a fence or the car, about its
+  centre.
+</p>
+<p>
+  The car has a direction: the <strong>Facing</strong> list says which way
+  the bonnet points. A tree is <em>Broadleaf</em> or <em>Conifer</em>.
+</p>
+<p>
+  Before you click, the item appears see-through exactly where it will go;
+  the gate shows the garden wall it is about to open, the steps the terrace
+  they lead to. Once selected, an item shows its dimensions and
+  <strong>handles</strong>: corners and side midpoints for a terrace, a pool
+  or a car, one at each end for a garden wall, a hedge or a fence, the
+  radius for a tree or a shrub. When you move or resize, the edges
+  <strong>snap</strong> to walls and to other items within 30 cm — a dotted
+  line shows it —, and <kbd>Alt</kbd> turns snapping off. The arrow keys
+  shift the selection by 25 cm (1 m with <kbd>Shift</kbd>).
+</p>
+
+<h2 id="equipements">8. Equipment, for the dashboard</h2>
+<p>
+  The <em>Equipment</em> family gathers what a dashboard puts its markers
+  on: <strong>wall light</strong>, <strong>camera</strong> and <strong>EV
+  charger</strong>, which mount on a wall, then <strong>lamp post</strong>,
+  <strong>heat pump</strong>, <strong>letter box</strong> and
+  <strong>carport</strong>, which stand on the ground.
+</p>
+<p>
+  Wall fittings are placed like openings, with a click on a wall — in the
+  render, <em>at the height you clicked</em>; on the plan, the targeted wall
+  and the mounting point show before you click. They can be adjusted in
+  position and height, slide along their wall when dragged as with the arrow
+  keys — and from one wall to another by dragging them on the plan —, follow
+  their wall when the house changes, and go with their volume when it is
+  moved, turned, duplicated or deleted. Wall lights and lamp posts
+  <strong>light up in the night view</strong>, like the windows.
+</p>
+<p>
+  The heat pump and the letter box turn to face a side (<em>Fan
+  facing</em>, <em>Slot facing</em>). The carport is adjusted in size and
+  height, with a flat roof or pergola slats, and a car parks underneath.
+</p>
+<img src="assets/equipment.png" alt="The seven pieces of equipment, by day then by night">
+
+<h2 id="couleurs">9. Colours and materials</h2>
+<p>
+  The <em>Project → Appearance</em> section for the palette, <em>Colours and
+  materials</em> for the rest. Six palettes, roof coverings (tiles, mixed
+  barrel tiles, slates, standing seam) and wall finishes (brick, cladding,
+  stone, half-timbering), then every material can be recoloured one by one.
+</p>
+<div class="note">
+  <strong>For Gladys, keep a “Horizons” palette.</strong> It uses the exact
+  colours of the illustrations that come with Gladys v5, so your house does
+  not clash with the rest of the dashboard.
+</div>
+
+<h2 id="vue">10. Looking at your house</h2>
+<p>
+  <strong>Drag on the render</strong> to turn the house, wherever you grab
+  it. The pad at the bottom right does the same with clicks, and switches
+  between <em>Orbit</em> and <em>Pan</em> — the arrow keys follow that
+  choice, and holding them down repeats the step.
+</p>
+<table>
+  <tr><th>Gesture</th><th>Effect</th></tr>
+  <tr><td>Drag</td><td>Turn the house, and raise or lower the camera</td></tr>
+  <tr><td>Drag the selected item</td><td>Move it: on the ground, along its wall, or over its roof</td></tr>
+  <tr><td><kbd>Shift</kbd> + drag</td><td>Move the view</td></tr>
+  <tr><td><kbd>Alt</kbd> + drag</td><td>Tilt the image within its frame</td></tr>
+  <tr><td>Wheel</td><td>Zoom around the pointer</td></tr>
+  <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Turn a quarter turn</td></tr>
+</table>
+<p>
+  An item that is <strong>already selected</strong> moves when you drag
+  it — the pointer shows it on hover: an outdoor item slides over the ground
+  in quarters of a metre, an opening along its wall without leaving it, a
+  roof item over its roof, a wall fitting along its wall and up and down.
+  Any other drag turns the view. <kbd>Esc</kbd> during the drag puts the item
+  back where it was. Clicking a roof selects its volume.
+</p>
+<p>
+  The <em>View</em> section gives the same settings to the degree, and
+  <strong>+ Save this view</strong> keeps an angle and a framing under a
+  name, so you can come back to it and export it again later.
+</p>
+<p>
+  A <strong>Night view</strong> checkbox in <em>Appearance</em> turns the
+  illustration to night: a starry sky, the moon, and lit windows — which, on
+  a dashboard, tells you whether the house is awake.
+</p>
+<img src="assets/night.png" alt="The same house by day, and two houses by night">
+<p>
+  Each saved view has three small buttons: <strong>Rename</strong>,
+  <strong>Update with the current view</strong> (its angle and framing), and
+  <strong>Delete</strong> — the message that follows offers <em>Undo</em> to
+  bring it back.
+</p>
+
+<h2 id="cadrage">11. Framing an area, for a widget</h2>
+<p>
+  A widget that controls a single device gains nothing from showing the
+  whole property: the gate ends up a few pixels wide. The <strong>Framing
+  area</strong> tool (last family, on the left) draws a rectangle on the
+  plan; the export reframes on it. With the same tool, you move the area by
+  dragging it and resize it by its handles.
+</p>
+<img src="assets/focus.png" alt="An overall view, then two framings: the gate, the pool">
+<p>Worth knowing:</p>
+<ul>
+  <li>Whatever lies outside the area is <strong>removed</strong>, not just
+    left out of shot. In isometric view, a shed at the bottom of the garden
+    projects <em>upwards</em>, right into a tight frame on the gate.</li>
+  <li>Whatever crosses the area is <strong>cut</strong> there; compact
+    items — a tree, a gate — are kept whole or removed depending on whether
+    their centre falls inside.</li>
+  <li>A building volume is kept only if it <strong>stands</strong> within
+    the area. A house whose wall runs along the area only grazes it by a
+    centimetre: it disappears. Extend the area a metre or two over the
+    building to keep it.</li>
+  <li>The <strong>Margin</strong> is air around the drawing, not extra lawn.
+    A metre or two is usually enough.</li>
+  <li>Nothing is cut off by the edge of the image: the camera frames the
+    whole drawing. Each area therefore gives a complete illustration, and a
+    house can carry as many framings as there are widgets.</li>
+</ul>
+
+<h2 id="export">12. Exporting, and adding it to Gladys</h2>
+<ol>
+  <li><strong>Export</strong>, at the top right (or
+    <kbd>Ctrl</kbd>+<kbd>E</kbd>, or the button at the foot of the
+    <em>Export framing</em> section). The window shows the image
+    <strong>exactly as it will be downloaded</strong>, in the proportions of
+    the chosen size, on a checkerboard when the background is
+    transparent.</li>
+  <li>Size <strong>Gladys — 2560 × 1600</strong>, format
+    <strong>PNG</strong>, background <strong>Transparent</strong>. The
+    background is chosen in this window: transparent, white, light grey,
+    dark or any colour you like; the night view imposes its starry sky.
+    <em>Custom…</em> gives a free width and height, up to 8192 px a
+    side.</li>
+  <li>In Gladys: add the <em>house view</em> widget (“Vue de la maison” in
+    Gladys’s French interface), <strong>upload the image</strong>, then click on it to place
+    your markers linked to devices.</li>
+</ol>
+<div class="note">
+  <strong>Why 2560 and not 4×.</strong> Gladys scales every image down to
+  2560 px on its long side and does not re-encode it below 2 MB. Exporting at
+  4× (4800 px) therefore gives a <em>less</em> sharp image, since it will be
+  resampled when it arrives. The <em>Gladys</em> preset aims at that
+  ceiling.
+</div>
+<p>
+  The other outputs: <em>All 4 sides</em> produces the four orientations,
+  <em>Saved views</em> regenerates all your named views in one go — each as
+  <strong>a single ZIP archive</strong>, which the browser does not block the
+  way it would a burst of downloads —, <em>Copy</em> puts the image on the
+  clipboard and <em>SVG</em> gives editable vector graphics. Nothing forces
+  you to go through the house view widget: a plain <em>Image</em>
+  card does the job, and the export stays an ordinary PNG for Home
+  Assistant, Jeedom or a wiki.
+</p>
+
+<h2 id="fichiers">13. Saving, sharing, privacy</h2>
+<p>
+  <strong>Nothing leaves your browser.</strong> The tool sends no requests:
+  no account, no server, no analytics. The current project is kept in the
+  local storage of <em>your</em> browser, on <em>your</em> machine. Someone
+  who opens the tool’s link lands on the template gallery and sees nothing
+  of what you have drawn.
+</p>
+<ul>
+  <li><strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) produces a
+    readable <code>.house.json</code> file that you can keep under version
+    control, and that <strong>Open…</strong>
+    (<kbd>Ctrl</kbd>+<kbd>O</kbd>) reads back — you can also <strong>drop the
+    file on the window</strong>. In Chrome and Edge, Save writes over the
+    same file instead of downloading a new one;
+    <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> picks another. Elsewhere,
+    it is a download.</li>
+  <li><strong>Share</strong> copies a link that <strong>holds the whole
+    project</strong> in its address. Handy for sending a house to someone —
+    and not to be confused with the tool’s own link if you would rather not
+    show yours. Opening such a link replaces the current project, but
+    <strong>Undo</strong> brings it back — including for a link pasted into
+    the tool while it is already open; the link is then removed from the
+    address bar, so that reloading keeps your changes.</li>
+  <li><strong>New</strong> starts again from a blank page, after asking;
+    <kbd>Ctrl</kbd>+<kbd>Z</kbd> brings back the previous project, as it does
+    after choosing a template. If the browser refuses local saving (private
+    browsing, full storage), the tool tells you: remember to
+    <strong>Save</strong> then.</li>
+</ul>
+
+<h2 id="raccourcis">14. Shortcuts</h2>
+<p>
+  <kbd>?</kbd> or the <em>Keyboard shortcuts</em> button in the header shows
+  this list in the tool. No single-key shortcut acts while you are typing in
+  a field; <kbd>Ctrl</kbd>+<kbd>S</kbd>, <kbd>Ctrl</kbd>+<kbd>O</kbd> and
+  <kbd>Ctrl</kbd>+<kbd>E</kbd> keep working, so that the browser’s own
+  “save page” does not open instead.
+</p>
+<table>
+  <tr><th>Key</th><th>Effect</th></tr>
+  <tr><td><kbd>V</kbd> <kbd>B</kbd> <kbd>R</kbd> <kbd>E</kbd></td><td>Select, Brush, Rectangle, Eraser</td></tr>
+  <tr><td><kbd>F</kbd> <kbd>P</kbd> <kbd>G</kbd></td><td>Window, Door, Garage door</td></tr>
+  <tr><td><kbd>S</kbd> <kbd>A</kbd> <kbd>H</kbd> <kbd>M</kbd> <kbd>C</kbd></td><td>Solar panels, Tree, Hedge, Garden wall, Framing area</td></tr>
+  <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Plan only, both, render only</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>Ctrl</kbd>+<kbd>O</kbd> / <kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Save, open, export</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td><td>Undo, redo — in a text field, undoes the typing. Turning or moving the view is not a change: the history ignores it, and the view stays where it is when you undo</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Duplicate the selection — a selected volume is duplicated alongside</td></tr>
+  <tr><td>Arrows</td><td>Shift the selection by 25 cm (1 m with <kbd>Shift</kbd>); an opening or a wall fitting by 5 cm along its wall; a volume by one square. A field that has the focus keeps its arrows</td></tr>
+  <tr><td><kbd>Space</kbd> + drag</td><td>Move the plan</td></tr>
+  <tr><td><kbd>Alt</kbd> while dragging</td><td>Turn snapping off (on the plan)</td></tr>
+  <tr><td><kbd>Delete</kbd></td><td>Delete the selected item (a volume is deleted from the inspector)</td></tr>
+  <tr><td><kbd>Esc</kbd></td><td>Cancel the gesture under way, on the plan or the render; otherwise, go back to Select; otherwise, deselect</td></tr>
+  <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Turn a quarter turn</td></tr>
+</table>
+
+<footer>
+  <p>
+    Free tool under the MIT licence — <a href="https://github.com/guim31/isometric-house-builder">source code and bug reports</a>.
+    A comment, a rendering glitch? Open an <em>issue</em> with your
+    <code>.house.json</code> file: that is what makes it possible to
+    reproduce.
+  </p>
+</footer>
+</main>
+</body>
+</html>

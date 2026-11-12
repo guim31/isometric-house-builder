@@ -3,4 +3,4 @@
  * would notice, and matched by the first entry of CHANGELOG.md — a test
  * keeps the two together.
  */
-export const VERSION = '2.0.0';
+export const VERSION = '2.1.0';

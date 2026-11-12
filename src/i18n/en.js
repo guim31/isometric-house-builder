@@ -335,8 +335,6 @@ export default {
   'export.customColour': 'Colour',
   'export.nightNote': 'Night view: its starry sky is the image’s background, so it cannot be transparent. Turn off the night view (Appearance) to choose a background.',
   'export.preview': 'Preview of the exported image',
-  'export.png': 'PNG',
-  'export.svg': 'SVG',
   'export.copy': 'Copy',
   'export.four': 'All 4 sides (.zip)',
   'export.views': 'Saved views (.zip)',

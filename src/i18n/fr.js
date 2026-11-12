@@ -336,8 +336,6 @@ export default {
   'export.customColour': 'Couleur',
   'export.nightNote': 'Vue de nuit : son ciel étoilé est le fond de l’image, qui ne peut donc pas être transparente. Désactivez la vue de nuit (Apparence) pour choisir un fond.',
   'export.preview': 'Aperçu de l’image exportée',
-  'export.png': 'PNG',
-  'export.svg': 'SVG',
   'export.copy': 'Copier',
   'export.four': 'Les 4 faces (.zip)',
   'export.views': 'Vues enregistrées (.zip)',

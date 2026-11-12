@@ -27,7 +27,8 @@ import { spawn, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const DEADLINE = 3 * 60 * 1000;
+// The smoke tests run twice, in French and in English: four minutes.
+const DEADLINE = 4 * 60 * 1000;
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',

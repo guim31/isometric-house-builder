@@ -4,6 +4,24 @@ Ce qui change pour qui utilise l’outil, version après version. Les projets
 enregistrés, les fichiers `.house.json` et les liens de partage des versions
 précédentes s’ouvrent toujours sur la même maison.
 
+## 2.1.0 — français et anglais
+
+- **L’interface parle anglais.** Tout ce qui se lit — outils et aides,
+  inspecteur, dialogues, export, messages, info-bulles, galerie, rose des
+  vents, cotes — existe en français et en anglais. La langue suit celle du
+  navigateur ; un sélecteur discret dans l’en-tête (dans le menu ⋯ sur
+  téléphone) la change sur-le-champ, sans recharger la page ni toucher au
+  projet, et le choix est retenu.
+- Les nombres suivent la langue : 3,40 en français, 3.40 en anglais. La
+  saisie accepte la virgule comme le point, dans les deux langues.
+- **Un projet garde ses noms.** Ce que l’outil crée — page blanche, modèle de
+  la galerie, nouveau corps, copie, vue — est nommé dans la langue du moment ;
+  un fichier, un projet enregistré ou un lien s’ouvrent à l’identique dans
+  les deux langues, et le format ne change pas.
+- Le guide existe en anglais (`guide.en.html`), et l’application ouvre celui
+  de sa langue ; le README aussi (`README.en.md`).
+- Pour un utilisateur français, rien ne change hormis le sélecteur.
+
 ## 2.0.0 — l’interface
 
 - **Le rendu en grand.** Plan et rendu se partagent le centre avec un

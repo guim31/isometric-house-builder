@@ -1,5 +1,7 @@
 # Isometric House Builder
 
+**[English version](README.en.md)**
+
 Modélisez votre maison en vue isométrique et exportez-en des illustrations
 PNG ou SVG, prêtes à être posées sur un tableau de bord domotique.
 
@@ -9,7 +11,8 @@ PNG ou SVG, prêtes à être posées sur un tableau de bord domotique.
  · **[📖 Guide de prise en main](https://guim31.github.io/isometric-house-builder/guide.html)**
 
 Rien à installer, tout se passe dans le navigateur, aucune donnée n'est envoyée
-nulle part.
+nulle part. L'interface est en français et en anglais : un sélecteur
+dans l'en-tête, la langue du navigateur par défaut.
 
 ---
 
@@ -571,35 +574,3 @@ Merci de faire passer `node dev/run-tests.mjs` avant de proposer un changement.
 
 MIT — voir [LICENSE](LICENSE). Faites-en ce que vous voulez, y compris
 commercialement.
-
----
-
-<details>
-<summary><b>English summary</b></summary>
-
-**Isometric House Builder** is a free, open-source, build-step-free web tool for
-modelling the exterior of a house in isometric view and exporting it as a
-transparent PNG or a flat SVG — meant for home-automation dashboards such as
-Gladys Assistant, but the output is plain image files usable anywhere.
-
-It opens on a gallery of ten starter houses — French regional archetypes from a
-Flemish brick townhouse to a Provençal mas, a mountain chalet and a passive
-solar home — so you begin by adjusting something close to your own rather than
-from an empty grid.
-
-Draw the footprint on a one-metre grid, pick a roof (hip, gable, shed, flat),
-place windows, doors, garage doors, solar panels, chimneys, a pool, trees, and
-the equipment a dashboard pins badges on — wall lights, cameras, a car charger,
-a garden lamp, a heat pump, a letter box, a carport — then
-export the current view or all four isometric orientations at once.
-
-The default palette matches the **Horizons** theme of Gladys Assistant v5, so an
-exported house drops straight into its *house-view* widget — which accepts a
-custom image and lets you pin device features onto it. Export at the *Gladys*
-preset (2560 px): the app downscales anything larger.
-
-No dependencies, no bundler, no account: clone it, serve the folder, open
-`index.html`. Roof and wall materials are generated in world space and projected, so courses follow each slope. Tests live in `tests/` and run in the browser, or headlessly via
-`node dev/run-tests.mjs`. MIT licensed.
-
-</details>
