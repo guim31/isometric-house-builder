@@ -459,6 +459,48 @@ export class PlanView {
       add('text', { x: 10, y: this.map.h - 10, class: 'plan-coords' },
         `x ${q(this.pointerAt[0])} m · y ${q(this.pointerAt[1])} m`);
     }
+    this.fitLabels();
+  }
+
+  /**
+   * Keep the selection's dimensions readable: inside the panel — near its
+   * edge, one was cut in half — and over the walls' own dimensions, which
+   * make way for them rather than being written across.
+   */
+  fitLabels() {
+    const labels = [...this.overlay.querySelectorAll('text.plan-dim')];
+    const walls = [...this.svg.querySelectorAll('.plan-dims text')];
+    for (const t of walls) t.classList.remove('plan-dim-covered');
+    if (!labels.length) return;
+    const M = 4;
+    const boxes = [];
+    for (const t of labels) {
+      let b;
+      try { b = t.getBBox(); } catch { continue; }
+      if (!b.width) continue;
+      // A label beside a wall that runs off the panel goes to the wall's
+      // other side rather than being pushed back across the wall it measures.
+      const side = t.classList.contains('side') ? 1 : t.classList.contains('side-end') ? -1 : 0;
+      if (side && (b.x < M || b.x + b.width > this.map.w - M)) {
+        t.classList.toggle('side', side < 0);
+        t.classList.toggle('side-end', side > 0);
+        t.setAttribute('x', Number(t.getAttribute('x')) - side * 60);
+        try { b = t.getBBox(); } catch { continue; }
+      }
+      const dx = b.x < M ? M - b.x : b.x + b.width > this.map.w - M ? this.map.w - M - b.x - b.width : 0;
+      const dy = b.y < M ? M - b.y : b.y + b.height > this.map.h - M ? this.map.h - M - b.y - b.height : 0;
+      if (dx || dy) {
+        t.setAttribute('x', Number(t.getAttribute('x')) + dx);
+        t.setAttribute('y', Number(t.getAttribute('y')) + dy);
+      }
+      boxes.push({ x: b.x + dx, y: b.y + dy, w: b.width, h: b.height });
+    }
+    const hit = (a, b) => a.x < b.x + b.width && b.x < a.x + a.w && a.y < b.y + b.height && b.y < a.y + a.h;
+    for (const t of walls) {
+      let b;
+      try { b = t.getBBox(); } catch { continue; }
+      if (boxes.some((a) => hit(a, b))) t.classList.add('plan-dim-covered');
+    }
   }
 
   /** A box in metres, as an SVG rect. */

@@ -1309,3 +1309,6 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12.5px; }
 }
 .link-button:hover { border-color: var(--accent); }
 .slider-box { display: block; }
+
+/* A wall's dimension under one of the selection's: it makes way. */
+.plan-dims text.plan-dim-covered { opacity: 0; }
