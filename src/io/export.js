@@ -1,12 +1,13 @@
 /**
- * Export: SVG, PNG at several resolutions, and the four isometric views in one
- * go. Everything happens in the browser; nothing is uploaded anywhere.
+ * Export: SVG, PNG at several resolutions or at a free size, and sets of
+ * images — the four faces, the saved views — as one archive. Everything happens in the browser; nothing is uploaded anywhere.
  */
 
 import { renderScene } from '../render/svg.js';
 import { VIEWPOINTS } from '../core/iso.js';
 import { DEFAULT_FOCUS } from '../core/model.js';
 import { download, slug } from './files.js';
+import { zipStore, uniqueNames } from './zip.js';
 
 export const SIZES = [
   // Gladys downscales anything past 2560 px on the long edge, and keeps the
@@ -57,9 +58,9 @@ export function svgToPng(svg, width, height) {
 }
 
 export async function exportPng(model, size) {
-  const svg = svgFor(model, size);
-  const blob = await svgToPng(svg, size.width * size.ratio, size.height * size.ratio);
-  download(blob, `${slug(model.name)}-${size.id}.png`);
+  const [w, h] = pixelsOf(size);
+  const blob = await svgToPng(svgFor(model, size), w, h);
+  download(blob, `${slug(model.name)}-${sizeTag(size)}.png`);
 }
 
 export function exportSvg(model, size) {
@@ -69,20 +70,47 @@ export function exportSvg(model, size) {
   download(new Blob([svg], { type: 'image/svg+xml' }), `${slug(model.name)}.svg`);
 }
 
-/** The four isometric views of the same house, as separate PNG files. */
-export async function exportFourViews(model, size, onProgress) {
+/** The longest side a canvas is trusted with, in pixels, in every browser. */
+export const MAX_SIDE = 8192;
+/** And the smallest image worth making. */
+export const MIN_SIDE = 64;
+
+/**
+ * A free size, in output pixels, as the export window takes it: laid out at
+ * that size, at one pixel per pixel, bounded to what a canvas accepts.
+ */
+export function customSize(width, height) {
+  const side = (v) => Math.max(MIN_SIDE, Math.min(MAX_SIDE, Math.round(Number(v) || 0)));
+  return { id: 'custom', label: `${side(width)} × ${side(height)}`, width: side(width), height: side(height), ratio: 1 };
+}
+
+/** What a size gives, in pixels: [width, height] of the PNG file. */
+export const pixelsOf = (size) => [size.width * size.ratio, size.height * size.ratio];
+
+/** File-name tail of a size: the preset's id, or the free size's dimensions. */
+const sizeTag = (size) => (size.id === 'custom' ? `${size.width}x${size.height}` : size.id);
+
+async function pngBytes(model, size) {
+  const [w, h] = pixelsOf(size);
+  const blob = await svgToPng(svgFor(model, size), w, h);
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+/**
+ * The four isometric views of the same house, as PNG files named as they
+ * were when each one was its own download.
+ */
+export async function fourViewFiles(model, size, onProgress) {
   const names = VIEWPOINTS.map((v) => v.toLowerCase());
+  const files = [];
   for (let r = 0; r < 4; r++) {
     // The quarter turns keep their own pitch: the four faces are meant to read
     // as one set, and a hand-tilted camera is a different picture each time.
     const view = { ...model, camera: { ...model.camera, yaw: r * 90 } };
-    const svg = svgFor(view, size);
-    const blob = await svgToPng(svg, size.width * size.ratio, size.height * size.ratio);
-    download(blob, `${slug(model.name)}-${names[r]}.png`);
-    if (onProgress) onProgress(r + 1, 4);
-    // Browsers throttle bursts of downloads; a short gap keeps all four.
-    await new Promise((r2) => setTimeout(r2, 350));
+    files.push({ name: `${slug(model.name)}-${names[r]}.png`, data: await pngBytes(view, size) });
+    onProgress?.(r + 1, 4);
   }
+  return files;
 }
 
 /**
@@ -92,17 +120,34 @@ export async function exportFourViews(model, size, onProgress) {
  * the whole house — regenerated as a set whenever the model changes, instead
  * of being reframed by hand one at a time.
  */
-export async function exportSavedViews(model, size, onProgress) {
+export async function savedViewFiles(model, size, onProgress) {
   const views = model.views || [];
+  const names = uniqueNames(views.map((v) => `${slug(model.name)}-${slug(v.name)}.png`));
+  const files = [];
   for (let i = 0; i < views.length; i++) {
     const v = views[i];
     const shot = { ...model, camera: v.camera, focus: { ...DEFAULT_FOCUS, ...v.focus } };
-    const svg = svgFor(shot, size);
-    const blob = await svgToPng(svg, size.width * size.ratio, size.height * size.ratio);
-    download(blob, `${slug(model.name)}-${slug(v.name)}.png`);
-    if (onProgress) onProgress(i + 1, views.length);
-    await new Promise((r) => setTimeout(r, 350));
+    files.push({ name: names[i], data: await pngBytes(shot, size) });
+    onProgress?.(i + 1, views.length);
   }
+  return files;
+}
+
+/** Hand a set of files over as one archive: one download, which nothing blocks. */
+export function downloadZip(files, filename) {
+  download(new Blob([zipStore(files)], { type: 'application/zip' }), filename);
+}
+
+export async function exportFourViews(model, size, onProgress) {
+  const files = await fourViewFiles(model, size, onProgress);
+  downloadZip(files, `${slug(model.name)}-4-faces.zip`);
+  return files.length;
+}
+
+export async function exportSavedViews(model, size, onProgress) {
+  const files = await savedViewFiles(model, size, onProgress);
+  downloadZip(files, `${slug(model.name)}-vues.zip`);
+  return files.length;
 }
 
 /** Copy the current view to the clipboard, ready to paste into a dashboard. */
