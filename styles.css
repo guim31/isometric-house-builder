@@ -1092,7 +1092,11 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12.5px; }
   :root { --tools-w: 98px; --inspector-w: 272px; }
   .layout { gap: 6px; padding: 6px; }
   .tools { padding: 4px; }
-  .tool-group-title { padding: 4px; font-size: 9.5px; letter-spacing: .04em; }
+  /* Titles in plain case, and allowed a second line: in capitals they ran
+     past the column (« ÉQUIPEM… »). */
+  .tool-group-title { padding: 4px 2px; gap: 4px; font-size: 10px; letter-spacing: 0; text-transform: none; align-items: flex-start; }
+  .tool-group-title::before { margin-top: 4px; }
+  .tool-group-name { white-space: normal; overflow: visible; line-height: 1.2; }
   .tool-group-count { display: none; }
   .tool-list { display: grid; grid-template-columns: repeat(2, 40px); gap: 3px; justify-content: center; }
   .tool { width: 40px; height: 40px; min-height: 0; padding: 0; justify-content: center; position: relative; }
@@ -1105,11 +1109,13 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12.5px; }
   .rot-label { min-width: 0; }
   /* The pad on the drawing recentres too. */
   #btn-fit { display: none; }
-}
-@media (max-width: 1100px) and (max-height: 820px) {
-  /* A shorter screen: the families of icons go on one line each where they
-     can, so the column holds without scrolling. */
-  .view-nav .nav-pad { grid-template-columns: repeat(3, 24px); grid-template-rows: repeat(3, 24px); }
+  /* The render's pad, reduced to one row: the two modes, zoom and fit. The
+     arrows go — a drag turns the house, two fingers pinch — and the pad no
+     longer covers a quarter of the drawing. */
+  .view-nav { flex-direction: row; right: 8px; bottom: 8px; padding: 4px; gap: 4px; }
+  .view-nav .nav-pad { display: none; }
+  .nav-fit-compact { display: grid !important; }
+  .nav-modes button { height: 34px; padding: 0 9px; font-size: 12.5px; }
 }
 
 /* ---------- touch ---------- */
@@ -1234,12 +1240,6 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12.5px; }
   #layout[data-tab="settings"] .tools,
   #layout[data-tab="settings"] .stage { display: none; }
 
-  /* The render's pad, reduced: the two modes, zoom and fit on one row. The
-     arrows go; a finger drags, and two fingers pinch. */
-  .view-nav { flex-direction: row; right: 8px; bottom: 8px; padding: 4px; gap: 4px; }
-  .view-nav .nav-pad { display: none; }
-  .nav-fit-compact { display: grid !important; }
-  .nav-modes button { height: 40px; padding: 0 9px; font-size: 12.5px; }
   .plan-nav { right: 8px; bottom: 8px; }
 
   .tabbar {

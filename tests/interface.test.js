@@ -568,6 +568,76 @@ await checkAsync('dans le plan, la cote de la sélection reste dans le panneau e
   return true;
 });
 
+/* ---------------- a tablet's width ---------------- */
+
+/** Resize the app's frame, as a window or a tablet turned would, and let it redraw. */
+async function resizeApp(frame, w, h) {
+  frame.style.width = `${w}px`;
+  frame.style.height = `${h}px`;
+  await new Promise((r) => setTimeout(r, 120));
+  await frames(frame.contentWindow, 3);
+  frame.contentWindow.__app.render();
+}
+
+await checkAsync('à 1024 px, aucun titre de famille d’outils n’est coupé et le pavé du rendu tient sur une ligne', async () => {
+  const frame = await app();
+  const doc = frame.contentDocument;
+  doc.querySelectorAll('dialog[open]').forEach((d) => d.close());
+  await resizeApp(frame, 1024, 768);
+  try {
+    const tools = doc.getElementById('tools').getBoundingClientRect();
+    for (const n of doc.querySelectorAll('.tool-group-name')) {
+      const r = n.getBoundingClientRect();
+      if (n.scrollWidth > n.clientWidth + 1 || r.right > tools.right - 2) return `titre coupé : « ${n.textContent} »`;
+    }
+    const nav = doc.getElementById('view-nav').getBoundingClientRect();
+    const iso = doc.getElementById('iso').getBoundingClientRect();
+    if (doc.querySelector('.view-nav .nav-pad').offsetParent !== null) return 'le pavé garde ses flèches';
+    if (nav.height > 60) return `pavé de ${Math.round(nav.height)} px de haut`;
+    const share = (nav.width * nav.height) / (iso.width * iso.height);
+    return share < 0.1 || `le pavé couvre ${Math.round(share * 100)} % du rendu`;
+  } finally {
+    await resizeApp(frame, 1280, 800);
+  }
+});
+
+await checkAsync('le plan qui montrait tout le projet le montre encore après un changement de taille ; zoomé, il garde son centre', async () => {
+  const frame = await app();
+  const win = frame.contentWindow;
+  const { store, plan } = win.__app;
+  win.document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+  store.reset({ ...fixtureHouse(), props: [
+    { id: 'tl', kind: 'tree', x: -9, y: 3, r: 1.5 }, { id: 'tr', kind: 'tree', x: 19, y: 3, r: 1.5 },
+  ] });
+  plan.fit();
+  const allIn = () => {
+    const { w, h } = plan.map;
+    // The house is 9 × 6 m from the origin; the trees stand at either end.
+    const [x0, y0, x1, y1] = [-10.5, 0, 20.5, 6];
+    const a = plan.toPx(x0, y1), b = plan.toPx(x1, y0);
+    return a[0] >= -0.5 && a[1] >= -0.5 && b[0] <= w + 0.5 && b[1] <= h + 0.5;
+  };
+  if (!allIn()) return 'le projet ne tient pas au départ';
+  try {
+    await resizeApp(frame, 900, 800);
+    if (!allIn()) return 'après un rétrécissement, le projet sort du cadre';
+    win.__app.layout.setLayout('plan');
+    await resizeApp(frame, 900, 800);
+    if (!allIn()) return 'après la bascule « Plan », le projet sort du cadre';
+    win.__app.layout.setLayout('both');
+    await resizeApp(frame, 1280, 800);
+    // Zoomed in by hand: the centre stays where it was put.
+    plan.zoomBy(3);
+    const { cx, cy, scale } = plan.view;
+    await resizeApp(frame, 1000, 800);
+    const v = plan.view;
+    return (v.cx === cx && v.cy === cy && v.scale === scale) || 'une vue zoomée a été réajustée';
+  } finally {
+    win.__app.layout.setLayout('both');
+    await resizeApp(frame, 1280, 800);
+  }
+});
+
 /* ---------------- the boot guard follows the whole graph ---------------- */
 
 await checkAsync('la garde de démarrage retrouve chaque module et chaque feuille de style que l’application charge', async () => {

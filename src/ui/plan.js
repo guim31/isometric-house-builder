@@ -89,8 +89,8 @@ export class PlanView {
     this.render();
   }
 
-  /** The view that shows the whole content, with some room around it. */
-  fitted(w, h) {
+  /** The extent of the whole project, in metres: [x0, y0, x1, y1]. */
+  contentBox() {
     const m = this.store.model;
     const cs = cellSizeOf(m);
     const cells = cellSet(m);
@@ -114,6 +114,12 @@ export class PlanView {
       i0 = Math.min(i0, fx0); j0 = Math.min(j0, fy0);
       i1 = Math.max(i1, fx1); j1 = Math.max(j1, fy1);
     }
+    return [i0, j0, i1, j1];
+  }
+
+  /** The view that shows the whole content, with some room around it. */
+  fitted(w, h) {
+    let [i0, j0, i1, j1] = this.contentBox();
     const pad = 4;
     i0 -= pad; j0 -= pad; i1 += pad; j1 += pad;
     return {
@@ -123,15 +129,35 @@ export class PlanView {
     };
   }
 
+  /** Did the view show the whole project in a panel of this size? */
+  showedAll(w, h) {
+    const { cx, cy, scale } = this.view;
+    const [x0, y0, x1, y1] = this.contentBox();
+    const px = (x) => w / 2 + (x - cx) * scale, py = (y) => h / 2 - (y - cy) * scale;
+    return px(x0) >= -0.5 && px(x1) <= w + 0.5 && py(y1) >= -0.5 && py(y0) <= h + 0.5;
+  }
+
   /**
-   * Pixel mapping of the current view. A resize keeps the centre where it
-   * was: only the amount of plan around it changes.
+   * Pixel mapping of the current view.
+   *
+   * When the panel changes size — the window, the splitter, a switch of
+   * layout, a tablet turned — a view that showed the whole project is fitted
+   * again, so that it still does: kept centred, the tree on the left edge
+   * went out of frame. A view someone zoomed into or moved keeps its centre:
+   * only the amount of plan around it changes. A panel hidden for now
+   * (render alone, another tab) has no size to compare.
    */
   layout() {
     const r = this.root.getBoundingClientRect();
+    const hidden = !r.width || !r.height;
     const w = Math.max(200, r.width);
     const h = Math.max(200, r.height);
+    const last = this.lastSize;
     if (!this.view) this.view = this.fitted(w, h);
+    else if (!hidden && last && (last.w !== w || last.h !== h) && this.showedAll(last.w, last.h)) {
+      this.view = this.fitted(w, h);
+    }
+    if (!hidden) this.lastSize = { w, h };
     const { cx, cy, scale } = this.view;
     this.map = {
       w, h, scale,
