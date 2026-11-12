@@ -678,7 +678,7 @@ await checkAsync('la garde de démarrage retrouve chaque module et chaque feuill
   return true;
 });
 
-check('la version affichée est celle du journal des changements', () => VERSION === '2.0.0' || VERSION);
+check('la version affichée est celle du journal des changements', () => VERSION === '2.1.0' || VERSION);
 
 await checkAsync('le journal des changements commence par la version affichée', async () => {
   const text = await (await fetch('../CHANGELOG.md')).text();
