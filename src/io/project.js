@@ -5,6 +5,7 @@
 
 import { normalise, defaultModel, MODEL_VERSION } from '../core/model.js';
 import { download, slug } from './files.js';
+import { t } from '../i18n/index.js';
 
 const STORAGE_KEY = 'isometric-house-builder/current';
 
@@ -71,13 +72,13 @@ export function importProject(file) {
     reader.onload = () => {
       try {
         const raw = JSON.parse(String(reader.result));
-        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('ce n’est pas un projet');
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(t('project.notProject'));
         resolve({ model: normalise(raw), newer: Number(raw.version) > MODEL_VERSION });
       } catch (e) {
-        reject(new Error('Fichier illisible : ' + e.message));
+        reject(new Error(t('project.unreadable', { message: e.message })));
       }
     };
-    reader.onerror = () => reject(new Error('Lecture impossible'));
+    reader.onerror = () => reject(new Error(t('project.readFailed')));
     reader.readAsText(file);
   });
 }
@@ -153,7 +154,7 @@ export function initialModel() {
  */
 let fileHandle = null;
 
-const PICKER_TYPES = [{ description: 'Projet Isometric House Builder', accept: { 'application/json': ['.json'] } }];
+const pickerTypes = () => [{ description: t('project.fileType'), accept: { 'application/json': ['.json'] } }];
 
 /** Can this browser write a file in place? */
 export const canWriteFiles = () => typeof window.showSaveFilePicker === 'function';
@@ -177,7 +178,7 @@ export async function saveProject(model, { as = false } = {}) {
   }
   try {
     if (!fileHandle || as) {
-      fileHandle = await window.showSaveFilePicker({ suggestedName: `${slug(model.name)}.house.json`, types: PICKER_TYPES });
+      fileHandle = await window.showSaveFilePicker({ suggestedName: `${slug(model.name)}.house.json`, types: pickerTypes() });
     }
     const out = await fileHandle.createWritable();
     await out.write(JSON.stringify(model, null, 2));
@@ -199,7 +200,7 @@ export async function pickProject() {
   if (typeof window.showOpenFilePicker !== 'function') return null;
   let handle;
   try {
-    [handle] = await window.showOpenFilePicker({ types: PICKER_TYPES, multiple: false });
+    [handle] = await window.showOpenFilePicker({ types: pickerTypes(), multiple: false });
   } catch (e) {
     if (e?.name === 'AbortError') return { cancelled: true };
     return null;

@@ -21,7 +21,7 @@ const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && 
 /** Is this model what normalise would make of it — nothing out of range, nothing missing? */
 function invalid(m) {
   const breach = limitBreach(m);
-  if (breach) return `plafond franchi : ${breach}`;
+  if (breach) return `plafond franchi : ${breach.key}`;
   if (/NaN|Infinity/.test(JSON.stringify(m))) return 'valeur non finie';
   const again = normalise(JSON.parse(JSON.stringify(m)));
   for (const list of ['openings', 'fixtures', 'roofItems', 'props', 'buildings']) {

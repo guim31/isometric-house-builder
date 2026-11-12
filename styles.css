@@ -214,6 +214,21 @@ kbd {
 }
 .app-link:hover { background: var(--bg); color: var(--ink); }
 
+/* The language selector: discreet, a word in the bar rather than a control
+   that asks to be used. */
+.lang-select {
+  height: 34px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+}
+.lang-select:hover { border-color: var(--line); color: var(--ink); }
+.lang-select option { color: var(--ink); background: var(--panel); }
+
 /* ---------- layout ---------- */
 
 .layout {
@@ -1123,7 +1138,7 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12.5px; }
 @media (pointer: coarse) {
   .plan-handle-hit { r: 22px; }
   .icon-btn { width: 40px; height: 40px; }
-  .project-name, .project-actions button, .project-actions a, #btn-export, .app-link { height: 40px; }
+  .project-name, .project-actions button, .project-actions a, #btn-export, .app-link, .lang-select { height: 40px; }
   .segmented button { height: 36px; min-width: 40px; }
   .view-nav .nav-btn, .plan-nav .nav-btn { width: 40px; height: 40px; }
   .nav-pad { grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(3, 40px); }
@@ -1146,7 +1161,7 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12.5px; }
 @media (max-width: 820px) {
   :root { --bar-h: 52px; }
   .app-bar { gap: 6px; padding: 6px 8px; }
-  .brand-name, .brand-version, .bar-end .app-link, #btn-keys { display: none; }
+  .brand-name, .brand-version, .bar-end .app-link, #btn-keys, .lang-bar { display: none; }
   .project-name { min-width: 0; flex: 1 1 auto; max-width: none; height: 40px; }
   .icon-btn { width: 40px; height: 40px; }
   #btn-export { height: 40px; width: 40px; padding: 0; }
@@ -1184,6 +1199,8 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12.5px; }
     font-size: 14px;
   }
   .project-actions .btn-label { display: inline !important; }
+  .project-actions .menu-lang { align-items: center; justify-content: space-between; cursor: default; }
+  .project-actions .menu-lang .lang-select { height: 36px; border-color: var(--line); background: var(--bg); color: var(--ink); }
   .project-actions button:hover, .project-actions a:hover { background: var(--bg); }
 
   .layout {

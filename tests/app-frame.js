@@ -3,7 +3,7 @@
  */
 
 import { clearLocal } from '../src/io/project.js';
-import { clearPrefs } from '../src/ui/prefs.js';
+import { clearPrefs, setPrefs } from '../src/ui/prefs.js';
 
 /**
  * Load the real page in an iframe.
@@ -33,6 +33,9 @@ async function loadAppOnce(width, height, deadline) {
   // The interface's own settings too — the layout, the open sections: the
   // page must boot as a first visit sees it, whatever an earlier test set.
   clearPrefs();
+  // In French, whatever the browser speaks; the English pass switches the
+  // running page itself, as a user would.
+  setPrefs({ lang: 'fr' });
   bootError = null;
   return new Promise((resolve, reject) => {
     const frame = document.createElement('iframe');

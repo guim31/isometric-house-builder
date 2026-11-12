@@ -13,11 +13,12 @@
 
 import { key, parseKey, boundaryEdges, boundaryRuns, SIDES } from '../core/grid.js';
 import {
-  cellSet, cellSizeOf, fmtMetres, buildingCells, setBuildingCells, fitOpening, openingRun, propFootprint,
+  cellSet, cellSizeOf, buildingCells, setBuildingCells, fitOpening, openingRun, propFootprint,
   wallSpan, buildingOfEdge, storeyHeightOf, fixtureZRange, offsetOnRun,
 } from '../core/model.js';
 import { moveBody } from '../core/bodies.js';
 import { focusFrame } from '../core/focus.js';
+import { t, metres } from '../i18n/index.js';
 import {
   OPENING_DEFAULTS, ROOF_ITEM_DEFAULTS, PROP_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS, FIXTURE_DEFAULTS,
   placeOpening, placeRoofItem, placeProp, placeRun, runShape, propAt, roofItemAt, roofAt, placeFixture, OFF_ROOF,
@@ -208,27 +209,35 @@ export class PlanView {
    * pinch nobody knows about is a feature nobody has, and buttons are what a
    * keyboard can reach.
    */
+  /** The pad's words, in the language of the moment. */
+  relabel() {
+    this.pad.setAttribute('aria-label', t('plan.nav'));
+    for (const b of this.pad.querySelectorAll('button[data-label]')) {
+      b.title = t(b.dataset.label);
+      b.setAttribute('aria-label', b.title);
+    }
+  }
+
   buildPad() {
     const pad = document.createElement('div');
     pad.className = 'plan-nav';
     pad.setAttribute('role', 'group');
-    pad.setAttribute('aria-label', 'Navigation dans le plan');
     const btn = (cls, glyph, label, run) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `nav-btn ${cls}`;
       b.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${ICON[glyph]}</svg>`;
-      b.title = label;
-      b.setAttribute('aria-label', label);
+      b.dataset.label = label;
       b.addEventListener('click', run);
       return b;
     };
     pad.append(
-      btn('plan-out', 'minus', 'Dézoomer le plan', () => this.zoomBy(1 / 1.25)),
-      btn('plan-in', 'plus', 'Zoomer le plan', () => this.zoomBy(1.25)),
-      btn('plan-fit', 'fit', 'Ajuster le plan au projet', () => this.fit()),
+      btn('plan-out', 'minus', 'plan.zoomOut', () => this.zoomBy(1 / 1.25)),
+      btn('plan-in', 'plus', 'plan.zoomIn', () => this.zoomBy(1.25)),
+      btn('plan-fit', 'fit', 'plan.fit', () => this.fit()),
     );
     this.pad = pad;
+    this.relabel();
     this.root.appendChild(pad);
   }
 
@@ -339,13 +348,13 @@ export class PlanView {
       // label would cover more wall than it measures.
       if (!active && m.buildings.length > 1) continue;
       for (const run of boundaryRuns(bCells)) {
-        const metres = run.cells * cs;
-        if (metres * map.scale < 26) continue;
+        const length = run.cells * cs;
+        if (length * map.scale < 26) continue;
         const mid = [((run.a[0] + run.b[0]) / 2) * cs, ((run.a[1] + run.b[1]) / 2) * cs];
         const p = this.toPx(mid[0] + run.n[0] * 0.9, mid[1] + run.n[1] * 0.9);
-        const t = el('text', { x: p[0], y: p[1], dy: 4 });
-        t.textContent = `${fmtMetres(metres)} m`;
-        gDims.appendChild(t);
+        const dim = el('text', { x: p[0], y: p[1], dy: 4 });
+        dim.textContent = t('plan.metres', { v: metres(length) });
+        gDims.appendChild(dim);
       }
     }
 
@@ -422,9 +431,9 @@ export class PlanView {
       // Above the margin ring, not the zone: over the zone the label lands on
       // whatever is being framed, which is exactly what one wants to look at.
       const p = this.toPx(mx0, my1);
-      const t = el('text', { x: p[0] + ((mx1 - mx0) * map.scale) / 2, y: p[1] - 8, class: 'rect-size' });
-      t.textContent = `cadrage ${fmtMetres(f.w)} × ${fmtMetres(f.d)} m`;
-      gFrame.appendChild(t);
+      const caption = el('text', { x: p[0] + ((mx1 - mx0) * map.scale) / 2, y: p[1] - 8, class: 'rect-size' });
+      caption.textContent = t('plan.framing', { w: metres(f.w), d: metres(f.d) });
+      gFrame.appendChild(caption);
     }
 
     // Compass. The plan flips y so north is up; the arrow makes it explicit,
@@ -434,7 +443,7 @@ export class PlanView {
     comp.appendChild(el('line', { x1: 0, y1: 9, x2: 0, y2: -5 }));
     comp.appendChild(el('path', { d: 'M -4 -3 L 0 -10 L 4 -3 Z' }));
     const label = el('text', { x: 0, y: 26 });
-    label.textContent = 'N';
+    label.textContent = t('plan.north');
     comp.appendChild(label);
     this.svg.appendChild(comp);
 
@@ -481,9 +490,9 @@ export class PlanView {
     }
 
     if (this.pointerAt && (this.hover || d)) {
-      const q = (v) => fmtMetres(Math.round(v * 20) / 20);
+      const q = (v) => metres(Math.round(v * 20) / 20);
       add('text', { x: 10, y: this.map.h - 10, class: 'plan-coords' },
-        `x ${q(this.pointerAt[0])} m · y ${q(this.pointerAt[1])} m`);
+        t('plan.coords', { x: q(this.pointerAt[0]), y: q(this.pointerAt[1]) }));
     }
     this.fitLabels();
   }
@@ -538,10 +547,10 @@ export class PlanView {
   /** Dimensions along the sides of a box, as the walls have theirs. */
   drawBoxDims(add, [x0, y0, x1, y1], depth = true) {
     const top = this.toPx((x0 + x1) / 2, y1);
-    add('text', { x: top[0], y: top[1] - 8, class: 'rect-size plan-dim' }, `${fmtMetres(x1 - x0)} m`);
+    add('text', { x: top[0], y: top[1] - 8, class: 'rect-size plan-dim' }, t('plan.metres', { v: metres(x1 - x0) }));
     if (!depth) return;
     const side = this.toPx(x1, (y0 + y1) / 2);
-    add('text', { x: side[0] + 8, y: side[1] + 4, class: 'rect-size plan-dim side' }, `${fmtMetres(y1 - y0)} m`);
+    add('text', { x: side[0] + 8, y: side[1] + 4, class: 'rect-size plan-dim side' }, t('plan.metres', { v: metres(y1 - y0) }));
   }
 
   /** Where an opening or a fixture stands on the plan: its two ends in pixels. */
@@ -598,12 +607,12 @@ export class PlanView {
       const ctx = this.openingContext(it);
       if (ctx) {
         add('text', { x: ctx.label[0], y: ctx.label[1] + 4, class: `rect-size plan-dim${ctx.anchor}` },
-          `${fmtMetres(Math.round(ctx.corner * 100) / 100)} m de l’angle`);
+          t('plan.fromCorner', { v: metres(Math.round(ctx.corner * 100) / 100) }));
         // A fixture's other dimension is its height, which the plan cannot
         // show otherwise.
         if (sel.type === 'fixture') {
           add('text', { x: ctx.label[0], y: ctx.label[1] + 18, class: `rect-size plan-dim${ctx.anchor}` },
-            `à ${fmtMetres(Math.round(this.fixtureZ(it) * 100) / 100)} m du plancher`);
+            t('plan.aboveFloor', { v: metres(Math.round(this.fixtureZ(it) * 100) / 100) }));
         }
       }
       return;
@@ -612,13 +621,13 @@ export class PlanView {
     const box = boxOf(sel.type, it);
     if (shape === 'radius') {
       const top = this.toPx(it.x, it.y + (it.r ?? 1));
-      add('text', { x: top[0], y: top[1] - 8, class: 'rect-size plan-dim' }, `⌀ ${fmtMetres((it.r ?? 1) * 2)} m`);
+      add('text', { x: top[0], y: top[1] - 8, class: 'rect-size plan-dim' }, t('plan.diameter', { v: metres((it.r ?? 1) * 2) }));
     } else if (shape === 'ends') {
       const horiz = box[2] - box[0] >= box[3] - box[1];
       const len = horiz ? box[2] - box[0] : box[3] - box[1];
       const p = horiz ? this.toPx((box[0] + box[2]) / 2, box[3]) : this.toPx(box[2], (box[1] + box[3]) / 2);
       add('text', horiz ? { x: p[0], y: p[1] - 8, class: 'rect-size plan-dim' }
-        : { x: p[0] + 8, y: p[1] + 4, class: 'rect-size plan-dim side' }, `${fmtMetres(len)} m`);
+        : { x: p[0] + 8, y: p[1] + 4, class: 'rect-size plan-dim side' }, t('plan.metres', { v: metres(len) }));
     } else {
       this.drawBoxDims(add, box);
     }
@@ -674,7 +683,7 @@ export class PlanView {
       if (ctx) {
         add('line', { x1: ctx.p0[0], y1: ctx.p0[1], x2: ctx.p1[0], y2: ctx.p1[1], class: 'plan-wall-hover' });
         add('text', { x: ctx.label[0], y: ctx.label[1] + 4, class: `rect-size plan-dim${ctx.anchor}` },
-          `${fmtMetres(Math.round(ctx.corner * 100) / 100)} m de l’angle`);
+          t('plan.fromCorner', { v: metres(Math.round(ctx.corner * 100) / 100) }));
       }
       const [p0, p1] = this.openingEnds(op);
       add('line', { x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1], class: `opening opening-${tool} ghost` });
@@ -691,7 +700,7 @@ export class PlanView {
       if (ctx) {
         add('line', { x1: ctx.p0[0], y1: ctx.p0[1], x2: ctx.p1[0], y2: ctx.p1[1], class: 'plan-wall-hover' });
         add('text', { x: ctx.label[0], y: ctx.label[1] + 4, class: `rect-size plan-dim${ctx.anchor}` },
-          `${fmtMetres(Math.round(ctx.corner * 100) / 100)} m de l’angle`);
+          t('plan.fromCorner', { v: metres(Math.round(ctx.corner * 100) / 100) }));
       }
       const { a, u } = edgeFrame(f.edge, cs);
       const c = this.toPx(a[0] + u[0] * f.offset, a[1] + u[1] * f.offset);
@@ -744,7 +753,7 @@ export class PlanView {
     // Live dimensions while dragging: this is how a wall gets its real length.
     const p = this.toPx(((x0 + x1 + 1) / 2) * cs, (y1 + 1) * cs);
     add('text', { x: p[0], y: p[1] - 9, class: 'rect-size' },
-      `${fmtMetres((x1 - x0 + 1) * cs)} × ${fmtMetres((y1 - y0 + 1) * cs)} m`);
+      t('plan.area', { w: metres((x1 - x0 + 1) * cs), d: metres((y1 - y0 + 1) * cs) }));
   }
 
   drawRun(add, d) {
@@ -754,7 +763,7 @@ export class PlanView {
     const p1 = horiz ? this.toPx(to[0], from[1]) : this.toPx(from[0], to[1]);
     add('line', { x1: p0[0], y1: p0[1], x2: p1[0], y2: p1[1], class: `run-preview run-${kind}` });
     const { len } = runShape(kind, from, to);
-    add('text', { x: (p0[0] + p1[0]) / 2, y: (p0[1] + p1[1]) / 2 - 10, class: 'rect-size' }, `${fmtMetres(len)} m`);
+    add('text', { x: (p0[0] + p1[0]) / 2, y: (p0[1] + p1[1]) / 2 - 10, class: 'rect-size' }, t('plan.metres', { v: metres(len) }));
   }
 
   drawFrame(add, d) {
@@ -764,7 +773,7 @@ export class PlanView {
     add('rect', { ...this.boxAttrs([x0, y0, x1, y1]), class: 'focus-zone drawing' });
     const p = this.toPx((x0 + x1) / 2, y1);
     add('text', { x: p[0], y: p[1] - 9, class: 'rect-size' },
-      `${fmtMetres(Math.round((x1 - x0) * 4) / 4)} × ${fmtMetres(Math.round((y1 - y0) * 4) / 4)} m`);
+      t('plan.area', { w: metres(Math.round((x1 - x0) * 4) / 4), d: metres(Math.round((y1 - y0) * 4) / 4) }));
   }
 
   /** Nearest exterior wall to a world point, within `maxDist` metres. */
@@ -991,13 +1000,13 @@ export class PlanView {
     if (OPENING_DEFAULTS[tool]) {
       const hit = this.nearestEdge(pt);
       if (hit) placeOpening(s, tool, hit.edge.id, 0, hit.offset);
-      else s.notify('Cliquez près d’un mur pour y poser l’ouverture');
+      else s.notify(t('plan.nearWall'));
       return;
     }
     if (FIXTURE_DEFAULTS[tool]) {
       const hit = this.nearestEdge(pt);
       if (hit) placeFixture(s, tool, hit.edge.id, 0, hit.offset);
-      else s.notify('Cliquez près d’un mur pour y fixer l’équipement');
+      else s.notify(t('plan.nearWallFixture'));
       return;
     }
     if (ROOF_ITEM_DEFAULTS[tool]) { placeRoofItem(s, tool, pt); return; }
@@ -1056,7 +1065,7 @@ export class PlanView {
         if (d.type === 'roofItem' && !roofAt(s.model, [x, y])) {
           // Held on the last roof it was over, as the render holds it: let
           // go past the eaves it was never drawn again.
-          if (!d.warned) s.notify(OFF_ROOF);
+          if (!d.warned) s.notify(t(OFF_ROOF));
           d.warned = true;
           this.renderOverlay();
           return;
@@ -1095,7 +1104,7 @@ export class PlanView {
         const next = moveBody(d.base, d.id, at[0], at[1]);
         if (!next) {
           // Held where it last fitted; said once, not at every pixel.
-          if (!d.warned) s.notify('Un corps ne peut pas en recouvrir un autre');
+          if (!d.warned) s.notify(t('plan.overlap'));
           d.warned = true;
           this.renderOverlay();
           return;
@@ -1173,7 +1182,7 @@ export class PlanView {
     }
     if (refused && !d.warned) {
       d.warned = true;
-      s.notify(`Case déjà occupée par « ${refused.name} »`);
+      s.notify(t('plan.cellTaken', { name: refused.name }));
     }
     if (!changes.size) return;
     s.update((cur) => {
@@ -1243,6 +1252,6 @@ export class PlanView {
       }
       return next;
     });
-    if (refused) s.notify(`Cases déjà occupées par « ${refused.name} » laissées de côté`);
+    if (refused) s.notify(t('plan.cellsTaken', { name: refused.name }));
   }
 }

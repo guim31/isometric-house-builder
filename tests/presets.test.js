@@ -8,6 +8,7 @@ import { normalise, cellSet } from '../src/core/model.js';
 import { renderScene } from '../src/render/svg.js';
 import { PRESETS, getPreset } from '../src/data/presets.js';
 import { Gallery } from '../src/ui/gallery.js';
+import { DICTIONARIES } from '../src/i18n/index.js';
 
 /* ---------------- starter models ---------------- */
 
@@ -16,7 +17,12 @@ check('la galerie propose dix modèles, tous identifiés', () => {
   const ids = PRESETS.map((p) => p.id);
   if (new Set(ids).size !== ids.length) return 'identifiants en double';
   for (const p of PRESETS) {
-    if (!p.name || !p.note) return `${p.id} : nom ou description manquant`;
+    // The name and the description shown are the dictionaries'; the French
+    // name is also the model's own, and the two must not drift apart.
+    for (const [lang, dict] of Object.entries(DICTIONARIES)) {
+      if (!dict[`preset.${p.id}`] || !dict[`preset.${p.id}.note`]) return `${p.id} : nom ou description manquant (${lang})`;
+    }
+    if (DICTIONARIES.fr[`preset.${p.id}`] !== p.name) return `${p.id} : nom différent du dictionnaire`;
     if (!p.model.cells.length) return `${p.id} : emprise vide`;
   }
   return getPreset('chalet') !== null && getPreset('inconnu') === null;

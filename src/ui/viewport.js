@@ -14,6 +14,7 @@ import { buildMesh } from '../core/scene.js';
 import { mergeCoplanar } from '../core/mesh.js';
 import { rotateDir, project, clampPitch, clampRoll, normaliseYaw } from '../core/iso.js';
 import { focusModel } from '../core/focus.js';
+import { t } from '../i18n/index.js';
 import {
   OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, LINEAR_KINDS, FIXTURE_DEFAULTS,
   placeOpening, placeProp, placeRoofItem, placeFixture, OFF_ROOF,
@@ -379,7 +380,7 @@ export class Viewport {
       if (this.drag && !this.drag.moved) {
         // It was a click after all. With a roof tool, a click off every roof
         // places nothing, and says so — as the plan does.
-        if (ROOF_ITEM_DEFAULTS[this.store.tool] && this.drag.button === 0) this.store.notify(OFF_ROOF);
+        if (ROOF_ITEM_DEFAULTS[this.store.tool] && this.drag.button === 0) this.store.notify(t(OFF_ROOF));
         const sel = this.drag.pick;
         if (sel?.type === 'building') this.store.setActiveBuilding(sel.id);
         this.store.select(sel);

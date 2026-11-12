@@ -10,6 +10,7 @@
 
 import { prefs, setPrefs, SPLIT_RANGE, DEFAULT_PREFS, LAYOUT_IDS, TAB_IDS } from './prefs.js';
 import { LAYOUTS, TABS } from './texts.js';
+import { t } from '../i18n/index.js';
 import { icon } from './icons.js';
 
 /** The width below which the page is laid out as a phone application. */
@@ -33,6 +34,7 @@ export class Layout {
     this.buildSwitcher(switcher);
     this.buildTabs(tabbar);
     this.bindSplitter();
+    this.relabel();
     this.phoneQuery.addEventListener?.('change', () => this.apply());
     this.apply();
   }
@@ -53,9 +55,8 @@ export class Layout {
       const b = document.createElement('button');
       b.type = 'button';
       b.dataset.layout = l.id;
-      b.title = `${l.title} (${l.key})`;
-      b.innerHTML = `${icon(LAYOUT_ICONS[l.id])}<span class="btn-label">${l.label}</span>`;
-      b.setAttribute('aria-label', l.title);
+      b.dataset.key = l.key;
+      b.innerHTML = `${icon(LAYOUT_ICONS[l.id])}<span class="btn-label"></span>`;
       b.addEventListener('click', () => this.setLayout(l.id));
       root.appendChild(b);
       return b;
@@ -63,15 +64,28 @@ export class Layout {
   }
 
   buildTabs(root) {
-    this.tabButtons = TABS.map((t) => {
+    this.tabButtons = TABS.map((id) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.dataset.tab = t.id;
-      b.innerHTML = `${icon(TAB_ICONS[t.id])}<span class="tab-label">${t.label}</span><span class="tab-dot" hidden></span>`;
-      b.addEventListener('click', () => this.setTab(t.id));
+      b.dataset.tab = id;
+      b.innerHTML = `${icon(TAB_ICONS[id])}<span class="tab-label"></span><span class="tab-dot" hidden></span>`;
+      b.addEventListener('click', () => this.setTab(id));
       root.appendChild(b);
       return b;
     });
+  }
+
+  /** Write the buttons' words, in the language of the moment. */
+  relabel() {
+    for (const b of this.switchButtons) {
+      const id = b.dataset.layout;
+      const title = t(`layout.${id}Title`);
+      b.title = t('layout.title', { title, key: b.dataset.key });
+      b.setAttribute('aria-label', title);
+      b.querySelector('.btn-label').textContent = t(`layout.${id}`);
+    }
+    for (const b of this.tabButtons) b.querySelector('.tab-label').textContent = t(`tab.${b.dataset.tab}`);
+    this.applySplit(this.split);
   }
 
   setLayout(id) {
@@ -97,7 +111,7 @@ export class Layout {
     this.plan.style.flexGrow = String(split);
     this.render.style.flexGrow = String(1 - split);
     this.splitter.setAttribute('aria-valuenow', String(Math.round(split * 100)));
-    this.splitter.setAttribute('aria-valuetext', `Plan ${Math.round(split * 100)} %, rendu ${Math.round((1 - split) * 100)} %`);
+    this.splitter.setAttribute('aria-valuetext', t('stage.splitterValue', { plan: Math.round(split * 100), render: Math.round((1 - split) * 100) }));
   }
 
   /** Put the page in the state the prefs say. */

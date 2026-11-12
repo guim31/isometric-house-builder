@@ -13,7 +13,21 @@ import {
   customSize, pixelsOf, MAX_SIDE, MIN_SIDE,
 } from '../io/export.js';
 import { prefs, setPrefs } from './prefs.js';
-import { EXPORT_T as X } from './texts.js';
+import { t } from '../i18n/index.js';
+
+/** The backgrounds offered as chips, with the key of each one's name. */
+const BACKGROUNDS = [
+  ['transparent', 'export.bg.transparent'],
+  ['#ffffff', 'export.bg.white'],
+  ['#f4f6f8', 'export.bg.light'],
+  ['#0f172a', 'export.bg.dark'],
+];
+
+/** The name of a background, for whoever shows it elsewhere: the inspector. */
+export function backgroundName(value) {
+  const known = BACKGROUNDS.find(([v]) => v === value);
+  return known ? t(known[1]) : value;
+}
 
 const COLOUR_RE = /^#[0-9a-f]{6}$/i;
 
@@ -34,7 +48,7 @@ export class ExportDialog {
     this.buildSizes();
     this.buildBackgrounds();
     this.bindActions();
-    this.$('export-lead').textContent = X.lead;
+    this.relabel();
     dialog.addEventListener('close', () => {
       this.unsubscribe?.();
       this.unsubscribe = null;
@@ -53,8 +67,8 @@ export class ExportDialog {
 
   buildSizes() {
     const sel = this.$('export-size');
-    for (const s of SIZES) sel.appendChild(new Option(s.label, s.id));
-    sel.appendChild(new Option(X.custom, 'custom'));
+    for (const s of SIZES) sel.appendChild(new Option('', s.id));
+    sel.appendChild(new Option('', 'custom'));
     sel.addEventListener('change', () => {
       setPrefs({ exportSize: sel.value });
       this.sync();
@@ -69,16 +83,39 @@ export class ExportDialog {
     for (const input of [w, hgt]) {
       input.addEventListener('change', commit);
       input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); commit(); } });
-      input.title = X.tooBig(MAX_SIDE);
     }
+  }
+
+  /** Every word the window writes itself, in the language of the moment. */
+  relabel() {
+    this.$('export-lead').textContent = t('export.lead');
+    for (const o of this.$('export-size').options) {
+      o.textContent = o.value === 'custom' ? t('export.custom') : t(`export.size.${o.value}`);
+    }
+    for (const input of [this.$('export-w'), this.$('export-h')]) {
+      input.title = t('export.tooBig', { max: MAX_SIDE });
+      input.setAttribute('aria-description', t('export.range', { min: MIN_SIDE, max: MAX_SIDE }));
+    }
+    for (const chip of this.dialog.querySelectorAll('#export-bg-chips .chip')) {
+      chip.querySelector('.chip-label').textContent = t(chip.dataset.label);
+    }
+    this.colourInput.setAttribute('aria-label', t('export.customColour'));
+    if (this.dialog.open) this.sync();
   }
 
   buildBackgrounds() {
     const box = this.$('export-bg-chips');
     this.bgInputs = [];
-    for (const [value, label] of X.backgrounds) {
+    const word = (key) => {
+      const span = document.createElement('span');
+      span.className = 'chip-label';
+      span.textContent = t(key);
+      return span;
+    };
+    for (const [value, label] of BACKGROUNDS) {
       const chip = document.createElement('label');
       chip.className = 'chip';
+      chip.dataset.label = label;
       const r = document.createElement('input');
       r.type = 'radio';
       r.name = 'export-bg';
@@ -86,7 +123,7 @@ export class ExportDialog {
       const swatch = document.createElement('span');
       swatch.className = `swatch${value === 'transparent' ? ' swatch-clear' : ''}`;
       if (value !== 'transparent') swatch.style.background = value;
-      chip.append(r, swatch, document.createTextNode(label));
+      chip.append(r, swatch, word(label));
       r.addEventListener('change', () => this.setBackground(value));
       box.appendChild(chip);
       this.bgInputs.push(r);
@@ -94,6 +131,7 @@ export class ExportDialog {
     // A colour of one's own: the dashboard's own background, say.
     const chip = document.createElement('label');
     chip.className = 'chip chip-colour';
+    chip.dataset.label = 'export.customColour';
     const r = document.createElement('input');
     r.type = 'radio';
     r.name = 'export-bg';
@@ -101,8 +139,7 @@ export class ExportDialog {
     const colour = document.createElement('input');
     colour.type = 'color';
     colour.value = '#dfe7ee';
-    colour.setAttribute('aria-label', X.customColour);
-    chip.append(r, colour, document.createTextNode(X.customColour));
+    chip.append(r, colour, word('export.customColour'));
     r.addEventListener('change', () => this.setBackground(colour.value));
     colour.addEventListener('input', () => { r.checked = true; this.setBackground(colour.value, true); });
     box.appendChild(chip);
@@ -119,14 +156,14 @@ export class ExportDialog {
 
   bindActions() {
     const run = (id, fn) => this.$(id).addEventListener('click', () => fn());
-    run('btn-png', () => this.job(X.rendering, async () => {
+    run('btn-png', () => this.job(t('export.rendering'), async () => {
       await exportPng(this.store.model, this.size);
-      return X.pngDone;
+      return t('export.pngDone');
     }));
     // Synchronous, so that a failure is said before the click returns.
     run('btn-svg', () => this.job(null, () => {
       exportSvg(this.store.model, this.size);
-      return X.svgDone;
+      return t('export.svgDone');
     }));
     // Not through job(): the clipboard write must start within the click, and
     // Safari refuses it once the click is over.
@@ -134,19 +171,21 @@ export class ExportDialog {
       this.status('');
       try {
         await copyPngToClipboard(this.store.model, this.size);
-        this.status(X.copyDone);
-      } catch (e) { this.status(X.failed(e.message), true); }
+        this.status(t('export.copyDone'));
+      } catch (e) { this.status(t('export.failed', { message: e.message }), true); }
     });
-    run('btn-four', () => this.job(X.face(0, 4), async (progress) => {
-      const n = await exportFourViews(this.store.model, this.size, (i, total) => progress(i, total, X.face(Math.min(i + 1, total), total)));
-      return X.zipDone(n);
+    run('btn-four', () => this.job(t('export.face', { n: 0, total: 4 }), async (progress) => {
+      const n = await exportFourViews(this.store.model, this.size,
+        (i, total) => progress(i, total, t('export.face', { n: Math.min(i + 1, total), total })));
+      return t('export.zipDone', { n });
     }));
     run('btn-views', () => {
       const total = this.store.model.views.length;
-      if (!total) { this.status(X.noViews); return; }
-      this.job(X.view(1, total), async (progress) => {
-        const n = await exportSavedViews(this.store.model, this.size, (i, t) => progress(i, t, X.view(Math.min(i + 1, t), t)));
-        return X.zipDone(n);
+      if (!total) { this.status(t('export.noViews')); return; }
+      this.job(t('export.view', { n: 1, total }), async (progress) => {
+        const n = await exportSavedViews(this.store.model, this.size,
+          (i, all) => progress(i, all, t('export.view', { n: Math.min(i + 1, all), total: all })));
+        return t('export.zipDone', { n });
       });
     });
   }
@@ -181,7 +220,7 @@ export class ExportDialog {
       const done = fn(progress);
       this.status(done instanceof Promise ? await done : done);
     } catch (e) {
-      this.status(X.failed(e.message), true);
+      this.status(t('export.failed', { message: e.message }), true);
     } finally {
       this.busy = false;
       bar.hidden = true;
@@ -232,22 +271,21 @@ export class ExportDialog {
     const shownW = customSize(cw, ch);
     if (document.activeElement !== w) w.value = String(shownW.width);
     if (document.activeElement !== hgt) hgt.value = String(shownW.height);
-    for (const input of [w, hgt]) input.setAttribute('aria-description', `${MIN_SIDE} à ${MAX_SIDE} px`);
 
     const night = !!m.style.night;
     const bg = m.style.background;
-    const preset = X.backgrounds.some(([v]) => v === bg);
+    const preset = BACKGROUNDS.some(([v]) => v === bg);
     for (const r of this.bgInputs) {
       r.disabled = night;
       r.checked = r.value === 'custom' ? !preset : r.value === bg;
     }
     this.colourInput.disabled = night;
     if (!preset && COLOUR_RE.test(bg) && this.colourInput.value !== bg) this.colourInput.value = bg;
-    this.$('export-bg-note').textContent = night ? X.nightNote : '';
+    this.$('export-bg-note').textContent = night ? t('export.nightNote') : '';
     this.$('export-bg').classList.toggle('disabled', night);
 
     const [pw, ph] = pixelsOf(size);
-    this.$('export-dims').textContent = X.file(pw, ph);
+    this.$('export-dims').textContent = t('export.file', { w: pw, h: ph });
     this.fitFrame(size);
     if (this.shown?.model === m && this.shown.size === `${size.id}:${size.width}x${size.height}`) return;
     this.shown = { model: m, size: `${size.id}:${size.width}x${size.height}` };

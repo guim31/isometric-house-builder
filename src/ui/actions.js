@@ -12,6 +12,7 @@ import {
   newId, fitOpening, OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, stairsRun, cellSizeOf,
   FIXTURE_DEFAULTS,
 } from '../core/model.js';
+import { t } from '../i18n/index.js';
 
 // Defined in the model, which fills them into files that leave them out.
 export { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, FIXTURE_DEFAULTS };
@@ -74,14 +75,14 @@ export function roofItemAt(kind, pt) {
 /**
  * Put a roof item down — on a roof only. Off every roof it was created all
  * the same, and never drawn: an object nobody could see or find again.
- * Returns whether one was placed.
+ * Returns whether one was placed. `OFF_ROOF` is the key of the refusal.
  */
-export const OFF_ROOF = 'Posez cet objet sur le toit d’un corps de bâtiment';
+export const OFF_ROOF = 'plan.offRoof';
 
 export function placeRoofItem(store, kind, pt) {
   const item = roofItemAt(kind, pt);
   if (!roofAt(store.model, [item.x, item.y])) {
-    store.notify?.(OFF_ROOF);
+    store.notify?.(t(OFF_ROOF));
     return false;
   }
   const id = newId('r', store.model);
@@ -252,7 +253,7 @@ export function nudgeSelection(store, dx, dy, big = false) {
   if (sel.type === 'roofItem') {
     const to = [Math.round((item.x + dx * step) * 100) / 100, Math.round((item.y + dy * step) * 100) / 100];
     // Kept on a roof: an arrow past the eaves would lose it.
-    if (!roofAt(store.model, to)) { store.notify(OFF_ROOF); return true; }
+    if (!roofAt(store.model, to)) { store.notify(t(OFF_ROOF)); return true; }
   }
   store.patchSelected((it) => ({
     x: Math.round((it.x + dx * step) * 100) / 100,

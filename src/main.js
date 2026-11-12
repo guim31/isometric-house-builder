@@ -10,16 +10,21 @@ import {
   initialModel, importProject, clearLocal, toShareUrl, readShareUrl, clearShareHash, setAside,
   saveProject, pickProject, useFile,
 } from './io/project.js';
-import { Gallery } from './ui/gallery.js';
-import { emptyModel, defaultModel } from './core/model.js';
-import { viewpointLabel, normaliseYaw } from './core/iso.js';
+import { Gallery, presetModel } from './ui/gallery.js';
+import { PRESETS } from './data/presets.js';
+import { normaliseYaw } from './core/iso.js';
 import { nudgeSelection } from './ui/actions.js';
 import { Layout } from './ui/layout.js';
 import { buildTools, syncTools, revealTool } from './ui/toolbar.js';
 import { ExportDialog } from './ui/export-dialog.js';
 import { ask, askText, showText } from './ui/dialogs.js';
 import { icon } from './ui/icons.js';
-import { TOOL_GROUPS, LAYOUTS, SHORTCUT_SECTIONS, T } from './ui/texts.js';
+import {
+  TOOL_GROUPS, LAYOUTS, SHORTCUT_SECTIONS, toolLabel, shortcutParts,
+} from './ui/texts.js';
+import { blankModel } from './ui/naming.js';
+import { pointName } from './ui/words.js';
+import { t, language, setLanguage, onLanguageChange, LANGUAGES } from './i18n/index.js';
 import { VERSION } from './version.js';
 
 const $ = (id) => document.getElementById(id);
@@ -47,26 +52,61 @@ function toast(message, duration = 2600, action = null) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show', 'error'), duration === 'error' ? 7000 : duration);
 }
-const reportError = (text) => toast(`Une erreur est survenue : ${text || 'erreur inconnue'}`, 'error');
+const reportError = (text) => toast(t('error.generic', { message: text || t('error.unknown') }), 'error');
 window.addEventListener('error', (ev) => reportError(ev.message || ev.error?.message));
 window.addEventListener('unhandledrejection', (ev) => reportError(ev.reason?.message || String(ev.reason)));
 
-/* ---------- icons and version, before anything is drawn ---------- */
+/* ---------- icons, version and words, before anything is drawn ---------- */
 
 for (const n of document.querySelectorAll('[data-icon]')) n.insertAdjacentHTML('afterbegin', icon(n.dataset.icon));
 $('app-version').textContent = VERSION;
-$('app-version').title = `Version ${VERSION}`;
+
+/*
+ * The page's own words — the bar, the headings, the dialogs' frames — are in
+ * index.html in French, so that the page reads before any module has run.
+ * Each carries the key of its text: `data-i18n` for the text itself,
+ * `data-i18n-title` and `data-i18n-aria` for its tooltip and its accessible
+ * name. Written again at each change of language, with the page's language,
+ * title and description.
+ */
+function applyPageWords() {
+  const root = document.documentElement;
+  root.lang = language();
+  document.title = t('page.title');
+  document.querySelector('meta[name="description"]')?.setAttribute('content', t('page.description'));
+  for (const n of document.querySelectorAll('[data-i18n]')) n.textContent = t(n.dataset.i18n);
+  for (const n of document.querySelectorAll('[data-i18n-title]')) n.title = t(n.dataset.i18nTitle);
+  for (const n of document.querySelectorAll('[data-i18n-aria]')) n.setAttribute('aria-label', t(n.dataset.i18nAria));
+  for (const n of document.querySelectorAll('a[data-guide]')) n.href = t('page.guide');
+  $('app-version').title = t('page.version', { version: VERSION });
+  for (const pick of document.querySelectorAll('.lang-select')) if (pick.value !== language()) pick.value = language();
+}
+
+/*
+ * The language selector: each language named in itself, as one looks for it.
+ * Two of them, the same: one in the bar, one in the phone's menu.
+ */
+for (const pick of document.querySelectorAll('.lang-select')) {
+  for (const l of LANGUAGES) pick.appendChild(new Option(l.name, l.id));
+  pick.value = language();
+  pick.addEventListener('change', () => setLanguage(pick.value));
+}
+applyPageWords();
 
 /* ---------- the store and the views ---------- */
 
 const boot = initialModel();
+// The house a first visit opens on — or the one opened when what was saved
+// would not — is named in the visitor's language, like everything the tool
+// creates. A project that was saved keeps its names.
+if (boot.source === 'default' || boot.source === 'rejected') boot.model = presetModel(PRESETS[0]);
 // A link opened over a project already here does not erase it: that project
 // becomes the history entry before the link, and « Annuler » brings it back.
 const store = new Store(boot.source === 'link' && boot.previous ? boot.previous : boot.model);
 if (boot.source === 'link' && boot.previous) store.update(boot.model);
 store.onLimit = (message) => toast(message, 4000);
 store.onNotice = (message) => toast(message, 3200);
-store.onSaveError = () => toast('Sauvegarde automatique impossible dans ce navigateur : pensez à « Enregistrer »');
+store.onSaveError = () => toast(t('project.autosaveFailed'));
 const plan = new PlanView($('plan'), store);
 const viewport = new Viewport($('iso'), store);
 const exportDialog = new ExportDialog($('export-dialog'), store);
@@ -93,7 +133,6 @@ function openModel(model, { file = null } = {}) {
   plan.refit();
 }
 
-const LINK_OPENED = 'Projet du lien ouvert — Annuler pour retrouver le vôtre';
 
 /*
  * A link pasted into the address bar of a page already open changes only the
@@ -105,11 +144,11 @@ window.addEventListener('hashchange', () => {
   if (!link) return;
   clearShareHash();
   if (link.failed) {
-    toast('Ce lien de partage est illisible : votre projet reste ouvert, et le lien est mis de côté', 6000);
+    toast(t('link.unreadable'), 6000);
     return;
   }
   openModel(link.model);
-  toast(LINK_OPENED, 6000);
+  toast(t('link.openedOver'), 6000);
 });
 
 /* ---------- tools ---------- */
@@ -163,16 +202,8 @@ const NUDGE = {
   right: () => (viewport.dragMode === 'pan' ? viewport.panBy(PAN_STEP, 0) : viewport.nudge(YAW_STEP, 0)),
 };
 
-const NUDGE_TITLES = {
-  orbit: {
-    up: 'Monter la caméra', down: 'Descendre la caméra',
-    left: 'Tourner vers la gauche', right: 'Tourner vers la droite',
-  },
-  pan: {
-    up: 'Remonter l’image', down: 'Descendre l’image',
-    left: 'Décaler vers la gauche', right: 'Décaler vers la droite',
-  },
-};
+/** What each arrow of the pad says it does, in the mode of the moment: `nav.<mode>.<dir>`. */
+const nudgeTitle = (mode, dir) => t(`nav.${mode === 'pan' ? 'pan' : 'orbit'}.${dir}`);
 
 /**
  * Press and hold to keep going.
@@ -202,13 +233,12 @@ function buildNav() {
   const root = $('view-nav');
   const modes = document.createElement('div');
   modes.className = 'nav-modes';
-  const modeButtons = [['orbit', 'Pivoter', 'Glisser fait pivoter la maison (Maj : déplacer)'],
-    ['pan', 'Déplacer', 'Glisser déplace la vue (Maj : pivoter)']];
+  const modeButtons = [['orbit', 'nav.orbit', 'nav.orbitTitle'], ['pan', 'nav.pan', 'nav.panTitle']];
   for (const [mode, label, title] of modeButtons) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.textContent = label;
-    b.title = title;
+    b.textContent = t(label);
+    b.title = t(title);
     b.dataset.mode = mode;
     b.addEventListener('click', () => viewport.setDragMode(mode));
     modes.appendChild(b);
@@ -220,8 +250,8 @@ function buildNav() {
     b.type = 'button';
     b.className = `nav-btn ${cls}`;
     b.innerHTML = glyph(name);
-    b.title = label;
-    b.setAttribute('aria-label', label);
+    b.title = t(label);
+    b.setAttribute('aria-label', b.title);
     if (onClick) b.addEventListener('click', onClick);
     return b;
   };
@@ -229,20 +259,20 @@ function buildNav() {
   const pad = document.createElement('div');
   pad.className = 'nav-pad';
   for (const dir of ['up', 'left', 'right', 'down']) {
-    const b = btn(`nav-${dir}`, 'arrow', NUDGE_TITLES.orbit[dir], null);
+    const b = btn(`nav-${dir}`, 'arrow', `nav.orbit.${dir}`, null);
     b.dataset.dir = dir;
     repeatable(b, NUDGE[dir]);
     pad.appendChild(b);
   }
-  pad.appendChild(btn('nav-fit', 'fit', 'Recadrer', () => viewport.resetView()));
+  pad.appendChild(btn('nav-fit', 'fit', 'nav.fit', () => viewport.resetView()));
 
   const zoom = document.createElement('div');
   zoom.className = 'nav-zoom';
   zoom.append(
-    btn('nav-out', 'minus', 'Dézoomer', () => viewport.zoomBy(1 / 1.25)),
-    btn('nav-in', 'plus', 'Zoomer', () => viewport.zoomBy(1.25)),
+    btn('nav-out', 'minus', 'nav.zoomOut', () => viewport.zoomBy(1 / 1.25)),
+    btn('nav-in', 'plus', 'nav.zoomIn', () => viewport.zoomBy(1.25)),
     // The pad's centre button, again, for the compact pad that has no arrows.
-    btn('nav-fit nav-fit-compact', 'fit', 'Recadrer', () => viewport.resetView()),
+    btn('nav-fit nav-fit-compact', 'fit', 'nav.fit', () => viewport.resetView()),
   );
 
   root.replaceChildren(modes, pad, zoom);
@@ -253,10 +283,9 @@ function syncNav() {
   for (const b of document.querySelectorAll('.nav-modes button')) {
     b.setAttribute('aria-pressed', String(b.dataset.mode === viewport.dragMode));
   }
-  const titles = NUDGE_TITLES[viewport.dragMode] || NUDGE_TITLES.orbit;
   for (const b of document.querySelectorAll('.nav-pad [data-dir]')) {
-    b.title = titles[b.dataset.dir];
-    b.setAttribute('aria-label', titles[b.dataset.dir]);
+    b.title = nudgeTitle(viewport.dragMode, b.dataset.dir);
+    b.setAttribute('aria-label', b.title);
   }
 }
 viewport.onModeChange = syncNav;
@@ -297,25 +326,25 @@ const gallery = new Gallery($('gallery-dialog'), (model) => {
   // Offered on a first visit, the gallery replaces nothing anyone made.
   const replacing = gallery.replacing;
   openModel(model);
-  if (replacing) toast(T.galleryDone(model.name), 4200, { label: T.undo, run: () => store.undo() });
+  if (replacing) toast(t('gallery.done', { name: model.name }), 4200, { label: t('undo'), run: () => store.undo() });
 });
 $('btn-gallery').addEventListener('click', () => gallery.open({ replacing: true }));
 
 async function newProject() {
-  const ok = await ask({ title: T.newTitle, body: T.newBody, confirm: T.newConfirm, danger: true });
+  const ok = await ask({ title: t('new.title'), body: t('new.body'), confirm: t('new.confirm'), danger: true });
   if (!ok) return;
   clearLocal();
-  openModel(emptyModel());
-  toast(T.newDone, 4200, { label: T.undo, run: () => store.undo() });
+  openModel(blankModel());
+  toast(t('new.done'), 4200, { label: t('undo'), run: () => store.undo() });
 }
 $('btn-new').addEventListener('click', newProject);
 
 async function save(as = false) {
   try {
     const done = await saveProject(store.model, { as });
-    if (done) toast(done.name ? T.savedTo(done.name) : T.saved);
+    if (done) toast(done.name ? t('project.savedTo', { name: done.name }) : t('project.saved'));
   } catch (e) {
-    toast(T.saveFailed(e.message), 5000);
+    toast(t('project.saveFailed', { message: e.message }), 5000);
   }
 }
 $('btn-save').addEventListener('click', () => save(false));
@@ -326,16 +355,16 @@ $('btn-share').addEventListener('click', async () => {
   const url = toShareUrl(store.model);
   try {
     await navigator.clipboard.writeText(url);
-    toast(T.shareCopied);
+    toast(t('link.copied'));
   } catch {
     // No clipboard on insecure origins: the link is shown, selected, to copy.
-    showText({ title: T.shareTitle, body: T.shareBody, text: url });
+    showText({ title: t('link.title'), body: t('link.body'), text: url });
   }
 });
 
 function opened({ model, newer }, file = null) {
   openModel(model, { file });
-  toast(newer ? T.openedNewer : T.opened);
+  toast(newer ? t('project.openedNewer') : t('project.opened'));
 }
 
 async function openFile() {
@@ -387,7 +416,7 @@ window.addEventListener('drop', async (ev) => {
   const item = [...(ev.dataTransfer.items || [])].find((i) => i.kind === 'file');
   const file = ev.dataTransfer.files?.[0];
   if (!file) return;
-  if (!/\.json$/i.test(file.name)) { toast(T.dropRefused, 4000); return; }
+  if (!/\.json$/i.test(file.name)) { toast(t('project.dropRefused'), 4000); return; }
   // Where the browser hands over the file itself, « Enregistrer » can write
   // back into it. Asked for before anything is awaited: the drop's data is
   // only there during the event.
@@ -398,7 +427,6 @@ window.addEventListener('drop', async (ev) => {
     toast(e.message);
   }
 });
-dropZone.querySelector('p').textContent = T.dropHere;
 
 /* ---------- export, shortcuts ---------- */
 
@@ -409,10 +437,15 @@ function buildKeys() {
   const body = $('keys-body');
   const lead = document.createElement('p');
   lead.className = 'dialog-lead';
-  lead.textContent = T.shortcutsLead;
+  lead.textContent = t('keys.lead');
   const sections = [
-    ...SHORTCUT_SECTIONS,
-    { title: T.shortcutsTools, keys: TOOL_GROUPS.flatMap((g) => g.tools).filter((t) => t.key).map((t) => [t.key, t.label]) },
+    ...SHORTCUT_SECTIONS.map((s) => ({
+      title: t(`keys.${s.id}`), keys: s.keys.map(([keys, what]) => [shortcutParts(keys), t(`keys.${what}`)]),
+    })),
+    {
+      title: t('keys.tools'),
+      keys: TOOL_GROUPS.flatMap((g) => g.tools).filter((x) => x.key).map((x) => [shortcutParts(x.key), toolLabel(x.id)]),
+    },
   ];
   const grid = document.createElement('div');
   grid.className = 'keys-grid';
@@ -423,8 +456,9 @@ function buildKeys() {
     const dl = document.createElement('dl');
     for (const [keys, what] of s.keys) {
       const dt = document.createElement('dt');
-      for (const [k, part] of keys.split(/( ou | · | et | \+ )/).entries()) {
-        if (k % 2) dt.append(part); else for (const [n, key] of part.split('+').entries()) {
+      for (const part of keys) {
+        if (part.text) { dt.append(part.text); continue; }
+        for (const [n, key] of part.keys.entries()) {
           if (n) dt.append('+');
           const kbd = document.createElement('kbd');
           kbd.textContent = key;
@@ -440,7 +474,7 @@ function buildKeys() {
   }
   const foot = document.createElement('p');
   foot.className = 'keys-version';
-  foot.textContent = `Isometric House Builder ${VERSION}`;
+  foot.textContent = t('keys.version', { version: VERSION });
   body.replaceChildren(lead, grid, foot);
 }
 function showKeys() {
@@ -553,7 +587,7 @@ function renderAll() {
   syncTools(toolsRoot, hint, store);
   $('btn-undo').disabled = !store.canUndo;
   $('btn-redo').disabled = !store.canRedo;
-  $('rot-label').textContent = viewpointLabel(store.model.camera.yaw);
+  $('rot-label').textContent = pointName(store.model.camera.yaw);
   if (nameInput.value !== store.model.name) nameInput.value = store.model.name;
   layout.markSettings(!!store.selection && layout.tab !== 'settings');
 }
@@ -567,7 +601,7 @@ function renderAll() {
 function renderCamera() {
   viewport.render();
   inspector.syncCamera();
-  $('rot-label').textContent = viewpointLabel(store.model.camera.yaw);
+  $('rot-label').textContent = pointName(store.model.camera.yaw);
 }
 
 let frame = null;
@@ -604,6 +638,25 @@ if (window.ResizeObserver) {
   ro.observe($('iso'));
 }
 
+/*
+ * A change of language rewrites every word on the page where it stands: the
+ * page's own, the palette, the pad, the help, the open dialogs, the
+ * inspector and the drawings' dimensions. Nothing is reloaded, the project
+ * and its history are not touched, and the names the project holds stay as
+ * they were given.
+ */
+onLanguageChange(() => {
+  applyPageWords();
+  buildTools(toolsRoot, store);
+  buildNav();
+  buildKeys();
+  layout.relabel();
+  plan.relabel();
+  exportDialog.relabel();
+  gallery.relabel();
+  renderAll();
+});
+
 buildTools(toolsRoot, store);
 buildNav();
 buildKeys();
@@ -619,18 +672,19 @@ try {
   // will not parse, and open the default model rather than a blank page.
   setAside(store.model);
   boot.rejected = 'local';
-  store.reset(defaultModel());
+  store.reset(presetModel(PRESETS[0]));
   plan.refit();
   renderAll();
 }
 if (boot.rejected) {
-  toast(boot.rejected === 'link'
-    ? 'Ce lien de partage est illisible : le modèle par défaut est ouvert, et le lien mis de côté'
-    : 'Le projet enregistré n’a pas pu être ouvert : il est mis de côté, et le modèle par défaut est ouvert', 8000);
+  toast(boot.rejected === 'link' ? t('link.unreadableDefault') : t('project.restoreFailed'), 8000);
 }
 
 // For the test bench and the console: the running store, nothing else.
-window.__app = { store, viewport, plan, inspector, layout, exportDialog, render: renderAll, renderCamera };
+window.__app = {
+  store, viewport, plan, inspector, layout, exportDialog, gallery, render: renderAll, renderCamera,
+  i18n: { t, language, setLanguage },
+};
 // Tell the boot guard of index.html that the interface stands: from here on,
 // the page's own error net answers for what goes wrong.
 window.__bootReady?.();
@@ -639,7 +693,7 @@ window.__bootReady?.();
 // guess what the tool is for — over the first preset, which beats an empty
 // grid behind it. Returning visitors get their project straight back, even an
 // empty one: a page left blank on purpose is still their page.
-if (boot.source === 'link') toast(boot.previous ? LINK_OPENED : 'Projet du lien ouvert', 6000);
+if (boot.source === 'link') toast(boot.previous ? t('link.openedOver') : t('link.opened'), 6000);
 
 if (boot.source === 'default') {
   requestAnimationFrame(() => gallery.open({ replacing: false }));

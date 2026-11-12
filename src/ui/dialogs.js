@@ -8,7 +8,7 @@
  * pointer, and reads as part of the tool.
  */
 
-import { T } from './texts.js';
+import { t } from '../i18n/index.js';
 
 const h = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -22,7 +22,7 @@ const h = (tag, cls, text) => {
  * question gets a fresh element, removed once answered: two questions never
  * share state, and a test can find the one open.
  */
-function open({ title, body, fields = [], confirm, cancel = T.cancel, danger = false, className = '' }) {
+function open({ title, body, fields = [], confirm, cancel = t('dialog.cancel'), danger = false, className = '' }) {
   return new Promise((resolve) => {
     const dlg = h('dialog', `dialog dialog-ask ${className}`.trim());
     dlg.setAttribute('aria-labelledby', 'ask-title');
@@ -104,5 +104,5 @@ export function showText({ title, body, text }) {
   input.value = text;
   input.setAttribute('aria-label', title);
   queueMicrotask(() => input.select());
-  return open({ title, body, fields: [input], confirm: T.close, cancel: null });
+  return open({ title, body, fields: [input], confirm: t('dialog.close'), cancel: null });
 }

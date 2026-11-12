@@ -9,7 +9,8 @@
  * closed <details> cannot be opened by a style sheet.
  */
 
-import { TOOL_GROUPS, TOOLS, HINTS, TIPS } from './texts.js';
+import { TOOL_GROUPS, TOOLS, toolLabel, toolHint, toolTip, groupTitle } from './texts.js';
+import { t as tr, language } from '../i18n/index.js';
 import { icon } from './icons.js';
 import { prefs, setPrefs } from './prefs.js';
 
@@ -22,7 +23,8 @@ const h = (tag, cls, text) => {
 
 /** A tool's tooltip: its name, its key, and the whole of its help. */
 export function toolTitle(t) {
-  return `${t.label}${t.key ? ` (${t.key})` : ''} — ${TIPS[t.id] || ''}`;
+  const words = { label: toolLabel(t.id), key: t.key, tip: toolTip(t.id) };
+  return t.key ? tr('tool.titleKey', words) : tr('tool.title', words);
 }
 
 export function buildTools(root, store) {
@@ -38,7 +40,7 @@ export function buildTools(root, store) {
     head.type = 'button';
     head.setAttribute('aria-expanded', String(open));
     head.setAttribute('aria-controls', listId);
-    head.append(h('span', 'tool-group-name', group.title), h('span', 'tool-group-count', String(group.tools.length)));
+    head.append(h('span', 'tool-group-name', groupTitle(group.id)), h('span', 'tool-group-count', String(group.tools.length)));
     head.addEventListener('click', () => {
       const now = box.classList.toggle('folded');
       head.setAttribute('aria-expanded', String(!now));
@@ -47,7 +49,7 @@ export function buildTools(root, store) {
     const list = h('div', 'tool-list');
     list.id = listId;
     list.setAttribute('role', 'group');
-    list.setAttribute('aria-label', group.title);
+    list.setAttribute('aria-label', groupTitle(group.id));
     for (const t of group.tools) {
       const b = h('button', 'tool');
       b.type = 'button';
@@ -56,7 +58,7 @@ export function buildTools(root, store) {
       b.setAttribute('aria-pressed', 'false');
       if (t.key) b.setAttribute('aria-keyshortcuts', t.key);
       b.innerHTML = icon(t.id, 'tool-icon');
-      b.appendChild(h('span', 'tool-label', t.label));
+      b.appendChild(h('span', 'tool-label', toolLabel(t.id)));
       if (t.key) b.appendChild(h('kbd', 'tool-key', t.key));
       b.addEventListener('click', () => store.setTool(t.id));
       list.appendChild(b);
@@ -84,13 +86,15 @@ export function syncTools(root, hint, store) {
     }
   }
   const t = TOOLS[store.tool];
-  const text = HINTS[store.tool] || '';
-  if (hint.dataset.tool !== store.tool) {
-    hint.dataset.tool = store.tool;
+  const text = toolHint(store.tool);
+  // Keyed on the language too: the line is rewritten when it changes.
+  const stamp = `${store.tool}:${language()}`;
+  if (hint.dataset.tool !== stamp) {
+    hint.dataset.tool = stamp;
     hint.replaceChildren();
-    if (t) hint.appendChild(h('strong', 'hint-tool', t.label));
+    if (t) hint.appendChild(h('strong', 'hint-tool', toolLabel(t.id)));
     hint.appendChild(h('span', 'hint-text', text));
-    hint.title = t ? `${t.label} — ${TIPS[store.tool] || text}` : text;
+    hint.title = t ? tr('tool.title', { label: toolLabel(t.id), tip: toolTip(t.id) || text }) : text;
   }
 }
 

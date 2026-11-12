@@ -470,7 +470,9 @@ export function normalise(input) {
 }
 
 /**
- * The first ceiling a model goes past, as a sentence for the user — or null.
+ * The first ceiling a model goes past — or null. Said as `{ key, max }`:
+ * which ceiling (a key of LIMITS) and its value, for the interface to put
+ * into words in its own language.
  *
  * normalise cuts a file down to the ceilings; the interface refuses the edit
  * that would cross one instead, and says which, rather than accepting a
@@ -478,39 +480,39 @@ export function normalise(input) {
  */
 export function limitBreach(m) {
   const cs = cellSizeOf(m);
-  const n = (v) => v.toLocaleString('fr-FR');
-  if (m.buildings.length > LIMITS.buildings) return `${LIMITS.buildings} corps de bâtiment au plus`;
+  const over = (key) => ({ key, max: LIMITS[key] });
+  if (m.buildings.length > LIMITS.buildings) return over('buildings');
   let total = 0, edges = 0;
   for (const b of m.buildings) {
-    if (b.cells.length > LIMITS.cells) return `${n(LIMITS.cells)} cases par corps au plus`;
+    if (b.cells.length > LIMITS.cells) return over('cells');
     total += b.cells.length;
     if (b.cells.length) {
       let i0 = Infinity, j0 = Infinity, i1 = -Infinity, j1 = -Infinity;
       for (const c of b.cells) {
         const [i, j] = c.split(',').map(Number);
         i0 = Math.min(i0, i); j0 = Math.min(j0, j); i1 = Math.max(i1, i); j1 = Math.max(j1, j);
-        if (Math.abs(i) * cs > LIMITS.coord || Math.abs(j) * cs > LIMITS.coord) return `pas au-delà de ${LIMITS.coord} m de l’origine`;
+        if (Math.abs(i) * cs > LIMITS.coord || Math.abs(j) * cs > LIMITS.coord) return over('coord');
       }
       if ((i1 - i0 + 1) * cs > LIMITS.extent || (j1 - j0 + 1) * cs > LIMITS.extent) {
-        return `${LIMITS.extent} m de côté au plus pour un corps`;
+        return over('extent');
       }
     }
     edges += outlineLength(b.cells);
   }
-  if (total > LIMITS.totalCells) return `${n(LIMITS.totalCells)} cases en tout au plus`;
-  if (edges > LIMITS.edges) return 'contour des bâtiments trop découpé';
-  if (m.openings.length > LIMITS.openings) return `${LIMITS.openings} ouvertures au plus`;
-  if ((m.fixtures || []).length > LIMITS.fixtures) return `${LIMITS.fixtures} équipements muraux au plus`;
-  if (m.roofItems.length > LIMITS.roofItems) return `${LIMITS.roofItems} objets de toit au plus`;
-  if (roofArea(m.roofItems) > LIMITS.roofArea) return `${LIMITS.roofArea} m² de panneaux et fenêtres de toit au plus`;
-  if (m.props.length > LIMITS.props) return `${LIMITS.props} objets extérieurs au plus`;
-  if (m.views.length > LIMITS.views) return `${LIMITS.views} vues enregistrées au plus`;
+  if (total > LIMITS.totalCells) return over('totalCells');
+  if (edges > LIMITS.edges) return over('edges');
+  if (m.openings.length > LIMITS.openings) return over('openings');
+  if ((m.fixtures || []).length > LIMITS.fixtures) return over('fixtures');
+  if (m.roofItems.length > LIMITS.roofItems) return over('roofItems');
+  if (roofArea(m.roofItems) > LIMITS.roofArea) return over('roofArea');
+  if (m.props.length > LIMITS.props) return over('props');
+  if (m.views.length > LIMITS.views) return over('views');
   let run = 0;
   for (const p of m.props) {
     if (['hedge', 'fence', 'muret', 'gate'].includes(p.kind)) run += Math.max(p.w ?? 0, p.d ?? 0) * (p.kind === 'gate' ? 5 : 1);
-    if (Math.abs(p.x) > LIMITS.coord || Math.abs(p.y) > LIMITS.coord) return `pas au-delà de ${LIMITS.coord} m de l’origine`;
+    if (Math.abs(p.x) > LIMITS.coord || Math.abs(p.y) > LIMITS.coord) return over('coord');
   }
-  if (run > LIMITS.runLength) return `${LIMITS.runLength} m de haies, clôtures et murets au plus`;
+  if (run > LIMITS.runLength) return over('runLength');
   return null;
 }
 

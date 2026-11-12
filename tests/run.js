@@ -10,10 +10,14 @@
 
 import { finish, loadFailure } from './harness.js';
 import { clearPrefs } from '../src/ui/prefs.js';
+import { setLanguage } from '../src/i18n/index.js';
 
 // Settings left by an earlier run in this browser would open other sections
 // than the tests expect.
 clearPrefs();
+// The suite reads the interface in French, whatever the browser's language:
+// the English pass is asked for where it is tested.
+setLanguage('fr', { remember: false });
 
 export const FILES = [
   'grid', 'mesh', 'roof', 'projection', 'dimensions', 'viewpoints', 'render',

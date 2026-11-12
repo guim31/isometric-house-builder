@@ -12,14 +12,16 @@
  * survives the trip.
  */
 
+import { t } from '../i18n/index.js';
+
 const CRC_TABLE = (() => {
-  const t = new Uint32Array(256);
+  const table = new Uint32Array(256);
   for (let n = 0; n < 256; n++) {
     let c = n;
     for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
+    table[n] = c >>> 0;
   }
-  return t;
+  return table;
 })();
 
 /** CRC-32 (IEEE 802.3), as ZIP and PNG use it. */
@@ -51,12 +53,12 @@ export function zipStore(files, date = new Date()) {
   const entries = files.map((f) => {
     const name = enc.encode(f.name);
     const data = f.data instanceof Uint8Array ? f.data : new Uint8Array(f.data);
-    if (data.length >= LIMIT) throw new Error(`fichier trop gros pour l’archive : ${f.name}`);
+    if (data.length >= LIMIT) throw new Error(t('export.zipFileTooBig', { name: f.name }));
     return { name, data, crc: crc32(data) };
   });
   const localSize = entries.reduce((n, e) => n + 30 + e.name.length + e.data.length, 0);
   const centralSize = entries.reduce((n, e) => n + 46 + e.name.length, 0);
-  if (entries.length > 0xffff || localSize + centralSize >= LIMIT) throw new Error('archive trop grosse');
+  if (entries.length > 0xffff || localSize + centralSize >= LIMIT) throw new Error(t('export.zipTooBig'));
   const out = new Uint8Array(localSize + centralSize + 22);
   const view = new DataView(out.buffer);
   let at = 0;

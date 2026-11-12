@@ -12,6 +12,7 @@ import { normalise, emptyModel } from '../src/core/model.js';
 
 const STORAGE_KEY = 'isometric-house-builder/current';
 const RETRY_KEY = 'ihb-boot-retry';
+const PREFS_KEY = 'isometric-house-builder/ui';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const available = await fetch('/__boot-log/probe', { cache: 'no-store' })
@@ -107,23 +108,40 @@ await checkAsync(`un module périmé juste après une mise en ligne : la garde r
   return localStorage.getItem(STORAGE_KEY) === mine || 'le projet enregistré a changé';
 }));
 
-await checkAsync(`un module qui reste périmé : une seule relance, puis un message clair qui propose de recharger${available ? '' : ' (sauté)'}`, withProject(async (mine) => {
-  const r = await play('stuck');
-  const out = [];
-  if (r.state !== 'message') out.push(`état : ${r.state}`);
-  if (r.loads !== 2) out.push(`${r.loads} chargements de la page au lieu de deux`);
-  const box = r.message;
-  if (box) {
-    if (box.getAttribute('role') !== 'alert') out.push('message sans rôle d’alerte');
-    if (!/n’a pas pu démarrer/.test(box.textContent) || !/projet enregistré/.test(box.textContent)) out.push(`texte : ${box.textContent}`);
-    const btn = box.querySelector('button');
-    if (!btn || btn.textContent !== 'Recharger la page') out.push('pas de bouton pour recharger');
-    if (btn && box.ownerDocument.activeElement !== btn) out.push('le bouton n’a pas le focus');
-  }
-  r.done();
-  if (localStorage.getItem(STORAGE_KEY) !== mine) out.push('le projet enregistré a changé');
-  return !out.length || out.join(' ; ');
-}));
+/*
+ * The guard speaks the language the app would have spoken — the one chosen,
+ * read from the interface's settings, else the browser's — with no module to
+ * ask: the dictionaries are among what failed to load.
+ */
+const GUARD_WORDS = {
+  fr: { title: /n’a pas pu démarrer/, body: /projet enregistré/, button: 'Recharger la page' },
+  en: { title: /could not start/, body: /project saved/, button: 'Reload the page' },
+};
+
+for (const lang of ['fr', 'en']) {
+  await checkAsync(`un module qui reste périmé : une seule relance, puis un message clair qui propose de recharger (${lang})${available ? '' : ' (sauté)'}`, withProject(async (mine) => {
+    const prefs = localStorage.getItem(PREFS_KEY);
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ lang }));
+    const r = await play('stuck');
+    if (prefs === null) localStorage.removeItem(PREFS_KEY); else localStorage.setItem(PREFS_KEY, prefs);
+    const out = [];
+    if (r.state !== 'message') out.push(`état : ${r.state}`);
+    if (r.loads !== 2) out.push(`${r.loads} chargements de la page au lieu de deux`);
+    const box = r.message;
+    const want = GUARD_WORDS[lang];
+    if (box) {
+      if (box.getAttribute('role') !== 'alert') out.push('message sans rôle d’alerte');
+      if (box.getAttribute('lang') !== lang) out.push(`message en « ${box.getAttribute('lang')} »`);
+      if (!want.title.test(box.textContent) || !want.body.test(box.textContent)) out.push(`texte : ${box.textContent}`);
+      const btn = box.querySelector('button');
+      if (!btn || btn.textContent !== want.button) out.push('pas de bouton pour recharger');
+      if (btn && box.ownerDocument.activeElement !== btn) out.push('le bouton n’a pas le focus');
+    }
+    r.done();
+    if (localStorage.getItem(STORAGE_KEY) !== mine) out.push('le projet enregistré a changé');
+    return !out.length || out.join(' ; ');
+  }));
+}
 
 await checkAsync(`une application qui ne se dit jamais prête : la garde agit après son délai${available ? '' : ' (sauté)'}`, withProject(async () => {
   const r = await play('slow');

@@ -4,22 +4,24 @@
  */
 
 import { renderScene } from '../render/svg.js';
-import { VIEWPOINTS } from '../core/iso.js';
+import { viewpointIndex } from '../core/iso.js';
 import { DEFAULT_FOCUS } from '../core/model.js';
 import { download, slug } from './files.js';
 import { zipStore, uniqueNames } from './zip.js';
+import { t } from '../i18n/index.js';
 
+/** The sizes offered; each one's name is `export.size.<id>` in the dictionaries. */
 export const SIZES = [
   // Gladys downscales anything past 2560 px on the long edge, and keeps the
   // file untouched below 2 MB — so this is the largest size worth uploading.
-  { id: 'gladys', label: 'Gladys — 2560 × 1600', width: 1280, height: 800, ratio: 2 },
-  { id: 'sd', label: '1× — 1200 × 800', width: 1200, height: 800, ratio: 1 },
-  { id: 'hd', label: '2× — 2400 × 1600', width: 1200, height: 800, ratio: 2 },
-  { id: 'uhd', label: '4× — 4800 × 3200', width: 1200, height: 800, ratio: 4 },
-  { id: 'square', label: 'Carré 1024 × 1024', width: 1024, height: 1024, ratio: 1 },
+  { id: 'gladys', width: 1280, height: 800, ratio: 2 },
+  { id: 'sd', width: 1200, height: 800, ratio: 1 },
+  { id: 'hd', width: 1200, height: 800, ratio: 2 },
+  { id: 'uhd', width: 1200, height: 800, ratio: 4 },
+  { id: 'square', width: 1024, height: 1024, ratio: 1 },
   // Laid out at 640 × 400 and rendered at twice that, for a sharp widget on a
   // high-density screen; the label gives the file's size, like the others.
-  { id: 'widget', label: 'Widget — 1280 × 800 (640 × 400 à 2×)', width: 640, height: 400, ratio: 2 },
+  { id: 'widget', width: 640, height: 400, ratio: 2 },
 ];
 
 export function svgFor(model, size) {
@@ -43,16 +45,16 @@ export function svgToPng(svg, width, height) {
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error(`image trop grande (${width} × ${height} px)`);
+        if (!ctx) throw new Error(t('export.tooLarge', { w: width, h: height }));
         ctx.drawImage(img, 0, 0, width, height);
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('encodage PNG impossible'))), 'image/png');
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(t('export.pngFailed')))), 'image/png');
       } catch (e) {
         reject(e);
       } finally {
         URL.revokeObjectURL(url);
       }
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG illisible')); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('export.svgUnreadable'))); };
     img.src = url;
   });
 }
@@ -98,10 +100,11 @@ async function pngBytes(model, size) {
 
 /**
  * The four isometric views of the same house, as PNG files named as they
- * were when each one was its own download.
+ * were when each one was its own download — after the point of the compass
+ * each is seen from, in the interface's language.
  */
 export async function fourViewFiles(model, size, onProgress) {
-  const names = VIEWPOINTS.map((v) => v.toLowerCase());
+  const names = [0, 90, 180, 270].map((yaw) => slug(t(`rose.${viewpointIndex(yaw)}`)));
   const files = [];
   for (let r = 0; r < 4; r++) {
     // The quarter turns keep their own pitch: the four faces are meant to read
@@ -140,20 +143,20 @@ export function downloadZip(files, filename) {
 
 export async function exportFourViews(model, size, onProgress) {
   const files = await fourViewFiles(model, size, onProgress);
-  downloadZip(files, `${slug(model.name)}-4-faces.zip`);
+  downloadZip(files, `${slug(model.name)}-${t('export.fourFile')}.zip`);
   return files.length;
 }
 
 export async function exportSavedViews(model, size, onProgress) {
   const files = await savedViewFiles(model, size, onProgress);
-  downloadZip(files, `${slug(model.name)}-vues.zip`);
+  downloadZip(files, `${slug(model.name)}-${t('export.viewsFile')}.zip`);
   return files.length;
 }
 
 /** Copy the current view to the clipboard, ready to paste into a dashboard. */
 export async function copyPngToClipboard(model, size) {
   if (!navigator.clipboard || !window.ClipboardItem) {
-    throw new Error("Le presse-papier image n'est pas disponible dans ce navigateur");
+    throw new Error(t('export.noClipboard'));
   }
   // The item is handed a promise of the image and written straight away:
   // Safari only lets a page write to the clipboard within the click itself,

@@ -178,9 +178,10 @@ function freshId(prefix, taken) {
  * Beside, not on top: a copy in the same place would be refused anyway, a
  * cell belonging to one body. The first free spot is taken, east of the
  * original, then south, west, north, and further out if all four are taken.
- * Returns `{ model, id }`, or null when there is nothing to copy.
+ * Returns `{ model, id }`, or null when there is nothing to copy. The copy
+ * is named by `nameOf` — the interface's own words, in its language.
  */
-export function duplicateBody(m, id) {
+export function duplicateBody(m, id, nameOf = (name) => `${name} (copie)`) {
   const parts = bodyParts(m, id);
   if (!parts || !parts.body.cells.length) return null;
   const { w, d } = bounds(new Set(parts.body.cells));
@@ -207,7 +208,7 @@ export function duplicateBody(m, id) {
         ...it, id: freshId('r', taken), x: tidy(it.x + di * cs), y: tidy(it.y + dj * cs),
       }));
       const copy = {
-        ...parts.body, id: nid, cells: cells.sort(), name: `${parts.body.name} (copie)`.slice(0, 120),
+        ...parts.body, id: nid, cells: cells.sort(), name: nameOf(parts.body.name).slice(0, 120),
       };
       return {
         id: nid,

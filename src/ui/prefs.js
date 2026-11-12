@@ -1,6 +1,7 @@
 /**
  * Settings of the interface itself: which drawings share the centre and how,
- * which inspector sections are open, the export size last chosen.
+ * which inspector sections are open, the export size last chosen, the
+ * language.
  *
  * Outside the project on purpose. A project file or a shared link carries a
  * house, not the way one person likes their screen laid out — and a layout
@@ -28,6 +29,8 @@ export const DEFAULT_PREFS = Object.freeze({
   toolGroups: {},
   exportSize: 'gladys',
   customSize: [1600, 1000],
+  // The interface's language, once chosen; null follows the browser's.
+  lang: null,
 });
 
 const clampSplit = (v) => Math.max(SPLIT_RANGE[0], Math.min(SPLIT_RANGE[1], v));
@@ -51,6 +54,7 @@ export function readPrefs(raw) {
   if (Array.isArray(raw.customSize) && raw.customSize.length === 2 && raw.customSize.every(Number.isFinite)) {
     p.customSize = raw.customSize.map((v) => Math.round(v));
   }
+  if (typeof raw.lang === 'string' && /^[a-z]{2,3}$/.test(raw.lang)) p.lang = raw.lang;
   return p;
 }
 

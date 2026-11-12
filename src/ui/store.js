@@ -9,6 +9,7 @@
 import { normalise, newId, makeBuilding, fitOpening, limitBreach } from '../core/model.js';
 import { saveLocal } from '../io/project.js';
 import { moveBody, rotateBody, mirrorBody, duplicateBody } from '../core/bodies.js';
+import { t, formatCount } from '../i18n/index.js';
 
 const HISTORY_LIMIT = 80;
 
@@ -121,7 +122,7 @@ export class Store {
     if (!silent && grows) {
       const breach = limitBreach(next);
       if (breach && !limitBreach(this.model)) {
-        this.onLimit?.(`Limite atteinte : ${breach}`);
+        this.onLimit?.(t('store.limit', { what: t(`limit.${breach.key}`, { max: formatCount(breach.max) }) }));
         return;
       }
     }
@@ -271,7 +272,7 @@ export class Store {
 
   /** Add an empty volume and make it the one being painted into. */
   addBuilding() {
-    const b = makeBuilding({ id: newId('b', this.model), name: `Bâtiment ${this.model.buildings.length + 1}` });
+    const b = makeBuilding({ id: newId('b', this.model), name: t('default.body', { n: this.model.buildings.length + 1 }) });
     this.update((m) => ({ ...m, buildings: [...m.buildings, b] }));
     this.activeId = b.id;
     this.emit('selection');
@@ -306,17 +307,17 @@ export class Store {
    */
   moveBuilding(id, di, dj, coalesce = null) {
     const next = moveBody(this.model, id, di, dj);
-    if (!next) { this.notify('Pas de place ici : un corps ne peut pas en recouvrir un autre'); return false; }
+    if (!next) { this.notify(t('store.noRoom')); return false; }
     this.update(next, { coalesce });
     return next !== this.model;
   }
 
   rotateBuilding(id) {
-    return this.transformBuilding(rotateBody(this.model, id), 'Pas la place de le tourner ici : il recouvrirait un autre corps');
+    return this.transformBuilding(rotateBody(this.model, id), t('store.noRoomTurn'));
   }
 
   mirrorBuilding(id) {
-    return this.transformBuilding(mirrorBody(this.model, id), 'Pas la place de le retourner ici : il recouvrirait un autre corps');
+    return this.transformBuilding(mirrorBody(this.model, id), t('store.noRoomMirror'));
   }
 
   transformBuilding(next, refusal) {
@@ -327,8 +328,8 @@ export class Store {
   }
 
   duplicateBuilding(id) {
-    const out = duplicateBody(this.model, id);
-    if (!out) { this.notify('Aucune place libre à côté pour le dupliquer'); return null; }
+    const out = duplicateBody(this.model, id, (name) => t('default.copy', { name }));
+    if (!out) { this.notify(t('store.noRoomCopy')); return null; }
     const before = this.model;
     this.update(out.model);
     if (this.model === before) return null;

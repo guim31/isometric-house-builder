@@ -6,6 +6,10 @@
  * eaves and the number of storeys far more than its hue. Colours stay in the
  * Horizons register — applied as per-material overrides rather than separate
  * palettes — so any of them still sits comfortably on a dashboard.
+ *
+ * `name` is the French one, kept here as the model's own data; the gallery
+ * shows each house's name and description in the interface's language
+ * (`preset.<id>` and `preset.<id>.note` in src/i18n/).
  */
 
 import { rectCells } from '../core/grid.js';
@@ -21,7 +25,6 @@ export const PRESETS = [
   {
     id: 'pavillon',
     name: 'Pavillon familial',
-    note: 'Le plan le plus répandu en France : un corps rectangulaire, un garage accolé, une toiture à quatre pans.',
     model: {
       cells: cells([13, 14, 22, 21], [23, 14, 27, 18]),
       storeys: 1, storeyHeight: 2.6, plinth: 0,
@@ -49,7 +52,6 @@ export const PRESETS = [
   {
     id: 'nord',
     name: 'Maison de brique du Nord',
-    note: 'Flandre et Hainaut : brique rouge, pignon étroit, toiture d’ardoise très pentue et sans débord.',
     model: {
       cells: cells([15, 15, 23, 21]),
       storeys: 2, storeyHeight: 2.7, plinth: 0,
@@ -78,7 +80,6 @@ export const PRESETS = [
   {
     id: 'provence',
     name: 'Mas provençal',
-    note: 'Plan en L autour d’une terrasse, toiture de tuiles à faible pente et large débord, volets aux teintes d’olivier.',
     model: {
       cells: cells([12, 14, 24, 20], [19, 21, 24, 26]),
       storeys: 1, storeyHeight: 2.8, plinth: 0,
@@ -107,7 +108,6 @@ export const PRESETS = [
   {
     id: 'chalet',
     name: 'Chalet de montagne',
-    note: 'Soubassement maçonné, bardage bois et surtout un très grand débord de toiture, qui protège les façades de la neige.',
     model: {
       cells: cells([15, 15, 24, 22]),
       storeys: 2, storeyHeight: 2.5, plinth: 0.7,
@@ -134,7 +134,6 @@ export const PRESETS = [
   {
     id: 'passive',
     name: 'Maison passive solaire',
-    note: 'Volume compact pour limiter les déperditions, toiture à un seul pan entièrement couverte de panneaux, larges baies.',
     model: {
       cells: cells([16, 15, 24, 21]),
       storeys: 2, storeyHeight: 2.6, plinth: 0,
@@ -165,7 +164,6 @@ export const PRESETS = [
   {
     id: 'longere',
     name: 'Longère bretonne',
-    note: 'Très allongée et peu profonde, une pièce dans la largeur, couverte d’ardoise et percée de fenêtres de toit.',
     model: {
       cells: cells([11, 16, 28, 21]),
       storeys: 1, storeyHeight: 2.5, plinth: 0,
@@ -195,7 +193,6 @@ export const PRESETS = [
   {
     id: 'colombages',
     name: 'Maison à colombages',
-    note: 'Pays d’Auge et Alsace : ossature bois apparente sur torchis clair, toiture très pentue, volume étroit et haut.',
     model: {
       cells: cells([16, 16, 23, 22]),
       storeys: 2, storeyHeight: 2.5, plinth: 0,
@@ -221,7 +218,6 @@ export const PRESETS = [
   {
     id: 'basque',
     name: 'Etxe basque',
-    note: 'Large façade blanche sous un grand débord, pans de bois et volets au rouge basque, toiture de tuiles à deux pans.',
     model: {
       cells: cells([13, 14, 25, 22]),
       storeys: 2, storeyHeight: 2.6, plinth: 0,
@@ -248,7 +244,6 @@ export const PRESETS = [
   {
     id: 'contemporaine',
     name: 'Maison contemporaine',
-    note: 'Volumes décalés, toiture-terrasse et grandes baies vitrées ; le débord se réduit à une acrotère marquée.',
     model: {
       cells: cells([14, 15, 22, 22], [23, 17, 28, 22]),
       storeys: 2, storeyHeight: 2.8, plinth: 0,
@@ -280,7 +275,6 @@ export const PRESETS = [
   {
     id: 'ville',
     name: 'Maison de ville',
-    note: 'Étroite et profonde, mitoyenne, élevée sur trois niveaux ; le pignon donne sur la rue et porte toutes les ouvertures.',
     model: {
       cells: cells([18, 16, 23, 25]),
       storeys: 3, storeyHeight: 2.5, plinth: 0,
