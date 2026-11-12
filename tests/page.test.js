@@ -87,9 +87,9 @@ await checkAsync('la page s’amorce avec ses outils et un rendu visible', async
   nav.querySelector('.nav-modes button[data-mode="pan"]').click();
   if (arrow.title === orbitTitle) return 'les flèches ne suivent pas le mode';
   nav.querySelector('.nav-modes button[data-mode="orbit"]').click();
-  const groups = [...doc.querySelectorAll('details.tool-group')];
+  const groups = [...doc.querySelectorAll('.tool-group')];
   if (groups.length < 4) return `${groups.length} familles d’outils repliables`;
-  if (!groups.some((g) => !g.open)) return 'aucune famille repliée au démarrage';
+  if (!groups.some((g) => g.classList.contains('folded'))) return 'aucune famille repliée au démarrage';
   const tools = doc.getElementById('tools');
   if (tools.scrollHeight > tools.clientHeight + 2) {
     return `la palette déborde de ${tools.scrollHeight - tools.clientHeight} px`;

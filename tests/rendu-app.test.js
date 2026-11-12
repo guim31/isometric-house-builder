@@ -3,6 +3,7 @@
 import { checkAsync } from './harness.js';
 import { app } from './app-frame.js';
 import { frames } from './app.test.js';
+import { answerDialog } from './helpers.js';
 
 await checkAsync('une rotation ne redessine que le rendu et ce qui montre la caméra', async () => {
   const frame = await app();
@@ -40,9 +41,10 @@ await checkAsync('« Enregistrer cette vue » prend la caméra du moment, pas ce
   store.setCamera({ yaw: 211 });
   await frames(win, 2);
   const save = [...doc.querySelectorAll('#inspector button')].find((b) => /Enregistrer cette vue/.test(b.textContent));
-  const prompt = win.prompt;
-  win.prompt = () => 'essai';
-  try { save.click(); } finally { win.prompt = prompt; }
+  save.click();
+  // The name is asked in the page's dialog; the camera turns meanwhile.
+  store.setCamera({ yaw: 211 });
+  await answerDialog(doc, 'essai');
   const v = store.model.views[store.model.views.length - 1];
   const yaw = v?.camera.yaw;
   store.undo();

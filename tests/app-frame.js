@@ -3,6 +3,7 @@
  */
 
 import { clearLocal } from '../src/io/project.js';
+import { clearPrefs } from '../src/ui/prefs.js';
 
 /**
  * Load the real page in an iframe.
@@ -29,6 +30,9 @@ async function loadAppOnce(width, height, deadline) {
   clearLocal();
   await new Promise((r) => setTimeout(r, AUTOSAVE_DEBOUNCE));
   clearLocal();
+  // The interface's own settings too — the layout, the open sections: the
+  // page must boot as a first visit sees it, whatever an earlier test set.
+  clearPrefs();
   bootError = null;
   return new Promise((resolve, reject) => {
     const frame = document.createElement('iframe');

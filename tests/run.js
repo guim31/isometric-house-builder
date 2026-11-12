@@ -9,6 +9,11 @@
  */
 
 import { finish, loadFailure } from './harness.js';
+import { clearPrefs } from '../src/ui/prefs.js';
+
+// Settings left by an earlier run in this browser would open other sections
+// than the tests expect.
+clearPrefs();
 
 export const FILES = [
   'grid', 'mesh', 'roof', 'projection', 'dimensions', 'viewpoints', 'render',

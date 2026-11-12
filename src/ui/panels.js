@@ -14,6 +14,11 @@ import {
 } from '../core/model.js';
 import { bounds, edgeRunExtent } from '../core/grid.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
+import { parseDecimal, formatDecimal, settle, digitsFor } from './numeric.js';
+import { prefs, setPrefs } from './prefs.js';
+import { roofAt, OFF_ROOF } from './actions.js';
+import { icon } from './icons.js';
+import { T } from './texts.js';
 
 const h = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -33,17 +38,88 @@ function field(label, control, hint) {
   return row;
 }
 
-function slider(value, { min, max, step, onInput, format }) {
+/**
+ * A slider doubled by a field for the exact value.
+ *
+ * The slider keeps its step — it is for feeling one's way — while the field
+ * takes what is typed, to the centimetre where the model keeps centimetres
+ * (`exact`), within the slider's own bounds: « 3,40 » is 3.40, not the
+ * nearest notch. `unit` follows the field; `note` adds a word about the value
+ * — a bearing, « aucun » — that a number alone does not say.
+ */
+function slider(value, { min, max, step, onInput, unit = 'm', note = null, exact = null, digits = null }) {
   const wrap = h('span', 'slider');
   const input = document.createElement('input');
   Object.assign(input, { type: 'range', min, max, step, value });
-  const out = h('output', 'slider-value', format ? format(value) : String(value));
-  input.addEventListener('input', () => {
-    out.textContent = format ? format(Number(input.value)) : input.value;
-    onInput(Number(input.value));
+  const fine = exact ?? (unit === 'm' ? 0.01 : step);
+  const places = digits ?? digitsFor(Math.min(step, fine));
+  const num = numberField(value, {
+    min, max, exact: fine, digits: places,
+    onChange: (v) => { input.value = v; if (noteEl) noteEl.textContent = note(v); onInput(v); },
   });
-  wrap.append(input, out);
-  return wrap;
+  input.addEventListener('input', () => {
+    const v = Number(input.value);
+    num.value = formatDecimal(v, places);
+    if (noteEl) noteEl.textContent = note(v);
+    onInput(v);
+  });
+  wrap.append(input, num);
+  if (unit) wrap.appendChild(h('span', 'num-unit', unit));
+  const noteEl = note ? h('span', 'slider-note', note(value)) : null;
+  if (!noteEl) return wrap;
+  const box = h('span', 'slider-box');
+  box.append(wrap, noteEl);
+  return box;
+}
+
+/**
+ * A field for a number typed by hand: a comma or a point, a unit or none.
+ * What cannot be read is refused and the value put back; what is out of
+ * bounds is brought in. Committed on Entrée or on leaving the field, so a
+ * value half typed draws nothing. `onChange` may return false to refuse a
+ * value it cannot take, which is then put back too.
+ */
+function numberField(value, { min, max, exact = 0.01, digits = 2, onChange, label = null }) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.inputMode = 'decimal';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.className = 'num';
+  input.value = formatDecimal(value, digits);
+  input.dataset.min = String(min);
+  input.dataset.max = String(max);
+  if (label) input.setAttribute('aria-label', label);
+  let shown = value;
+  const commit = () => {
+    const typed = parseDecimal(input.value);
+    const v = settle(typed, { min, max, exact });
+    if (!Number.isFinite(v)) {
+      input.value = formatDecimal(shown, digits);
+      input.classList.remove('invalid');
+      return;
+    }
+    input.value = formatDecimal(v, digits);
+    if (Math.abs(v - shown) < 1e-9) return;
+    if (onChange(v) === false) { input.value = formatDecimal(shown, digits); return; }
+    shown = v;
+  };
+  input.addEventListener('change', commit);
+  input.addEventListener('input', () => input.classList.toggle('invalid', !Number.isFinite(parseDecimal(input.value))));
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); commit(); }
+    else if (ev.key === 'Escape') { input.value = formatDecimal(shown, digits); input.classList.remove('invalid'); input.blur(); ev.stopPropagation(); }
+    else if (ev.key === 'ArrowUp' || ev.key === 'ArrowDown') {
+      // The arrows step the value, as in a number field, by the slider's
+      // finest step; the selection is not moved from here.
+      ev.preventDefault();
+      const cur = parseDecimal(input.value);
+      const base = Number.isFinite(cur) ? cur : shown;
+      input.value = formatDecimal(settle(base + (ev.key === 'ArrowUp' ? 1 : -1) * (exact || 1) * (ev.shiftKey ? 10 : 1), { min, max, exact }), digits);
+      commit();
+    }
+  });
+  return input;
 }
 
 function select(value, options, onChange) {
@@ -72,17 +148,10 @@ function toggle(value, onChange) {
  * typed, -50 went through as is, and a field emptied by mistake came through
  * as 0 — a framing zone zero metres wide, an item sent back to the origin.
  */
-function number(value, { min, max, step, onChange }) {
-  const input = document.createElement('input');
-  Object.assign(input, { type: 'number', min, max, step, value });
-  input.addEventListener('change', () => {
-    const v = input.valueAsNumber;
-    if (!Number.isFinite(v)) { input.value = value; return; }
-    const clamped = Math.max(min, Math.min(max, v));
-    if (clamped !== v) input.value = clamped;
-    onChange(clamped);
-  });
-  return input;
+function number(value, { min, max, step, onChange, exact = 0.01 }) {
+  const row = h('span', 'num-row');
+  row.append(numberField(value, { min, max, exact: Math.min(step, exact), digits: 2, onChange }), h('span', 'num-unit', 'm'));
+  return row;
 }
 
 /** Materials the user can recolour, grouped as they are presented. */
@@ -128,7 +197,7 @@ function positionField(m, item, patch) {
   if (!run) {
     // The wall has been erased under it; fall back rather than show nothing.
     return field('Position', slider(item.offset ?? 0.5, {
-      min: -1, max: 2, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+      min: -1, max: 2, step: 0.05, unit: 'm',
       onInput: (v) => patch({ offset: v }, 'offset'),
     }), 'le long du mur');
   }
@@ -141,7 +210,7 @@ function positionField(m, item, patch) {
   const outside = from < -1e-6 || from > run.hi - run.lo - w + 1e-6;
   const what = FIXTURE_DEFAULTS[item.kind] ? 'l’équipement' : 'l’ouverture';
   return field('Position', slider(Math.round(from * 100) / 100, {
-    min, max, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+    min, max, step: 0.05, unit: 'm',
     onInput: (v) => patch({ offset: v + run.lo + w / 2 }, 'offset'),
   }), outside
     ? `${what} dépasse de son pan de mur`
@@ -149,14 +218,14 @@ function positionField(m, item, patch) {
 }
 
 export class Inspector {
-  constructor(root, store, { onExport = null } = {}) {
+  constructor(root, store, { onExport = null, askText = null, notify = null } = {}) {
     this.root = root;
     this.store = store;
     this.onExport = onExport;
-    // Which sections are unfolded. Kept here rather than in the DOM: the panel
-    // is rebuilt on every change to the model, and a <details> rebuilt from
-    // scratch would spring shut under the hand.
-    this.open = new Map();
+    // The page's dialogs and messages, when there is a page: a name to ask
+    // for, a deletion to offer to take back.
+    this.askText = askText;
+    this.notify = notify || ((message) => store.notify(message));
     // The range or colour input in the middle of a gesture, if any. Replacing
     // one mid-drag detaches it, which kills the drag and can close a native
     // colour picker, so the panel waits. The gesture ends with 'change', and
@@ -213,6 +282,10 @@ export class Inspector {
     const active = document.activeElement;
     const focus = this.focusKey(active);
     const caret = active?.type === 'text' ? [active.selectionStart, active.selectionEnd] : null;
+    // Where the panel was scrolled to, kept: emptied for an instant, the
+    // column would otherwise spring back to the top while one sets a value
+    // halfway down.
+    const scroll = this.root.scrollTop;
     this.root.replaceChildren();
     const sel = this.store.selected;
     // Three families, in the order the work goes: what is selected, then the
@@ -235,6 +308,7 @@ export class Inspector {
       this.focusSection(),
     );
     this.restoreFocus(focus, caret);
+    this.root.scrollTop = scroll;
   }
 
   /**
@@ -251,11 +325,12 @@ export class Inspector {
     const cam = this.store.model.camera;
     if (c.badge) c.badge.textContent = `${Math.round(cam.yaw)}° — ${viewpointLabel(cam.yaw)}${c.views}`;
     for (const k of ['yaw', 'pitch', 'roll']) {
-      const { input, out, format } = c[k];
-      if (input === this.busy) continue;
+      const { input, num, note, format } = c[k];
+      if (input === this.busy || num === document.activeElement) continue;
       const v = Math.round(cam[k]);
       input.value = v;
-      out.textContent = format(v);
+      num.value = String(v);
+      if (note) note.textContent = format(v);
     }
     if (c.projection.value !== cam.projection) c.projection.value = cam.projection;
   }
@@ -278,14 +353,21 @@ export class Inspector {
   section(title, { id = title, open = false, badge = '', accent = false } = {}) {
     const d = h('details', `panel${accent ? ' panel-selected' : ''}`);
     d.dataset.section = id;
-    d.open = this.open.has(id) ? this.open.get(id) : open;
+    // Which sections are unfolded is kept in the interface's settings rather
+    // than in the DOM: the panel is rebuilt on every change to the model, and
+    // a <details> rebuilt from scratch would spring shut under the hand — and
+    // a section opened today is wanted open tomorrow.
+    const remembered = prefs().sections[id];
+    d.open = remembered ?? open;
     const sum = document.createElement('summary');
     sum.className = 'panel-title';
     sum.appendChild(h('span', 'panel-name', title));
     if (badge) sum.appendChild(h('span', 'panel-badge', badge));
     d.appendChild(sum);
     // Attached after the initial state is set, so restoring it fires nothing.
-    d.addEventListener('toggle', () => this.open.set(id, d.open));
+    d.addEventListener('toggle', () => {
+      if (prefs().sections[id] !== d.open) setPrefs({ sections: { ...prefs().sections, [id]: d.open } });
+    });
     const body = h('div', 'panel-body');
     d.appendChild(body);
     body.panel = d;
@@ -379,7 +461,7 @@ export class Inspector {
 
     s.append(
       field('Étages', slider(b.storeys, {
-        min: 1, max: 4, step: 1,
+        min: 1, max: 4, step: 1, unit: '', exact: 1,
         onInput: (v) => this.store.patchBuilding({ storeys: v }, 'storeys'),
       })),
     );
@@ -396,7 +478,7 @@ export class Inspector {
       // one — left over from when it had more levels, and kept for when it
       // has them again.
       s.append(field('Hauteur d’étage', slider(storeyHeightOf(b, 0), {
-        min: hMin, max: hMax, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+        min: hMin, max: hMax, step: 0.1, unit: 'm',
         onInput: (v) => this.store.patchBuilding((cur) => ({
           storeyHeight: v,
           storeyHeights: cur.storeyHeights ? [v, ...cur.storeyHeights.slice(1)] : null,
@@ -407,7 +489,7 @@ export class Inspector {
       for (let i = 0; i < b.storeys; i++) {
         const level = i;
         s.append(field(`Hauteur — ${LEVEL[i]}`, slider(storeyHeightOf(b, i), {
-          min: hMin, max: hMax, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          min: hMin, max: hMax, step: 0.1, unit: 'm',
           onInput: (v) => this.store.patchBuilding((cur) => {
             const heights = Array.from({ length: Math.max(cur.storeys, cur.storeyHeights?.length ?? 0) },
               (_, k) => storeyHeightOf(cur, k));
@@ -419,7 +501,7 @@ export class Inspector {
     }
     s.append(
       field('Soubassement', slider(b.plinth, {
-        min: 0, max: 0.8, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+        min: 0, max: 0.8, step: 0.05, unit: 'm',
         onInput: (v) => this.store.patchBuilding({ plinth: v }, 'plinth'),
       })),
     );
@@ -514,17 +596,17 @@ export class Inspector {
     }
     if (b.roof.type !== 'flat') {
       s.appendChild(field('Inclinaison', slider(b.roof.pitch, {
-        min: 5, max: 55, step: 1, format: (v) => `${v}°`,
+        min: 5, max: 55, step: 1, unit: '°',
         onInput: (v) => this.store.patchRoof({ pitch: v }, 'pitch'),
       })));
     }
     s.append(
       field('Débord', slider(b.roof.overhang, {
-        min: 0, max: 1.25, step: STEP, format: (v) => `${v.toFixed(2)} m`,
+        min: 0, max: 1.25, step: STEP, unit: 'm', exact: STEP,
         onInput: (v) => this.store.patchRoof({ overhang: v }, 'overhang'),
       }), `par pas de ${STEP} m, pour que la rive reste sur la trame`),
       field('Épaisseur de rive', slider(b.roof.fascia, {
-        min: 0, max: 0.4, step: 0.02, format: (v) => `${v.toFixed(2)} m`,
+        min: 0, max: 0.4, step: 0.02, unit: 'm',
         onInput: (v) => this.store.patchRoof({ fascia: v }, 'fascia'),
       })),
     );
@@ -545,15 +627,20 @@ export class Inspector {
         (v) => this.setIn('style', { windowBars: v }))),
       field('Vue de nuit', toggle(m.style.night, (v) => this.setIn('style', { night: v })),
         'ciel étoilé, teintes de lune, fenêtres allumées — le fond ne peut alors plus être transparent'),
-      field('Fond', select(m.style.background, [
-        ['transparent', 'Transparent (recommandé)'],
-        ['#ffffff', 'Blanc'],
-        ['#f4f6f8', 'Gris clair'],
-        ['#0f172a', 'Sombre'],
-      ], (v) => this.setIn('style', { background: v })),
-        m.style.night ? 'sans effet : la vue de nuit dessine son propre ciel' : 'appliqué à l’export seulement'),
+      // The background is chosen where its effect is seen: in the export
+      // window, over the preview. Said here, with the way there.
+      field('Fond de l’image', this.backgroundLink(m),
+        m.style.night ? 'la vue de nuit dessine son propre ciel' : 'se choisit dans la fenêtre d’export, sur l’aperçu'),
     );
     return s.panel;
+  }
+
+  backgroundLink(m) {
+    const names = { transparent: 'Transparent', '#ffffff': 'Blanc', '#f4f6f8': 'Gris clair', '#0f172a': 'Sombre' };
+    const b = h('button', 'link-button', `${m.style.night ? 'Ciel de nuit' : names[m.style.background] || m.style.background} — choisir…`);
+    b.type = 'button';
+    b.addEventListener('click', () => this.onExport?.());
+    return b;
   }
 
   /** Textures and per-material colour overrides. */
@@ -616,7 +703,7 @@ export class Inspector {
         field('Revêtement', select(m.ground.material, Object.entries(GROUND_LABELS),
           (v) => this.setIn('ground', { material: v }))),
         field('Marge', slider(m.ground.margin, {
-          min: 0, max: 10, step: 0.5, format: (v) => `${v} m`,
+          min: 0, max: 10, step: 0.5, unit: 'm',
           onInput: (v) => this.setIn('ground', { margin: v }, 'margin'),
         })),
       );
@@ -632,18 +719,17 @@ export class Inspector {
       badge: `${Math.round(m.camera.yaw)}° — ${viewpointLabel(m.camera.yaw)}`
         + (nv ? ` · ${nv} vue${nv > 1 ? 's' : ''}` : ''),
     });
-    const deg = (v) => `${Math.round(v)}°`;
-    const yawFormat = (v) => `${deg(v)} — ${viewpointLabel(v)}`;
+    const yawFormat = (v) => viewpointLabel(v);
     const yaw = slider(Math.round(m.camera.yaw), {
-      min: 0, max: 359, step: 1, format: yawFormat,
+      min: 0, max: 359, step: 1, unit: '°', note: yawFormat,
       onInput: (v) => this.store.setCamera({ yaw: normaliseYaw(v) }),
     });
     const pitch = slider(Math.round(m.camera.pitch), {
-      min: PITCH_RANGE[0], max: PITCH_RANGE[1], step: 1, format: deg,
+      min: PITCH_RANGE[0], max: PITCH_RANGE[1], step: 1, unit: '°',
       onInput: (v) => this.store.setCamera({ pitch: v }),
     });
     const roll = slider(Math.round(m.camera.roll), {
-      min: ROLL_RANGE[0], max: ROLL_RANGE[1], step: 1, format: deg,
+      min: ROLL_RANGE[0], max: ROLL_RANGE[1], step: 1, unit: '°',
       onInput: (v) => this.store.setCamera({ roll: v }),
     });
     const projection = select(m.camera.projection,
@@ -659,11 +745,14 @@ export class Inspector {
       field('Projection', projection),
     );
     // What syncCamera updates in place when only the camera has moved.
-    const ctl = (wrap, format) => ({ input: wrap.querySelector('input'), out: wrap.querySelector('output'), format });
+    const ctl = (wrap, format) => ({
+      input: wrap.querySelector('input[type="range"]'), num: wrap.querySelector('.num'),
+      note: wrap.querySelector('.slider-note'), format,
+    });
     this.cameraControls = {
       badge: s.panel.querySelector('.panel-badge'),
       views: nv ? ` · ${nv} vue${nv > 1 ? 's' : ''}` : '',
-      yaw: ctl(yaw, yawFormat), pitch: ctl(pitch, deg), roll: ctl(roll, deg), projection,
+      yaw: ctl(yaw, yawFormat), pitch: ctl(pitch, null), roll: ctl(roll, null), projection,
     };
 
     const reset = h('button', 'subtle', 'Revenir à la vue isométrique');
@@ -689,30 +778,88 @@ export class Inspector {
         apply.addEventListener('click', () => this.set({
           camera: { ...v.camera }, focus: { ...DEFAULT_FOCUS, ...v.focus },
         }));
-        const del = h('button', 'icon-button', '×');
-        del.type = 'button';
-        del.title = 'Supprimer cette vue';
-        del.addEventListener('click', () =>
-          this.set({ views: m.views.filter((x) => x.id !== v.id) }));
-        row.append(apply, del);
+        const acts = h('span', 'view-acts');
+        const act = (name, title, run, cls = '') => {
+          const b = h('button', `icon-button${cls}`);
+          b.type = 'button';
+          b.title = title;
+          b.setAttribute('aria-label', `${title} « ${v.name} »`);
+          b.innerHTML = icon(name);
+          b.addEventListener('click', run);
+          acts.appendChild(b);
+        };
+        act('rename', 'Renommer', () => this.renameView(v.id));
+        act('refresh', 'Mettre à jour avec la vue en cours', () => this.updateView(v.id));
+        act('trash', 'Supprimer', () => this.deleteView(v.id), ' delete');
+        row.append(apply, acts);
         list.appendChild(row);
       }
       s.appendChild(list);
     }
 
     const save = h('button', 'subtle', '+ Enregistrer cette vue');
-    save.addEventListener('click', () => {
-      const name = window.prompt('Nom de la vue :', m.focus.enabled ? 'Portail' : "Vue d'ensemble");
-      if (!name) return;
-      this.set({
-        views: [...m.views, {
-          id: newId('v', m), name,
-          camera: { ...this.store.model.camera }, focus: { ...m.focus },
-        }],
-      });
-    });
+    save.addEventListener('click', () => this.saveView());
     s.appendChild(save);
     return s.panel;
+  }
+
+  /** The name of a view, asked in the page's own dialog. */
+  async nameView(title, value, confirm) {
+    if (!this.askText) return null;
+    return this.askText({ title, label: T.viewName, value, confirm });
+  }
+
+  async saveView() {
+    const m = this.store.model;
+    const name = await this.nameView(T.viewNew, m.focus.enabled ? 'Portail' : 'Vue d’ensemble', T.viewSave);
+    if (!name) return;
+    // Read after the dialog: the camera may have moved while it was open.
+    const now = this.store.model;
+    this.set({
+      views: [...now.views, {
+        id: newId('v', now), name,
+        camera: { ...now.camera }, focus: { ...now.focus },
+      }],
+    });
+  }
+
+  async renameView(id) {
+    const v = this.store.model.views.find((x) => x.id === id);
+    if (!v) return;
+    const name = await this.nameView(T.viewRename, v.name, T.viewRenameOk);
+    if (!name || name === v.name) return;
+    this.set({ views: this.store.model.views.map((x) => (x.id === id ? { ...x, name } : x)) });
+  }
+
+  /** The view takes the camera and the framing of the moment. */
+  updateView(id) {
+    const m = this.store.model;
+    const v = m.views.find((x) => x.id === id);
+    if (!v) return;
+    this.set({ views: m.views.map((x) => (x.id === id ? { ...x, camera: { ...m.camera }, focus: { ...m.focus } } : x)) });
+    this.notify(T.viewUpdated(v.name));
+  }
+
+  /**
+   * Gone at once, with a way back offered at once: the view is put back where
+   * it was, whatever has been done since — undo would also rewind that.
+   */
+  deleteView(id) {
+    const views = this.store.model.views;
+    const at = views.findIndex((x) => x.id === id);
+    if (at < 0) return;
+    const gone = views[at];
+    this.set({ views: views.filter((x) => x.id !== id) });
+    this.notify(T.viewDeleted(gone.name), {
+      label: T.undo,
+      run: () => {
+        const now = this.store.model.views;
+        if (now.some((x) => x.id === gone.id)) return;
+        const next = [...now];
+        next.splice(Math.min(at, next.length), 0, gone);
+        this.set({ views: next });
+      },
+    });
   }
 
   /**
@@ -756,7 +903,7 @@ export class Inspector {
       num('Largeur', 'w', { min: 2, max: 200, step: 0.25 }),
       num('Profondeur', 'd', { min: 2, max: 200, step: 0.25 }),
       field('Marge', slider(f.margin, {
-        min: 0, max: 10, step: 0.25, format: (v) => `${fmtMetres(v)} m`,
+        min: 0, max: 10, step: 0.25, unit: 'm',
         onInput: (v) => this.setIn('focus', { margin: v }, 'focus'),
       }), 'air laissé autour de la zone, sans étendre le terrain'),
     );
@@ -780,6 +927,29 @@ export class Inspector {
     b.type = 'button';
     b.addEventListener('click', () => this.onExport?.());
     return b;
+  }
+
+  /**
+   * The bounds of a roof item's coordinate: its roof's extent along that
+   * axis, so a value typed far out lands on the far edge of the same roof.
+   */
+  roofSpan(item, axis) {
+    const m = this.store.model;
+    const host = roofAt(m, [item.x, item.y]);
+    if (!host?.cells.length) return { min: 0, max: 60 };
+    const cs = cellSizeOf(m);
+    const vals = host.cells.map((k) => Number(k.split(',')[axis]));
+    return { min: Math.min(...vals) * cs, max: (Math.max(...vals) + 1) * cs - 0.25 };
+  }
+
+  /** Move a roof item to a typed position, refused off every roof. */
+  moveRoofItem(item, x, y) {
+    if (!roofAt(this.store.model, [x, y])) {
+      this.notify(OFF_ROOF);
+      return false;
+    }
+    this.store.patchSelected({ x, y });
+    return true;
   }
 
   selectionSection(item) {
@@ -822,22 +992,22 @@ export class Inspector {
       s.append(
         positionField(m, item, patch),
         field('Largeur', slider(item.width, {
-          min: 0.4, max: 5, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          min: 0.4, max: 5, step: 0.1, unit: 'm',
           onInput: (v) => patch((it, mm) => fitOpening(mm, { ...it, width: v }), 'w'),
         }), overlaps ? `chevauche ${overlaps > 1 ? `${overlaps} autres ouvertures` : 'une autre ouverture'} sur ce mur` : undefined),
         field('Hauteur', slider(item.height, {
           min: 0.4, max: Math.max(0.4, Math.min(3, room(item.sill ?? 0))), step: 0.05,
-          format: (v) => `${v.toFixed(2)} m`,
+          unit: 'm',
           onInput: (v) => patch((it) => ({ height: Math.min(v, Math.max(0.4, levelH - (it.sill ?? 0))) }), 'h'),
         })),
         field('Allège', slider(item.sill ?? 0.95, {
           min: 0, max: Math.max(0, Math.min(2, room(item.height))), step: 0.05,
-          format: (v) => `${v.toFixed(2)} m`,
+          unit: 'm',
           onInput: (v) => patch((it) => ({ sill: Math.max(0, Math.min(v, levelH - it.height)) }), 'sill'),
         }), 'hauteur du bas de l’ouverture'),
         field('Renfoncement', slider(item.depth ?? 0, {
           min: 0, max: 0.8, step: 0.05,
-          format: (v) => (v > 0 ? `${v.toFixed(2)} m` : 'aucun'),
+          unit: 'm', note: (v) => (v > 0 ? '' : 'aucun'),
           onInput: (v) => patch({ depth: v }, 'depth'),
         }), 'creuse l’ouverture dans le mur — l’étage au-dessus continue'),
       );
@@ -847,12 +1017,12 @@ export class Inspector {
         s.append(
           field('Débord latéral', slider(item.sides ?? 0, {
             min: 0, max: 2, step: 0.05,
-            format: (v) => (v > 0 ? `${v.toFixed(2)} m` : 'aucun'),
+            unit: 'm', note: (v) => (v > 0 ? '' : 'aucun'),
             onInput: (v) => patch({ sides: v }, 'sides'),
           }), 'de chaque côté — pour une porte au fond d’un porche'),
           field('Débord en tête', slider(item.head ?? 0, {
             min: 0, max: 1, step: 0.05,
-            format: (v) => (v > 0 ? `${v.toFixed(2)} m` : 'aucun'),
+            unit: 'm', note: (v) => (v > 0 ? '' : 'aucun'),
             onInput: (v) => patch({ head: v }, 'head'),
           }), 'au-dessus de l’ouverture'),
         );
@@ -875,38 +1045,41 @@ export class Inspector {
       s.append(
         positionField(m, item, patch),
         field('Hauteur', slider(Math.max(lo, Math.min(hi, item.z ?? FIXTURE_DEFAULTS[item.kind].z)), {
-          min: lo, max: hi, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+          min: lo, max: hi, step: 0.05, unit: 'm',
           onInput: (v) => patch({ z: v }, 'z'),
         }), 'du centre, au-dessus du plancher de son niveau'),
       );
     } else if (type === 'roofItem') {
       s.append(
         field('Type', select(item.kind, Object.entries(ROOF_ITEM_LABELS), (v) => patch({ kind: v }))),
-        field('X', number(item.x, { min: 0, max: 60, step: 0.25, onChange: (v) => patch({ x: v }) })),
-        field('Y', number(item.y, { min: 0, max: 60, step: 0.25, onChange: (v) => patch({ y: v }) })),
+        // Kept on a roof, as the plan, the render and the arrows keep it: a
+        // value typed past the eaves would leave the item on no roof at all,
+        // never drawn again.
+        field('X', number(item.x, { ...this.roofSpan(item, 0), step: 0.25, onChange: (v) => this.moveRoofItem(item, v, item.y) })),
+        field('Y', number(item.y, { ...this.roofSpan(item, 1), step: 0.25, onChange: (v) => this.moveRoofItem(item, item.x, v) })),
       );
       if (item.kind === 'dish') {
         // A dish is round, drawn from the larger of its two sides: a width and
         // a depth meant one of the two sliders did nothing.
         s.appendChild(field('Diamètre', slider(Math.max(item.w ?? 0.8, item.d ?? 0.8), {
-          min: 0.4, max: 2, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          min: 0.4, max: 2, step: 0.1, unit: 'm',
           onInput: (v) => patch({ w: v, d: v }, 'w'),
         })));
       } else {
         s.append(
           field('Largeur', slider(item.w ?? 2, {
-            min: 0.4, max: 10, step: 0.2, format: (v) => `${v.toFixed(1)} m`,
+            min: 0.4, max: 10, step: 0.2, unit: 'm',
             onInput: (v) => patch({ w: v }, 'w'),
           })),
           field('Profondeur', slider(item.d ?? 1.5, {
-            min: 0.4, max: 8, step: 0.2, format: (v) => `${v.toFixed(1)} m`,
+            min: 0.4, max: 8, step: 0.2, unit: 'm',
             onInput: (v) => patch({ d: v }, 'd'),
           })),
         );
       }
       if (item.kind === 'chimney') {
         s.appendChild(field('Hauteur', slider(item.h ?? 1.1, {
-          min: 0.3, max: 3, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          min: 0.3, max: 3, step: 0.1, unit: 'm',
           onInput: (v) => patch({ h: v }, 'h'),
         })));
       }
@@ -922,7 +1095,7 @@ export class Inspector {
         // stretch a lamp into a wall.
       } else if (item.kind === 'tree' || item.kind === 'bush') {
         s.appendChild(field('Taille', slider(item.r ?? PROP_DEFAULTS[item.kind].r, {
-          min: 0.5, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          min: 0.5, max: 4, step: 0.1, unit: 'm',
           onInput: (v) => patch({ r: v }, 'r'),
         })));
       } else {
@@ -932,11 +1105,11 @@ export class Inspector {
           // by 3.95 but never 3 by 4, and no amount of care aligned it on the
           // building it adjoins — reported by a user trying to do exactly that.
           field('Largeur', slider(item.w ?? 2, {
-            min: 0.25, max: 24, step: 0.25, format: (v) => `${v.toFixed(2)} m`,
+            min: 0.25, max: 24, step: 0.25, unit: 'm',
             onInput: (v) => patch({ w: v }, 'w'),
           })),
           field('Profondeur', slider(item.d ?? 2, {
-            min: 0.25, max: 24, step: 0.25, format: (v) => `${v.toFixed(2)} m`,
+            min: 0.25, max: 24, step: 0.25, unit: 'm',
             onInput: (v) => patch({ d: v }, 'd'),
           })),
         );
@@ -958,7 +1131,7 @@ export class Inspector {
         s.append(
           field('Hauteur', slider(item.h ?? 0.5, {
             // As high as a terrace can be raised: the two go together.
-            min: 0.15, max: 3, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+            min: 0.15, max: 3, step: 0.05, unit: 'm',
             onInput: (v) => patch({ h: v }, 'h'),
           }), `${steps} marche${steps > 1 ? 's' : ''}, giron de ${tread} cm`
             + (tread < 24 ? ' — trop raide : allongez la volée' : '')),
@@ -971,7 +1144,7 @@ export class Inspector {
         s.appendChild(field('Élévation', slider(item.z ?? 0, {
           // Up to a full storey: on sloping ground a terrace can sit level
           // with the first floor, the garage opening underneath it.
-          min: 0, max: 3, step: 0.05, format: (v) => (v > 0 ? `${v.toFixed(2)} m` : 'au sol'),
+          min: 0, max: 3, step: 0.05, unit: 'm', note: (v) => (v > 0 ? '' : 'au sol'),
           onInput: (v) => patch({ z: v }, 'z'),
         }), 'la dalle reçoit ses joues — et masque ce qui reste au sol dessous'));
       }
@@ -985,14 +1158,14 @@ export class Inspector {
       }
       if (item.kind === 'lamppost') {
         s.appendChild(field('Hauteur', slider(item.h ?? 2.2, {
-          min: 0.8, max: 4, step: 0.1, format: (v) => `${v.toFixed(1)} m`,
+          min: 0.8, max: 4, step: 0.1, unit: 'm',
           onInput: (v) => patch({ h: v }, 'h'),
         }), 'une borne basse ou un lampadaire'));
       }
       if (item.kind === 'carport') {
         s.append(
           field('Hauteur', slider(item.h ?? 2.3, {
-            min: 1.8, max: 3.5, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+            min: 1.8, max: 3.5, step: 0.05, unit: 'm',
             onInput: (v) => patch({ h: v }, 'h'),
           }), 'sous la couverture'),
           field('Couverture', select(item.cover || 'flat',
@@ -1019,7 +1192,7 @@ export class Inspector {
       }
       if (['hedge', 'fence', 'muret', 'gate'].includes(item.kind)) {
         s.appendChild(field('Hauteur', slider(item.h ?? 1, {
-          min: 0.3, max: 3, step: 0.05, format: (v) => `${v.toFixed(2)} m`,
+          min: 0.3, max: 3, step: 0.05, unit: 'm',
           onInput: (v) => patch({ h: v }, 'h'),
         })));
       }

@@ -6,6 +6,7 @@
 import { checkAsync } from './harness.js';
 import { app } from './app-frame.js';
 import { appStore } from './app.test.js';
+import { answerDialog } from './helpers.js';
 import { rectCells } from '../src/core/grid.js';
 import { emptyModel, makeBuilding, normalise } from '../src/core/model.js';
 
@@ -116,10 +117,8 @@ await checkAsync('dans l’application, le plan se recadre sur un nouveau projet
   store.update((m) => ({ ...m, props: [...m.props, { id: 'far', kind: 'tree', x: 80, y: 80, r: 1 }] }));
   win.__app.render();
   const kept = plan.view.scale === zoomed;
-  const confirm = win.confirm;
-  win.confirm = () => true;
   doc.getElementById('btn-new').click();
-  win.confirm = confirm;
+  await answerDialog(doc);
   win.__app.render();
   const refitted = plan.view.scale !== zoomed;
   store.reset(before);

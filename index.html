@@ -129,53 +129,71 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M4 18 16 11l12 7-12 7z' fill='%23c8663c'/><path d='M4 18v5l12 7v-5z' fill='%23e9c98d'/><path d='M28 18v5l-12 7v-5z' fill='%23c8a76d'/></svg>">
 </head>
 <body>
+<a class="skip-link" href="#stage-area">Aller aux dessins</a>
 <header class="app-bar">
-  <div class="brand">
+  <div class="brand" title="Isometric House Builder">
     <span class="brand-mark" aria-hidden="true"></span>
     <span class="brand-name">Isometric House Builder</span>
+    <span class="brand-version" id="app-version"></span>
   </div>
-  <input id="project-name" class="project-name" aria-label="Nom du projet" spellcheck="false">
-  <div class="app-actions">
-    <button id="btn-undo" title="Annuler (Ctrl+Z)">Annuler</button>
-    <button id="btn-redo" title="Rétablir (Ctrl+Maj+Z)">Rétablir</button>
-    <span class="sep"></span>
-    <button id="btn-gallery">Modèles</button>
-    <button id="btn-new">Nouveau</button>
-    <button id="btn-open">Ouvrir…</button>
-    <button id="btn-save">Enregistrer</button>
-    <button id="btn-share" title="Copier un lien qui contient tout le projet">Partager</button>
-    <span class="sep"></span>
-    <a class="app-link" href="guide.html" target="_blank" rel="noopener">Guide</a>
-    <button id="btn-export" class="primary" title="Exporter une image">Exporter</button>
+  <input id="project-name" class="project-name" aria-label="Nom du projet" spellcheck="false" autocomplete="off">
+  <div class="bar-group" role="group" aria-label="Historique">
+    <button id="btn-undo" class="icon-btn" data-icon="undo" aria-label="Annuler" title="Annuler (Ctrl+Z)"></button>
+    <button id="btn-redo" class="icon-btn" data-icon="redo" aria-label="Rétablir" title="Rétablir (Ctrl+Maj+Z)"></button>
+  </div>
+  <button id="btn-menu" class="icon-btn menu-toggle" data-icon="more" aria-label="Actions du projet" aria-haspopup="true" aria-expanded="false" aria-controls="project-actions" title="Actions du projet"></button>
+  <div class="bar-group project-actions" id="project-actions" role="group" aria-label="Projet">
+    <button id="btn-gallery" data-icon="gallery" title="Partir d’un modèle de maison"><span class="btn-label">Modèles</span></button>
+    <button id="btn-new" data-icon="new" title="Repartir d’une page blanche"><span class="btn-label">Nouveau</span></button>
+    <button id="btn-open" data-icon="open" title="Ouvrir un fichier .house.json (Ctrl+O) — ou déposez-le sur la fenêtre"><span class="btn-label">Ouvrir…</span></button>
+    <button id="btn-save" data-icon="save" title="Enregistrer le projet (Ctrl+S)"><span class="btn-label">Enregistrer</span></button>
+    <button id="btn-save-as" class="menu-only" data-icon="save" title="Enregistrer dans un autre fichier (Ctrl+Maj+S)"><span class="btn-label">Enregistrer sous…</span></button>
+    <button id="btn-share" data-icon="share" title="Copier un lien qui contient tout le projet"><span class="btn-label">Partager</span></button>
+    <a class="menu-only" href="guide.html" target="_blank" rel="noopener" data-icon="guide"><span class="btn-label">Guide</span></a>
+    <button id="btn-keys-menu" class="menu-only" data-icon="keyboard"><span class="btn-label">Raccourcis clavier</span></button>
+  </div>
+  <div class="bar-end">
+    <a class="app-link" href="guide.html" target="_blank" rel="noopener" data-icon="guide" title="Le guide, dans un nouvel onglet"><span class="btn-label">Guide</span></a>
+    <button id="btn-keys" class="icon-btn" data-icon="keyboard" aria-label="Raccourcis clavier" title="Raccourcis clavier (?)"></button>
+    <button id="btn-export" class="primary" data-icon="export" title="Exporter une image (Ctrl+E)"><span class="btn-label">Exporter</span></button>
   </div>
 </header>
 
-<main class="layout">
+<main class="layout" id="layout" data-layout="both" data-tab="plan">
   <aside class="tools" id="tools" aria-label="Outils"></aside>
 
-  <section class="stage">
-    <div class="view">
-      <div class="view-head">
-        <h2>Plan — vue de dessus</h2>
-        <p class="view-hint" id="plan-hint">Dessinez l’emprise de la maison.</p>
-      </div>
-      <div class="view-body" id="plan"></div>
+  <section class="stage" id="stage-area" aria-label="Dessins" tabindex="-1">
+    <div class="stage-bar">
+      <p class="tool-hint" id="plan-hint" aria-live="polite"></p>
+      <div class="segmented" id="layout-switch" role="group" aria-label="Disposition des dessins"></div>
     </div>
-    <div class="view">
-      <div class="view-head">
-        <h2>Rendu isométrique</h2>
-        <div class="view-tools">
-          <button id="btn-rot-left" title="Tourner à gauche ( [ )">↺</button>
-          <span id="rot-label" class="rot-label">Sud-Est</span>
-          <button id="btn-rot-right" title="Tourner à droite ( ] )">↻</button>
-          <button id="btn-fit" title="Recadrer">Recadrer</button>
+    <div class="views" id="views">
+      <div class="view view-plan">
+        <div class="view-head">
+          <h2>Plan</h2>
+          <span class="view-sub">vue de dessus</span>
         </div>
+        <div class="view-body" id="plan"></div>
       </div>
-      <div class="view-body">
-        <div class="iso-canvas" id="iso"></div>
-        <!-- Navigation, on the drawing rather than in a menu: every gesture the
-             mouse can make has a button here that does the same thing. -->
-        <div class="view-nav" id="view-nav" role="group" aria-label="Navigation dans le rendu"></div>
+      <div class="splitter" id="splitter" role="separator" tabindex="0" aria-orientation="vertical"
+           aria-controls="views" aria-label="Partage entre le plan et le rendu" title="Glissez pour partager la place — double-clic : revenir au partage par défaut"></div>
+      <div class="view view-render">
+        <div class="view-head">
+          <h2>Rendu</h2>
+          <span class="view-sub">isométrique</span>
+          <div class="view-tools">
+            <button id="btn-rot-left" class="icon-btn small" aria-label="Tourner à gauche" title="Tourner à gauche ( [ )">↺</button>
+            <span id="rot-label" class="rot-label">Sud-Est</span>
+            <button id="btn-rot-right" class="icon-btn small" aria-label="Tourner à droite" title="Tourner à droite ( ] )">↻</button>
+            <button id="btn-fit" class="small" title="Recadrer le rendu sur la maison">Recadrer</button>
+          </div>
+        </div>
+        <div class="view-body">
+          <div class="iso-canvas" id="iso"></div>
+          <!-- Navigation, on the drawing rather than in a menu: every gesture the
+               mouse can make has a button here that does the same thing. -->
+          <div class="view-nav" id="view-nav" role="group" aria-label="Navigation dans le rendu"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -183,37 +201,85 @@
   <aside class="inspector" id="inspector" aria-label="Réglages"></aside>
 </main>
 
-<dialog id="export-dialog" class="dialog">
+<!-- The phone's three screens: one drawing at a time, or the settings. -->
+<nav class="tabbar" id="tabbar" aria-label="Écrans"></nav>
+
+<dialog id="export-dialog" class="dialog dialog-export" aria-labelledby="export-title">
   <form method="dialog">
-    <h2>Exporter une image</h2>
-    <p class="dialog-lead">Le fond transparent permet de déposer l’image sur n’importe quel tableau de bord.</p>
-    <label class="field">
-      <span class="field-label">Taille</span>
-      <select id="export-size"></select>
-    </label>
-    <div class="dialog-actions">
-      <button type="button" id="btn-png" class="primary">PNG</button>
-      <button type="button" id="btn-svg">SVG</button>
-      <button type="button" id="btn-four">Les 4 faces</button>
-      <button type="button" id="btn-views">Vues enregistrées</button>
-      <button type="button" id="btn-copy">Copier</button>
+    <div class="dialog-head">
+      <h2 id="export-title">Exporter une image</h2>
+      <button value="close" class="icon-btn dialog-x" data-icon="close" aria-label="Fermer" title="Fermer (Échap)"></button>
     </div>
-    <p class="dialog-status" id="export-status" role="status"></p>
-    <menu class="dialog-close"><button value="close">Fermer</button></menu>
+    <div class="export-body">
+      <figure class="export-preview" id="export-preview">
+        <div class="export-stage" id="export-stage">
+          <div class="export-frame" id="export-frame" role="img" aria-label="Aperçu de l’image exportée"></div>
+        </div>
+        <figcaption class="export-dims" id="export-dims"></figcaption>
+      </figure>
+      <div class="export-settings">
+        <p class="dialog-lead" id="export-lead"></p>
+        <label class="field">
+          <span class="field-label">Taille</span>
+          <select id="export-size"></select>
+        </label>
+        <div class="export-custom" id="export-custom" hidden>
+          <label class="field"><span class="field-label">Largeur (px)</span>
+            <input type="text" inputmode="numeric" id="export-w" autocomplete="off"></label>
+          <span class="export-times" aria-hidden="true">×</span>
+          <label class="field"><span class="field-label">Hauteur (px)</span>
+            <input type="text" inputmode="numeric" id="export-h" autocomplete="off"></label>
+        </div>
+        <fieldset class="field export-bg" id="export-bg">
+          <legend class="field-label">Fond</legend>
+          <div class="chips" id="export-bg-chips"></div>
+          <p class="field-hint" id="export-bg-note"></p>
+        </fieldset>
+      </div>
+    </div>
+    <div class="export-actions">
+      <div class="export-main">
+        <button type="button" id="btn-png" class="primary">PNG</button>
+        <button type="button" id="btn-svg">SVG</button>
+        <button type="button" id="btn-copy">Copier</button>
+      </div>
+      <div class="export-sets">
+        <button type="button" id="btn-four">Les 4 faces (.zip)</button>
+        <button type="button" id="btn-views">Vues enregistrées (.zip)</button>
+      </div>
+    </div>
+    <div class="export-progress">
+      <progress id="export-progress" max="1" value="0" hidden></progress>
+      <p class="dialog-status" id="export-status" role="status" aria-live="polite"></p>
+    </div>
   </form>
 </dialog>
 
-<dialog id="gallery-dialog" class="dialog dialog-wide">
+<dialog id="gallery-dialog" class="dialog dialog-wide" aria-labelledby="gallery-title">
   <form method="dialog">
-    <h2>Par où commencer&nbsp;?</h2>
-    <p class="dialog-lead">Choisissez le modèle le plus proche de votre maison, puis ajustez-le. Rien n’est définitif&nbsp;: tout se remodèle ensuite.</p>
+    <div class="dialog-head">
+      <h2 id="gallery-title">Par où commencer&nbsp;?</h2>
+      <button value="close" class="icon-btn dialog-x" data-icon="close" aria-label="Fermer" title="Fermer (Échap)"></button>
+    </div>
+    <p class="dialog-lead" id="gallery-lead">Choisissez le modèle le plus proche de votre maison, puis ajustez-le. Rien n’est définitif&nbsp;: tout se remodèle ensuite.</p>
+    <p class="dialog-note" id="gallery-replace" hidden></p>
     <div class="gallery-grid"></div>
-    <menu class="dialog-close"><button value="close">Fermer</button></menu>
   </form>
 </dialog>
 
+<dialog id="keys-dialog" class="dialog dialog-keys" aria-labelledby="keys-title">
+  <form method="dialog">
+    <div class="dialog-head">
+      <h2 id="keys-title">Raccourcis clavier</h2>
+      <button value="close" class="icon-btn dialog-x" data-icon="close" aria-label="Fermer" title="Fermer (Échap)"></button>
+    </div>
+    <div class="keys-body" id="keys-body"></div>
+  </form>
+</dialog>
+
+<div class="drop-zone" id="drop-zone" hidden><p>Déposez le fichier .house.json pour l’ouvrir</p></div>
 <input type="file" id="file-input" accept=".json,application/json" hidden>
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"><span class="toast-text"></span><button type="button" class="toast-action" hidden></button></div>
 
 <script type="module" src="src/main.js"></script>
 </body>

@@ -8,6 +8,7 @@
 import { PRESETS } from '../data/presets.js';
 import { renderScene } from '../render/svg.js';
 import { normalise, emptyModel } from '../core/model.js';
+import { T } from './texts.js';
 
 export class Gallery {
   constructor(dialog, onPick) {
@@ -51,8 +52,18 @@ export class Gallery {
     this.grid.appendChild(blank);
   }
 
-  open() {
+  /**
+   * Show the gallery. `replacing` says that a project is open and would give
+   * way to the model picked — said plainly, with the way back.
+   */
+  open({ replacing = false } = {}) {
     this.build();
+    this.replacing = replacing;
+    const note = this.dialog.querySelector('#gallery-replace');
+    if (note) {
+      note.textContent = T.galleryReplace;
+      note.hidden = !replacing;
+    }
     this.dialog.showModal();
   }
 }

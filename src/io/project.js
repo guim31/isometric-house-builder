@@ -141,3 +141,69 @@ export function initialModel() {
   if (local) return { model: local, source: 'local', rejected };
   return { model: defaultModel(), source: rejected ? 'rejected' : 'default', rejected };
 }
+
+/*
+ * Saving into the same file, where the browser allows it.
+ *
+ * A download is a new file each time — « maison (3).house.json » — and the
+ * one opened yesterday is never the one saved today. With the File System
+ * Access API the project remembers the file it came from, or the one it was
+ * first saved to, and « Enregistrer » writes there again. Elsewhere it stays
+ * a download.
+ */
+let fileHandle = null;
+
+const PICKER_TYPES = [{ description: 'Projet Isometric House Builder', accept: { 'application/json': ['.json'] } }];
+
+/** Can this browser write a file in place? */
+export const canWriteFiles = () => typeof window.showSaveFilePicker === 'function';
+
+/** The file the project is tied to, if any — its name only. */
+export const currentFileName = () => fileHandle?.name || null;
+
+/** Tie the project to a file (opened, or dropped) or to none (a new project). */
+export function useFile(handle) {
+  fileHandle = handle && typeof handle.createWritable === 'function' ? handle : null;
+}
+
+/**
+ * Save the project. Resolves with `{ name }` — the file written in place, or
+ * null for a download — or with null when the user closed the file picker.
+ */
+export async function saveProject(model, { as = false } = {}) {
+  if (!canWriteFiles()) {
+    exportProject(model);
+    return { name: null };
+  }
+  try {
+    if (!fileHandle || as) {
+      fileHandle = await window.showSaveFilePicker({ suggestedName: `${slug(model.name)}.house.json`, types: PICKER_TYPES });
+    }
+    const out = await fileHandle.createWritable();
+    await out.write(JSON.stringify(model, null, 2));
+    await out.close();
+    return { name: fileHandle.name };
+  } catch (e) {
+    if (e?.name === 'AbortError') return null;
+    throw e;
+  }
+}
+
+/**
+ * Pick a project file to open, through the browser's picker when it hands
+ * back a file that can be written to later. Resolves like importProject, plus
+ * the handle; null when the picker was closed, or when there is no such
+ * picker — the caller then falls back on a plain file input.
+ */
+export async function pickProject() {
+  if (typeof window.showOpenFilePicker !== 'function') return null;
+  let handle;
+  try {
+    [handle] = await window.showOpenFilePicker({ types: PICKER_TYPES, multiple: false });
+  } catch (e) {
+    if (e?.name === 'AbortError') return { cancelled: true };
+    return null;
+  }
+  const opened = await importProject(await handle.getFile());
+  return { ...opened, handle };
+}

@@ -96,9 +96,23 @@ async function workControls(win, doc, scope, reset, onChange = null) {
         const was = controls()[k]?.value;
         await act(k, (c) => { c.value = v; }, ['change'], v !== was);
       }
+    } else if (el.classList.contains('num')) {
+      // The exact-value field: typed at its upper bound, with a comma, as a
+      // French hand would; then something unreadable, which must be refused.
+      // (The lower bound is the slider's, already worked above.)
+      for (const v of [el.dataset.max, 'n’importe quoi']) {
+        const c0 = controls()[k];
+        if (!c0?.classList.contains('num')) break;
+        const target = Number(v);
+        const changes = Number.isFinite(target) && Math.abs(Number(c0.value.replace(',', '.')) - target) > 1e-9;
+        await act(k, (c) => { c.value = String(v).replace('.', ','); }, ['change'], changes);
+      }
     } else if (el.type === 'range') {
       for (const end of ['min', 'max']) {
         const c0 = controls()[k];
+        // A list that changed under the first end — a level gone — has
+        // moved another control to this place: that one has its own turn.
+        if (c0?.type !== 'range') break;
         const changes = c0 && Number(c0.value) !== Number(c0[end]);
         await act(k, (c) => { c.value = c[end]; }, ['input', 'change'], changes);
       }
@@ -226,7 +240,7 @@ await checkAsync('chaque outil, un clic dans le plan puis dans le rendu, sans ex
   };
   const errors = await watch(win, async () => {
     for (const b of tools) {
-      b.closest('details').open = true;
+      b.closest('.tool-group').classList.remove('folded');
       b.click();
       await frames(win, 1);
       // Over the plan first, without a press: each tool's preview is drawn.
