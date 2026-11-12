@@ -60,7 +60,11 @@ check('glisser une fenêtre la fait coulisser le long du mur', () => {
   line.dispatchEvent(pointer(view, 12.5, 9.9, 'pointerdown'));
   view.svg.dispatchEvent(pointer(view, 14.4, 9.9, 'pointermove'));
   view.svg.dispatchEvent(pointer(view, 14.4, 9.9, 'pointerup'));
-  if (op().edge !== '14,10,S') return `restée sur ${op().edge}`;
+  // Along the same wall it keeps its edge, the distance growing — as the
+  // arrows and the render's drag keep it; what counts is where it stands.
+  const [i, , side] = op().edge.split(',');
+  const centre = Number(i) + op().offset;
+  if (side !== 'S' || Math.abs(centre - 14.4) > 0.051) return `centre en x = ${centre} sur ${op().edge}`;
   // The old drag path wrote {x: NaN, y: NaN} onto the opening.
   return !('x' in op()) || 'des coordonnées x/y parasites ont été écrites';
 });
@@ -89,13 +93,15 @@ check('le pincement à deux doigts zoome le plan', () => {
     pointerId: id, clientX: r.left + x, clientY: r.top + y,
     bubbles: true, isPrimary: id === 1, button: 0,
   });
+  const before = view.view.scale;
   view.svg.dispatchEvent(pev(1, 100, 100, 'pointerdown'));
   view.svg.dispatchEvent(pev(2, 200, 100, 'pointerdown'));
   view.svg.dispatchEvent(pev(2, 260, 100, 'pointermove'));
-  const zoomed = view.zoom > 1.2;
+  const zoom = view.view.scale / before;
+  const zoomed = zoom > 1.2;
   view.svg.dispatchEvent(pev(1, 100, 100, 'pointerup'));
   view.svg.dispatchEvent(pev(2, 260, 100, 'pointerup'));
-  return zoomed || `zoom resté à ${view.zoom.toFixed(2)}`;
+  return zoomed || `zoom resté à ${zoom.toFixed(2)}`;
 });
 
 check('dupliquer la sélection crée une copie décalée', () => {

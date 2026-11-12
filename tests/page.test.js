@@ -29,11 +29,23 @@ await checkAsync('la galerie d’accueil s’ouvre à la première visite', asyn
   return dialog.open || 'la galerie ne s’est pas ouverte';
 });
 
-await checkAsync('le guide se charge, et l’application y renvoie', async () => {
+/*
+ * The guide, in each of its languages: the English one is a page of its own,
+ * and each links to the other.
+ */
+for (const [page, other] of [['guide.html', 'guide.en.html'], ['guide.en.html', 'guide.html']]) {
+await checkAsync(`le guide se charge, et l’application y renvoie (${page})`, async () => {
   // Meant to be handed to people who have never seen the tool, so a dead link
   // or a missing illustration is not a detail.
   const frame = await app();
-  const link = frame.contentDocument.querySelector('a[href="guide.html"]');
+  // The application links to the guide of its language: switched for the
+  // English page, and back.
+  const pick = frame.contentDocument.getElementById('lang-select');
+  pick.value = page === 'guide.html' ? 'fr' : 'en';
+  pick.dispatchEvent(new frame.contentWindow.Event('change', { bubbles: true }));
+  const link = frame.contentDocument.querySelector(`a.app-link[href="${page}"]`);
+  pick.value = 'fr';
+  pick.dispatchEvent(new frame.contentWindow.Event('change', { bubbles: true }));
   if (!link) return 'aucun lien vers le guide dans l’application';
 
   const doc = await new Promise((resolve, reject) => {
@@ -41,9 +53,10 @@ await checkAsync('le guide se charge, et l’application y renvoie', async () =>
     f.style.cssText = 'width:900px;height:600px;position:absolute;left:-9999px';
     f.onload = () => resolve(f.contentDocument);
     f.onerror = () => reject(new Error('guide illisible'));
-    f.src = '../guide.html';
+    f.src = `../${page}`;
     document.getElementById('stage').appendChild(f);
   });
+  if (!doc.querySelector(`header a[href="${other}"]`)) return `pas de lien vers ${other}`;
   const sections = doc.querySelectorAll('main h2[id]').length;
   if (sections < 8) return `${sections} sections dans le guide`;
   // Every entry in the table of contents must land somewhere.
@@ -65,6 +78,7 @@ await checkAsync('le guide se charge, et l’application y renvoie', async () =>
   }
   return true;
 });
+}
 
 await checkAsync('la page s’amorce avec ses outils et un rendu visible', async () => {
   const frame = await app();
@@ -87,9 +101,9 @@ await checkAsync('la page s’amorce avec ses outils et un rendu visible', async
   nav.querySelector('.nav-modes button[data-mode="pan"]').click();
   if (arrow.title === orbitTitle) return 'les flèches ne suivent pas le mode';
   nav.querySelector('.nav-modes button[data-mode="orbit"]').click();
-  const groups = [...doc.querySelectorAll('details.tool-group')];
+  const groups = [...doc.querySelectorAll('.tool-group')];
   if (groups.length < 4) return `${groups.length} familles d’outils repliables`;
-  if (!groups.some((g) => !g.open)) return 'aucune famille repliée au démarrage';
+  if (!groups.some((g) => g.classList.contains('folded'))) return 'aucune famille repliée au démarrage';
   const tools = doc.getElementById('tools');
   if (tools.scrollHeight > tools.clientHeight + 2) {
     return `la palette déborde de ${tools.scrollHeight - tools.clientHeight} px`;

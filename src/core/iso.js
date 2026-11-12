@@ -92,7 +92,15 @@ const ROSE = [
  * house. The test suite checks this against the geometry.
  */
 export function viewpointLabel(yaw) {
-  return ROSE[Math.round(normaliseYaw(45 + yaw) / 22.5) % 16];
+  return ROSE[viewpointIndex(yaw)];
+}
+
+/**
+ * The same point of the rose as a number, 0 for north and clockwise from
+ * there: what the interface names in its own language.
+ */
+export function viewpointIndex(yaw) {
+  return Math.round(normaliseYaw(45 + yaw) / 22.5) % 16;
 }
 
 /** The four quarter-turn viewpoints, in order. */

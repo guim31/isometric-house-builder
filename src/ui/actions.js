@@ -9,11 +9,13 @@
  */
 
 import {
-  newId, fitOpening, OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, stairsRun,
+  newId, fitOpening, OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, stairsRun, cellSizeOf,
+  FIXTURE_DEFAULTS,
 } from '../core/model.js';
+import { t } from '../i18n/index.js';
 
 // Defined in the model, which fills them into files that leave them out.
-export { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS };
+export { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, CENTRED_KINDS, FIXTURE_DEFAULTS };
 
 
 
@@ -39,27 +41,75 @@ export function placeOpening(store, kind, edgeId, storey, offsetMetres) {
   store.select({ type: 'opening', id });
 }
 
-export function placeRoofItem(store, kind, pt) {
-  const id = newId('r', store.model);
-  store.update((m) => ({
-    ...m,
-    roofItems: [...m.roofItems, { id, kind, x: snap(pt[0]), y: snap(pt[1]), ...ROOF_ITEM_DEFAULTS[kind] }],
-  }));
-  store.select({ type: 'roofItem', id });
+/** The building whose roof would carry an item centred on `pt`, or null. */
+export function roofAt(model, pt) {
+  const cs = cellSizeOf(model);
+  const k = `${Math.floor(pt[0] / cs)},${Math.floor(pt[1] / cs)}`;
+  return model.buildings.find((b) => b.cells.includes(k)) || null;
 }
 
-export function placeProp(store, kind, pt) {
-  const id = newId('p', store.model);
+/**
+ * Hang a fixture on a wall, `offsetMetres` along its edge and, when given,
+ * `z` metres above its level's floor — where the wall was clicked in the
+ * render; at the kind's usual height from the plan, which has no height.
+ */
+export function placeFixture(store, kind, edgeId, storey, offsetMetres, z = null) {
+  const id = newId('f', store.model);
+  const def = FIXTURE_DEFAULTS[kind];
+  store.update((m) => ({
+    ...m,
+    fixtures: [...m.fixtures, fitOpening(m, {
+      id, kind, edge: edgeId, storey: storey || 0,
+      offset: Math.round(offsetMetres * 20) / 20,
+      z: Number.isFinite(z) ? Math.round(z * 20) / 20 : def.z,
+    })],
+  }));
+  store.select({ type: 'fixture', id });
+}
+
+/** The roof item a click at `pt` would make, without its id. */
+export function roofItemAt(kind, pt) {
+  return { kind, x: snap(pt[0]), y: snap(pt[1]), ...ROOF_ITEM_DEFAULTS[kind] };
+}
+
+/**
+ * Put a roof item down — on a roof only. Off every roof it was created all
+ * the same, and never drawn: an object nobody could see or find again.
+ * Returns whether one was placed. `OFF_ROOF` is the key of the refusal.
+ */
+export const OFF_ROOF = 'plan.offRoof';
+
+export function placeRoofItem(store, kind, pt) {
+  const item = roofItemAt(kind, pt);
+  if (!roofAt(store.model, [item.x, item.y])) {
+    store.notify?.(t(OFF_ROOF));
+    return false;
+  }
+  const id = newId('r', store.model);
+  store.update((m) => ({ ...m, roofItems: [...m.roofItems, { id, ...item }] }));
+  store.select({ type: 'roofItem', id });
+  return true;
+}
+
+/**
+ * The outdoor item a click at `pt` would make, without its id, along with
+ * what it took its cue from: the wall a gate lines up with, the raised slab
+ * steps climb to. Shared by the placement and by the plan's preview of it,
+ * which must show exactly where the click will land.
+ */
+export function propAt(model, kind, pt) {
   let def = PROP_DEFAULTS[kind];
   let extra = {};
+  let slab = null, wall = null;
   if (kind === 'stairs') {
     // Steps exist to reach something. Turned the wrong way by default they
     // would have to be reoriented every single time, so they take their
     // height and their direction from the raised slab they are dropped by —
     // and a run long enough to climb it: at a fixed 1,25 m, three metres of
     // steps had seven-centimetre treads.
-    const near = nearestRaisedSlab(store.model, pt);
+    const near = nearestRaisedSlab(model, pt);
     if (near) {
+      slab = near.slab;
       const run = stairsRun(near.z);
       const along = near.dir === 'N' || near.dir === 'S';
       def = { ...def, h: near.z, dir: near.dir, w: along ? def.w : run, d: along ? run : def.d };
@@ -71,10 +121,16 @@ export function placeProp(store, kind, pt) {
   if (kind === 'gate') {
     // Snap onto the nearest wall: a gate is only useful in one, and aligning
     // it by hand to a quarter of a metre would be tedious and easy to miss.
-    const near = nearestMuret(store.model, pt);
-    if (near) extra = near.fit(pt, def);
+    const near = nearestMuret(model, pt);
+    if (near) { extra = near.fit(pt, def); wall = near.wall; }
   }
-  store.update((m) => ({ ...m, props: [...m.props, { id, kind, x, y, ...def, ...extra }] }));
+  return { prop: { kind, x, y, ...def, ...extra }, slab, wall };
+}
+
+export function placeProp(store, kind, pt) {
+  const id = newId('p', store.model);
+  const { prop } = propAt(store.model, kind, pt);
+  store.update((m) => ({ ...m, props: [...m.props, { id, ...prop }] }));
   store.select({ type: 'prop', id });
 }
 
@@ -163,4 +219,45 @@ export function placeRun(store, kind, from, to) {
   const { shape } = runShape(kind, from, to);
   store.update((m) => ({ ...m, props: [...m.props, { id, kind, ...def, ...shape }] }));
   store.select({ type: 'prop', id });
+}
+
+/**
+ * Nudge the selection with the arrow keys, one step in direction (dx, dy):
+ * a quarter metre (a metre with `big`) for an item, five centimetres (a
+ * quarter metre) along its wall for an opening, a whole cell for a body.
+ * Held keys repeat, and coalesce into one step of the history.
+ * Returns whether the key was used.
+ */
+export function nudgeSelection(store, dx, dy, big = false) {
+  const sel = store.selection;
+  if (!sel) return false;
+  if (sel.type === 'building') {
+    store.moveBuilding(sel.id, dx, dy, 'nudge');
+    return true;
+  }
+  const item = store.selected;
+  if (!item) return false;
+  if (sel.type === 'opening' || sel.type === 'fixture') {
+    // Along the wall only: an arrow across it has nowhere to send it.
+    const side = item.edge.split(',')[2];
+    const u = { S: [1, 0], N: [-1, 0], E: [0, 1], W: [0, -1] }[side];
+    const along = dx * u[0] + dy * u[1];
+    if (!along) return true;
+    const step = (big ? 0.25 : 0.05) * along;
+    store.patchSelected((it, m) => fitOpening(m, {
+      ...it, offset: Math.round(((it.offset ?? 0.5) + step) * 100) / 100,
+    }), 'nudge');
+    return true;
+  }
+  const step = big ? 1 : 0.25;
+  if (sel.type === 'roofItem') {
+    const to = [Math.round((item.x + dx * step) * 100) / 100, Math.round((item.y + dy * step) * 100) / 100];
+    // Kept on a roof: an arrow past the eaves would lose it.
+    if (!roofAt(store.model, to)) { store.notify(t(OFF_ROOF)); return true; }
+  }
+  store.patchSelected((it) => ({
+    x: Math.round((it.x + dx * step) * 100) / 100,
+    y: Math.round((it.y + dy * step) * 100) / 100,
+  }), 'nudge');
+  return true;
 }

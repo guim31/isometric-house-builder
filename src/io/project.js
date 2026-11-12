@@ -5,6 +5,7 @@
 
 import { normalise, defaultModel, MODEL_VERSION } from '../core/model.js';
 import { download, slug } from './files.js';
+import { t } from '../i18n/index.js';
 
 const STORAGE_KEY = 'isometric-house-builder/current';
 
@@ -71,13 +72,13 @@ export function importProject(file) {
     reader.onload = () => {
       try {
         const raw = JSON.parse(String(reader.result));
-        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('ce n’est pas un projet');
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(t('project.notProject'));
         resolve({ model: normalise(raw), newer: Number(raw.version) > MODEL_VERSION });
       } catch (e) {
-        reject(new Error('Fichier illisible : ' + e.message));
+        reject(new Error(t('project.unreadable', { message: e.message })));
       }
     };
-    reader.onerror = () => reject(new Error('Lecture impossible'));
+    reader.onerror = () => reject(new Error(t('project.readFailed')));
     reader.readAsText(file);
   });
 }
@@ -140,4 +141,70 @@ export function initialModel() {
   }
   if (local) return { model: local, source: 'local', rejected };
   return { model: defaultModel(), source: rejected ? 'rejected' : 'default', rejected };
+}
+
+/*
+ * Saving into the same file, where the browser allows it.
+ *
+ * A download is a new file each time — « maison (3).house.json » — and the
+ * one opened yesterday is never the one saved today. With the File System
+ * Access API the project remembers the file it came from, or the one it was
+ * first saved to, and « Enregistrer » writes there again. Elsewhere it stays
+ * a download.
+ */
+let fileHandle = null;
+
+const pickerTypes = () => [{ description: t('project.fileType'), accept: { 'application/json': ['.json'] } }];
+
+/** Can this browser write a file in place? */
+export const canWriteFiles = () => typeof window.showSaveFilePicker === 'function';
+
+/** The file the project is tied to, if any — its name only. */
+export const currentFileName = () => fileHandle?.name || null;
+
+/** Tie the project to a file (opened, or dropped) or to none (a new project). */
+export function useFile(handle) {
+  fileHandle = handle && typeof handle.createWritable === 'function' ? handle : null;
+}
+
+/**
+ * Save the project. Resolves with `{ name }` — the file written in place, or
+ * null for a download — or with null when the user closed the file picker.
+ */
+export async function saveProject(model, { as = false } = {}) {
+  if (!canWriteFiles()) {
+    exportProject(model);
+    return { name: null };
+  }
+  try {
+    if (!fileHandle || as) {
+      fileHandle = await window.showSaveFilePicker({ suggestedName: `${slug(model.name)}.house.json`, types: pickerTypes() });
+    }
+    const out = await fileHandle.createWritable();
+    await out.write(JSON.stringify(model, null, 2));
+    await out.close();
+    return { name: fileHandle.name };
+  } catch (e) {
+    if (e?.name === 'AbortError') return null;
+    throw e;
+  }
+}
+
+/**
+ * Pick a project file to open, through the browser's picker when it hands
+ * back a file that can be written to later. Resolves like importProject, plus
+ * the handle; null when the picker was closed, or when there is no such
+ * picker — the caller then falls back on a plain file input.
+ */
+export async function pickProject() {
+  if (typeof window.showOpenFilePicker !== 'function') return null;
+  let handle;
+  try {
+    [handle] = await window.showOpenFilePicker({ types: pickerTypes(), multiple: false });
+  } catch (e) {
+    if (e?.name === 'AbortError') return { cancelled: true };
+    return null;
+  }
+  const opened = await importProject(await handle.getFile());
+  return { ...opened, handle };
 }

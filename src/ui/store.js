@@ -8,11 +8,13 @@
 
 import { normalise, newId, makeBuilding, fitOpening, limitBreach } from '../core/model.js';
 import { saveLocal } from '../io/project.js';
+import { moveBody, rotateBody, mirrorBody, duplicateBody } from '../core/bodies.js';
+import { t, formatCount } from '../i18n/index.js';
 
 const HISTORY_LIMIT = 80;
 
 /** The model list each kind of selectable item lives in. A volume is not one. */
-const LISTS = { opening: 'openings', roofItem: 'roofItems', prop: 'props' };
+const LISTS = { opening: 'openings', fixture: 'fixtures', roofItem: 'roofItems', prop: 'props' };
 
 export class Store {
   constructor(model) {
@@ -28,6 +30,46 @@ export class Store {
     this.saveFailed = false;
     this.onSaveError = null;
     this.onLimit = null;
+    this.onNotice = null;
+    // An open gesture: every edit until it ends is one history entry.
+    this.gesture = null;
+  }
+
+  /** A short message for the user — a refusal, say — through the page's toast. */
+  notify(message) {
+    this.onNotice?.(message);
+  }
+
+  /**
+   * Group every edit until `endGesture` into one history entry, however long
+   * the gesture lasts. Coalescing alone is bounded in time: a stroke paused
+   * for a second in the middle undid in two halves.
+   */
+  beginGesture() {
+    this.gesture = { pushed: false, future: [...this.future] };
+  }
+
+  endGesture() {
+    if (!this.gesture) return;
+    this.gesture = null;
+    this.commit();
+  }
+
+  /**
+   * Abandon the gesture under way: the model goes back to what it was when
+   * the gesture began, with nothing left in the history and the redo stack as
+   * it was. Returns whether anything had to be undone.
+   */
+  cancelGesture() {
+    const g = this.gesture;
+    this.gesture = null;
+    if (!g?.pushed) return false;
+    const entry = this.past.pop();
+    this.future = g.future;
+    this.model = { ...entry.model, camera: this.model.camera };
+    this.lastEditAt = 0;
+    this.emit('model');
+    return true;
   }
 
   subscribe(fn) {
@@ -67,7 +109,7 @@ export class Store {
    * entry, so dragging a slider or painting a stroke undoes as a single step
    * rather than fifty.
    */
-  update(fn, { coalesce = null, silent = false } = {}) {
+  update(fn, { coalesce = null, silent = false, reason = 'model' } = {}) {
     const next = typeof fn === 'function' ? fn(this.model) : fn;
     if (!next || next === this.model) return;
     // The ceilings a file is cut down to on opening apply to editing too: the
@@ -75,11 +117,12 @@ export class Store {
     // and silently taken back at the next reload.
     const grows = next.buildings !== this.model.buildings || next.props !== this.model.props
       || next.openings !== this.model.openings || next.roofItems !== this.model.roofItems
+      || next.fixtures !== this.model.fixtures
       || next.views !== this.model.views;
     if (!silent && grows) {
       const breach = limitBreach(next);
       if (breach && !limitBreach(this.model)) {
-        this.onLimit?.(`Limite atteinte : ${breach}`);
+        this.onLimit?.(t('store.limit', { what: t(`limit.${breach.key}`, { max: formatCount(breach.max) }) }));
         return;
       }
     }
@@ -90,7 +133,9 @@ export class Store {
       // single undo step, but returning to the same control after a pause
       // starts a fresh one — undo then rewinds the latest gesture, not every
       // adjustment ever made with that slider.
-      const merge = coalesce && last && last.coalesce === coalesce && now - this.lastEditAt < 900;
+      const merge = this.gesture ? this.gesture.pushed
+        : coalesce && last && last.coalesce === coalesce && now - this.lastEditAt < 900;
+      if (this.gesture) this.gesture.pushed = true;
       if (!merge) {
         this.past.push({ model: this.model, coalesce });
         if (this.past.length > HISTORY_LIMIT) this.past.shift();
@@ -99,7 +144,7 @@ export class Store {
       this.lastEditAt = now;
     }
     this.model = next;
-    this.emit('model');
+    this.emit(reason);
   }
 
   /**
@@ -116,7 +161,10 @@ export class Store {
     const cur = this.model.camera;
     const next = { ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) };
     if (Object.keys(next).every((k) => next[k] === cur[k])) return;
-    this.update({ ...this.model, camera: next }, { silent: true });
+    // Said as such, so the page redraws only what shows the camera: rebuilding
+    // the plan and the whole inspector at every frame of an orbit is what a
+    // turn used to cost.
+    this.update({ ...this.model, camera: next }, { silent: true, reason: 'camera' });
   }
 
   /** Start over on `model`, with an empty history: nothing to undo back into. */
@@ -125,6 +173,7 @@ export class Store {
     this.past = [];
     this.future = [];
     this.selection = null;
+    this.gesture = null;
     this.emit('model');
   }
 
@@ -223,7 +272,7 @@ export class Store {
 
   /** Add an empty volume and make it the one being painted into. */
   addBuilding() {
-    const b = makeBuilding({ id: newId('b', this.model), name: `Bâtiment ${this.model.buildings.length + 1}` });
+    const b = makeBuilding({ id: newId('b', this.model), name: t('default.body', { n: this.model.buildings.length + 1 }) });
     this.update((m) => ({ ...m, buildings: [...m.buildings, b] }));
     this.activeId = b.id;
     this.emit('selection');
@@ -244,10 +293,50 @@ export class Store {
       ...m,
       buildings: m.buildings.filter((b) => b.id !== id),
       openings: m.openings.filter((o) => !cells.has(o.edge.split(',').slice(0, 2).join(','))),
+      fixtures: m.fixtures.filter((o) => !cells.has(o.edge.split(',').slice(0, 2).join(','))),
       roofItems: m.roofItems.filter((it) => !cells.has(`${Math.floor(it.x / cs)},${Math.floor(it.y / cs)}`)),
     }));
     this.activeId = null;
     this.emit('selection');
+  }
+
+  /**
+   * Move, turn, mirror or duplicate a whole body — its openings, roof items
+   * and shed slope along with it. Refused, and said, when the result would
+   * overlap another body. Returns whether the model changed.
+   */
+  moveBuilding(id, di, dj, coalesce = null) {
+    const next = moveBody(this.model, id, di, dj);
+    if (!next) { this.notify(t('store.noRoom')); return false; }
+    this.update(next, { coalesce });
+    return next !== this.model;
+  }
+
+  rotateBuilding(id) {
+    return this.transformBuilding(rotateBody(this.model, id), t('store.noRoomTurn'));
+  }
+
+  mirrorBuilding(id) {
+    return this.transformBuilding(mirrorBody(this.model, id), t('store.noRoomMirror'));
+  }
+
+  transformBuilding(next, refusal) {
+    if (!next) { this.notify(refusal); return false; }
+    const before = this.model;
+    this.update(next);
+    return this.model !== before;
+  }
+
+  duplicateBuilding(id) {
+    const out = duplicateBody(this.model, id, (name) => t('default.copy', { name }));
+    if (!out) { this.notify(t('store.noRoomCopy')); return null; }
+    const before = this.model;
+    this.update(out.model);
+    if (this.model === before) return null;
+    this.activeId = out.id;
+    this.select({ type: 'building', id: out.id });
+    this.emit('selection');
+    return out.id;
   }
 
   /** The currently selected item, or null. */
@@ -279,6 +368,7 @@ export class Store {
   duplicateSelected() {
     const sel = this.selection;
     if (!sel) return;
+    if (sel.type === 'building') { this.duplicateBuilding(sel.id); return; }
     const list = LISTS[sel.type];
     if (!list) return;
     const src = (this.model[list] || []).find((it) => it.id === sel.id);
@@ -287,6 +377,9 @@ export class Store {
     if (sel.type === 'opening') {
       // Beside the original, and still whole on the same wall.
       copy = fitOpening(this.model, { ...copy, offset: (src.offset ?? 0.5) + (src.width ?? 1.2) + 0.2 });
+    } else if (sel.type === 'fixture') {
+      // Along the same wall, an arm's length away.
+      copy = fitOpening(this.model, { ...copy, offset: (src.offset ?? 0.5) + 0.8 });
     } else if (sel.type === 'roofItem') {
       // On the same roof when there is room beside it: a copy nudged off the
       // eaves fell to the ground, or landed on the neighbour's roof.

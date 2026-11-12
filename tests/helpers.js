@@ -194,3 +194,22 @@ export function occlusionErrors(model, W, H, step = 3) {
   }
   return bad;
 }
+
+/**
+ * Answer the question the page has just put in one of its dialogs: type
+ * `text` into its field when given, then confirm — by the confirming button,
+ * as a hand would. Resolves once the dialog has closed and its promise run.
+ */
+export async function answerDialog(doc, text = null, confirm = true) {
+  const dlg = doc.querySelector('dialog.dialog-ask[open]');
+  if (!dlg) throw new Error('aucune question ouverte');
+  const input = dlg.querySelector('input');
+  if (text != null && input) input.value = text;
+  const btn = confirm ? dlg.querySelector('button[type="submit"]') : dlg.querySelector('button[value="cancel"]');
+  btn.click();
+  // The dialog resolves on its close event, a task of its own, and removes
+  // itself; then the caller's continuation runs.
+  const until = Date.now() + 2000;
+  while (dlg.isConnected && Date.now() < until) await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => setTimeout(r, 10));
+}

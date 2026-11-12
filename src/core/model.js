@@ -7,14 +7,16 @@ import { key, rectCells, connectedComponents, SIDES, runExtents } from './grid.j
 import {
   DEFAULT_PROJECTION, DEFAULT_PITCH, PROJECTIONS, clampPitch, clampRoll, normaliseYaw,
 } from './iso.js';
-import { ROOF_TYPES } from './roof.js';
+import { ROOF_TYPES, RIDGES } from './roof.js';
 import { ROOF_TEXTURES, WALL_TEXTURES } from '../render/texture.js';
 import { THEMES } from './palette.js';
 import { PRESETS } from '../data/presets.js';
 
-// 2: per-level heights, recessed openings, raised slabs, steps. Older files
-// open unchanged; the number is what tells a newer file apart.
-export const MODEL_VERSION = 2;
+// 2: per-level heights, recessed openings, raised slabs, steps.
+// 3: wall fixtures (a list of their own), equipment on the ground, the ridge
+// of a gable, a car's direction, a tree's silhouette. Older files open
+// unchanged; the number is what tells a newer file apart.
+export const MODEL_VERSION = 3;
 
 /** Drawing pitches the plan offers, in metres per cell. */
 export const CELL_SIZES = [1, 0.5];
@@ -43,7 +45,7 @@ export function newId(prefix, model = null) {
 /** Every id a model carries, whatever list it is in. */
 export function idsOf(m) {
   const out = new Set();
-  for (const list of ['buildings', 'openings', 'roofItems', 'props', 'views']) {
+  for (const list of ['buildings', 'openings', 'fixtures', 'roofItems', 'props', 'views']) {
     for (const it of m?.[list] || []) if (it?.id) out.add(it.id);
   }
   return out;
@@ -99,7 +101,41 @@ export const PROP_DEFAULTS = {
   tree: { r: 1.5 },
   bush: { r: 1.1 },
   car: { w: 1.8, d: 4.2 },
+  // Equipment on the ground — what a home dashboard puts a badge on. `dir` is
+  // the side they face: the fan of a heat pump, the slot of a letter box.
+  lamppost: { w: 0.4, d: 0.4, h: 2.2 },
+  heatpump: { w: 1, d: 0.4, h: 0.8, dir: 'S' },
+  mailbox: { w: 0.4, d: 0.3, h: 1.15, dir: 'S' },
+  carport: { w: 3, d: 5.5, h: 2.3, cover: 'flat' },
 };
+
+/**
+ * Equipment fixed to a wall, anchored as openings are: an edge, metres along
+ * it from its start, a level — and `z`, the height of its centre above that
+ * level's floor. `width` is what it takes up along the wall, for keeping it
+ * whole on its run; it is a property of the kind, not a setting.
+ *
+ * In a list of their own rather than among the openings: a version of the
+ * application that predates them reads any opening kind it does not know as a
+ * window, and would have hung a window where the camera was.
+ */
+export const FIXTURE_DEFAULTS = {
+  wallLight: { z: 2, width: 0.28 },
+  camera: { z: 2.3, width: 0.2 },
+  charger: { z: 1.1, width: 0.44 },
+};
+
+/**
+ * Ground equipment drawn to one shape: no width and depth to set, in the
+ * inspector or by a handle in the plan.
+ */
+export const FIXED_SHAPE_KINDS = new Set(['lamppost', 'mailbox']);
+
+/** What an opening or a fixture takes up along its wall, in metres. */
+export const wallSpan = (op) => op.width ?? OPENING_DEFAULTS[op.kind]?.width ?? FIXTURE_DEFAULTS[op.kind]?.width ?? 1.2;
+
+/** Range of a fixture's height above its level's floor, and how close to it. */
+export const fixtureZRange = (levelHeight) => [0.25, Math.max(0.25, levelHeight - 0.25)];
 
 /**
  * Size of a newly placed roof item, by kind — and what a file that leaves a
@@ -120,6 +156,32 @@ export const stairsSteps = (h) => Math.max(1, Math.min(24, Math.round(h / 0.18))
  * twenty-eight centimetres a step, rounded up to the quarter-metre grid.
  */
 export const stairsRun = (h) => Math.max(1.25, Math.ceil((stairsSteps(h) * 0.28) * 4) / 4);
+
+/** Outdoor items a quarter turn makes sense for: rectangles, and the car. */
+export const TURNABLE_KINDS = new Set([
+  'terrace', 'path', 'deck', 'pool', 'stairs', 'gate', 'muret', 'hedge', 'fence', 'car',
+  'heatpump', 'mailbox', 'carport',
+]);
+
+const NEXT_DIR = { N: 'E', E: 'S', S: 'W', W: 'N' };
+
+/**
+ * An outdoor item turned a quarter turn clockwise, seen from above, about the
+ * centre of its footprint. Width and depth trade places; what has a way of
+ * facing — the climb of a flight of steps, the front of a car — turns with
+ * it. Not snapped: two turns bring it back exactly where it was.
+ */
+export function quarterTurn(p) {
+  const def = PROP_DEFAULTS[p.kind] || {};
+  const w = p.w ?? def.w ?? 2, d = p.d ?? def.d ?? 2;
+  const out = { ...p, w: d, d: w };
+  if (!CENTRED_KINDS.has(p.kind)) {
+    out.x = p.x + w / 2 - d / 2;
+    out.y = p.y + d / 2 - w / 2;
+  }
+  if (p.kind === 'stairs' || p.kind === 'car' || p.dir) out.dir = NEXT_DIR[p.dir || (PROP_DEFAULTS[p.kind]?.dir) || 'N'];
+  return out;
+}
 
 /** An opening on a level its building no longer has is kept, but not built. */
 export const openingShown = (op, b) => (op.storey || 0) < b.storeys;
@@ -170,7 +232,7 @@ export function makeBuilding(patch = {}) {
     // the storey where the roof already begins.
     storeyHeights: null,
     plinth: 0,
-    roof: { type: 'hip', pitch: 30, overhang: 0.5, fascia: 0.18, shedDir: 'S' },
+    roof: { type: 'hip', pitch: 30, overhang: 0.5, fascia: 0.18, shedDir: 'S', ridge: 'auto' },
     overrides: {},
     texture: null, // null = follow the model's materials
     ...patch,
@@ -189,6 +251,7 @@ export function emptyModel() {
     texture: { roof: 'none', wall: 'none' },
     overrides: {},
     openings: [],
+    fixtures: [],
     roofItems: [],
     props: [],
     ground: { enabled: true, material: 'grass', margin: 3 },
@@ -247,7 +310,18 @@ export const LIMITS = {
   /** Any position, in metres from the origin. */
   coord: 250,
   openings: 200,
-  roofItems: 20,
+  fixtures: 100,
+  /**
+   * Roof items, by number and by what they actually cost. A panel or a roof
+   * window is laid as a patch subdivided every eighteen centimetres, so its
+   * price is its area — about a third of a millisecond a square metre — and a
+   * chimney or a dish costs next to nothing. Twenty items was a ceiling for
+   * someone laying panels one at a time; the area keeps the worst file where
+   * that ceiling had it.
+   */
+  roofItems: 100,
+  /** Square metres of panels and roof windows, all roofs together. */
+  roofArea: 800,
   props: 150,
   views: 30,
   name: 120,
@@ -286,6 +360,7 @@ const R = {
   propH: [0.05, 6],
   propZ: [0, 6],
   propRadius: [0, 5],
+  fixtureZ: [0.25, 3.75],
 };
 
 const SIDES_RE = /^[NSEW]$/;
@@ -300,6 +375,8 @@ const KINDS = {
   slab: ['paving', 'gravel', 'deck'],
   shape: ['rounded', 'rect'],
   gate: ['swing', 'sliding'],
+  tree: ['leafy', 'conifer'],
+  cover: ['flat', 'slats'],
 };
 
 /** Ids made safe, and unique within their list: a second item of the same id
@@ -365,6 +442,7 @@ export function normalise(input) {
       : { ...base.texture, ...(declared.texture || {}) }),
     overrides: safeColours(input.overrides),
     openings: normaliseOpenings(input.openings),
+    fixtures: normaliseFixtures(input.fixtures),
     roofItems: normaliseRoofItems(input.roofItems),
     props: normaliseProps(input.props),
     ground: {
@@ -392,7 +470,9 @@ export function normalise(input) {
 }
 
 /**
- * The first ceiling a model goes past, as a sentence for the user — or null.
+ * The first ceiling a model goes past — or null. Said as `{ key, max }`:
+ * which ceiling (a key of LIMITS) and its value, for the interface to put
+ * into words in its own language.
  *
  * normalise cuts a file down to the ceilings; the interface refuses the edit
  * that would cross one instead, and says which, rather than accepting a
@@ -400,37 +480,39 @@ export function normalise(input) {
  */
 export function limitBreach(m) {
   const cs = cellSizeOf(m);
-  const n = (v) => v.toLocaleString('fr-FR');
-  if (m.buildings.length > LIMITS.buildings) return `${LIMITS.buildings} corps de bâtiment au plus`;
+  const over = (key) => ({ key, max: LIMITS[key] });
+  if (m.buildings.length > LIMITS.buildings) return over('buildings');
   let total = 0, edges = 0;
   for (const b of m.buildings) {
-    if (b.cells.length > LIMITS.cells) return `${n(LIMITS.cells)} cases par corps au plus`;
+    if (b.cells.length > LIMITS.cells) return over('cells');
     total += b.cells.length;
     if (b.cells.length) {
       let i0 = Infinity, j0 = Infinity, i1 = -Infinity, j1 = -Infinity;
       for (const c of b.cells) {
         const [i, j] = c.split(',').map(Number);
         i0 = Math.min(i0, i); j0 = Math.min(j0, j); i1 = Math.max(i1, i); j1 = Math.max(j1, j);
-        if (Math.abs(i) * cs > LIMITS.coord || Math.abs(j) * cs > LIMITS.coord) return `pas au-delà de ${LIMITS.coord} m de l’origine`;
+        if (Math.abs(i) * cs > LIMITS.coord || Math.abs(j) * cs > LIMITS.coord) return over('coord');
       }
       if ((i1 - i0 + 1) * cs > LIMITS.extent || (j1 - j0 + 1) * cs > LIMITS.extent) {
-        return `${LIMITS.extent} m de côté au plus pour un corps`;
+        return over('extent');
       }
     }
     edges += outlineLength(b.cells);
   }
-  if (total > LIMITS.totalCells) return `${n(LIMITS.totalCells)} cases en tout au plus`;
-  if (edges > LIMITS.edges) return 'contour des bâtiments trop découpé';
-  if (m.openings.length > LIMITS.openings) return `${LIMITS.openings} ouvertures au plus`;
-  if (m.roofItems.length > LIMITS.roofItems) return `${LIMITS.roofItems} objets de toit au plus`;
-  if (m.props.length > LIMITS.props) return `${LIMITS.props} objets extérieurs au plus`;
-  if (m.views.length > LIMITS.views) return `${LIMITS.views} vues enregistrées au plus`;
+  if (total > LIMITS.totalCells) return over('totalCells');
+  if (edges > LIMITS.edges) return over('edges');
+  if (m.openings.length > LIMITS.openings) return over('openings');
+  if ((m.fixtures || []).length > LIMITS.fixtures) return over('fixtures');
+  if (m.roofItems.length > LIMITS.roofItems) return over('roofItems');
+  if (roofArea(m.roofItems) > LIMITS.roofArea) return over('roofArea');
+  if (m.props.length > LIMITS.props) return over('props');
+  if (m.views.length > LIMITS.views) return over('views');
   let run = 0;
   for (const p of m.props) {
     if (['hedge', 'fence', 'muret', 'gate'].includes(p.kind)) run += Math.max(p.w ?? 0, p.d ?? 0) * (p.kind === 'gate' ? 5 : 1);
-    if (Math.abs(p.x) > LIMITS.coord || Math.abs(p.y) > LIMITS.coord) return `pas au-delà de ${LIMITS.coord} m de l’origine`;
+    if (Math.abs(p.x) > LIMITS.coord || Math.abs(p.y) > LIMITS.coord) return over('coord');
   }
-  if (run > LIMITS.runLength) return `${LIMITS.runLength} m de haies, clôtures et murets au plus`;
+  if (run > LIMITS.runLength) return over('runLength');
   return null;
 }
 
@@ -472,8 +554,35 @@ function normaliseOpenings(input) {
   return uniqueIds(list, 'o');
 }
 
+/** Wall fixtures: on an edge that can be named, at a height within reason. */
+function normaliseFixtures(input) {
+  const list = (Array.isArray(input) ? input : []).filter(isRecord)
+    .filter((f) => FIXTURE_DEFAULTS[f.kind] && typeof f.edge === 'string' && /^-?\d{1,4},-?\d{1,4},[SENW]$/.test(f.edge))
+    .slice(0, LIMITS.fixtures)
+    .map((f) => ({
+      id: f.id,
+      kind: f.kind,
+      edge: f.edge,
+      storey: Number.isFinite(f.storey) ? Math.max(0, Math.min(3, Math.round(f.storey))) : 0,
+      offset: coord(f.offset, 0.5),
+      z: num(f.z, R.fixtureZ, FIXTURE_DEFAULTS[f.kind].z),
+    }));
+  return uniqueIds(list, 'f');
+}
+
+/** Kinds laid flat on the slope as a subdivided patch: what costs, by area. */
+const PATCH_KINDS = new Set(['solar', 'velux']);
+
+/** Area of the patch-laid roof items of a list, in square metres. */
+export function roofArea(items) {
+  let a = 0;
+  for (const it of items) if (PATCH_KINDS.has(it.kind)) a += (it.w ?? 0) * (it.d ?? 0);
+  return a;
+}
+
 /** Roof items: a kind something draws, a position, and sizes within reason. */
 function normaliseRoofItems(input) {
+  let area = 0;
   const list = (Array.isArray(input) ? input : []).filter(isRecord)
     .filter((it) => ROOF_ITEM_DEFAULTS[it.kind] && Number.isFinite(it.x) && Number.isFinite(it.y))
     .slice(0, LIMITS.roofItems)
@@ -485,6 +594,13 @@ function normaliseRoofItems(input) {
       };
       if (Number.isFinite(it.h) || def.h !== undefined) out.h = num(it.h, R.riH, def.h);
       return out;
+    })
+    // Past the area, the later panels are left out, as the later runs of
+    // hedge are past their length.
+    .filter((it) => {
+      if (!PATCH_KINDS.has(it.kind)) return true;
+      area += it.w * it.d;
+      return area <= LIMITS.roofArea;
     });
   return uniqueIds(list, 'r');
 }
@@ -518,8 +634,11 @@ function normaliseProps(input) {
       };
       pick('material', KINDS.slab);
       pick('shape', KINDS.shape);
-      pick('style', KINDS.gate);
+      // One field, a list of its own per kind: a gate swings or slides, a
+      // tree is broad-leaved or a conifer.
+      pick('style', KINDS[p.kind] || KINDS.gate);
       pick('dir', ['N', 'S', 'E', 'W']);
+      pick('cover', KINDS.cover);
       return out;
     })
     .filter((p) => {
@@ -587,6 +706,7 @@ function normaliseBuildings(input, themePlinth, cs) {
         overhang: num(roof.overhang, R.overhang, proto.roof.overhang),
         fascia: num(roof.fascia, R.fascia, proto.roof.fascia),
         shedDir: SIDES_RE.test(roof.shedDir) ? roof.shedDir : proto.roof.shedDir,
+        ridge: oneOf(roof.ridge, Object.keys(RIDGES), proto.roof.ridge),
       },
       overrides: safeColours(b.overrides),
       texture: isRecord(b.texture) ? materials(b.texture, { roof: 'none', wall: 'none' }) : null,
@@ -733,6 +853,31 @@ export function openingRun(m, op) {
 }
 
 /**
+ * Where a point `offset` metres along edge `edgeId` stands on the straight run
+ * of wall `op` hangs on, in metres from `op`'s own edge — or null when that
+ * edge is not on the same run. Sliding along a wall then keeps the edge, as
+ * the arrows and the render's drag already did; only crossing a corner
+ * changes it, and the same slide gives the same values from either view.
+ */
+export function offsetOnRun(m, op, edgeId, offset) {
+  if (edgeId === op.edge) return offset;
+  const run = openingRun(m, op);
+  if (!run) return null;
+  const [i0, j0, s0] = op.edge.split(',');
+  const [i1, j1, s1] = edgeId.split(',');
+  if (s0 !== s1 || !SIDES[s0]) return null;
+  const side = SIDES[s0];
+  const a0 = side.a(Number(i0), Number(j0)), a1 = side.a(Number(i1), Number(j1));
+  const b0 = side.b(Number(i0), Number(j0));
+  const u = [b0[0] - a0[0], b0[1] - a0[1]];
+  const d = [a1[0] - a0[0], a1[1] - a0[1]];
+  // Not on the same line: a parallel wall further in or out.
+  if (d[0] * u[1] - d[1] * u[0] !== 0) return null;
+  const s = (d[0] * u[0] + d[1] * u[1]) * cellSizeOf(m) + offset;
+  return s >= run.lo - 1e-9 && s <= run.hi + 1e-9 ? s : null;
+}
+
+/**
  * An offset that keeps an opening of `width` whole on its run of wall —
  * centred on it when the wall is the shorter of the two.
  */
@@ -750,7 +895,7 @@ export function fitOffset(offset, width, run) {
 export function fitOpening(m, op) {
   const run = openingRun(m, op);
   if (!run) return op;
-  const offset = fitOffset(op.offset ?? 0.5, op.width ?? OPENING_DEFAULTS[op.kind]?.width ?? 1.2, run);
+  const offset = fitOffset(op.offset ?? 0.5, wallSpan(op), run);
   return offset === op.offset ? op : { ...op, offset };
 }
 
@@ -765,6 +910,15 @@ export function openingSpan(op, b) {
   const sill = Math.max(0, Math.min(op.sill ?? 0.95, level - 0.1));
   const z0 = base + sill;
   return { z0, z1: Math.min(z0 + (op.height ?? 1.25), base + level) };
+}
+
+/**
+ * Height of a fixture's centre above the ground, kept within its level: a
+ * light set at 2,40 m on a level since lowered to 2,20 m stays on its wall.
+ */
+export function fixtureHeight(f, b) {
+  const [lo, hi] = fixtureZRange(storeyHeightOf(b, f.storey || 0));
+  return storeyBase(b, f.storey || 0) + Math.max(lo, Math.min(hi, f.z ?? FIXTURE_DEFAULTS[f.kind]?.z ?? 2));
 }
 
 /**
@@ -869,6 +1023,8 @@ export function withCellSize(m, size) {
     grid: { ...m.grid, cellSize: size },
     buildings: m.buildings.map((b) => ({ ...b, cells: convert(b.cells) })),
     openings: m.openings.map(reanchor),
+    // Fixtures hang off an edge exactly as openings do.
+    fixtures: (m.fixtures || []).map(reanchor),
   };
 }
 

@@ -1,5 +1,7 @@
 # Isometric House Builder
 
+**[English version](README.en.md)**
+
 Modélisez votre maison en vue isométrique et exportez-en des illustrations
 PNG ou SVG, prêtes à être posées sur un tableau de bord domotique.
 
@@ -9,7 +11,8 @@ PNG ou SVG, prêtes à être posées sur un tableau de bord domotique.
  · **[📖 Guide de prise en main](https://guim31.github.io/isometric-house-builder/guide.html)**
 
 Rien à installer, tout se passe dans le navigateur, aucune donnée n'est envoyée
-nulle part.
+nulle part. L'interface est en français et en anglais : un sélecteur
+dans l'en-tête, la langue du navigateur par défaut.
 
 ---
 
@@ -53,18 +56,43 @@ tout moment, et *Page blanche* reste disponible.
 | **Volumes** | Plusieurs **corps de bâtiment indépendants** — maison, garage, abri de jardin — chacun avec sa toiture, sa hauteur, ses matières et ses couleurs |
 | **Volume** | Emprise dessinée à main levée sur une trame de 1 m ou 0,50 m, jusqu'à 4 niveaux — chacun avec **sa propre hauteur**, pour l'étage sous combles — et soubassement réglable |
 | **Cotes** | Longueur affichée sur chaque pan de mur, dimensions en direct pendant le tracé, emprise et surface dans l'inspecteur |
-| **Toiture** | Croupe, deux pans, appentis, toit plat — inclinaison, débord et épaisseur de rive ; les noues entre ailes sont calculées |
+| **Toiture** | Croupe, deux pans, appentis, toit plat — inclinaison, débord et épaisseur de rive, **sens du faîtage** d'un deux-pans ; les noues entre ailes sont calculées |
 | **Ouvertures** | Fenêtres, fenêtres à volets, portes, portes de garage, posées sur n'importe quel mur et à n'importe quel niveau — avec un **renfoncement** optionnel, la niche étant de la vraie géométrie |
-| **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente |
-| **Extérieurs** | Piscine, terrasse, allée, haies, clôtures, arbres, buissons, voiture — terrasses et piscines pouvant être **surélevées jusqu'à 3 m**, avec leurs joues, et un **escalier** qui s'y pose de lui-même à la bonne hauteur |
+| **Sur le toit** | Panneaux photovoltaïques, cheminées, fenêtres de toit, paraboles — posés à plat sur la pente, dans le plan ou **d'un clic sur le versant** dans le rendu |
+| **Extérieurs** | Piscine, terrasse, allée, haies, clôtures, arbres feuillus ou **conifères**, buissons, voiture **orientable** — terrasses et piscines pouvant être **surélevées jusqu'à 3 m**, avec leurs joues, et un **escalier** qui s'y pose de lui-même à la bonne hauteur ; chaque rectangle **tourne d'un quart de tour** |
+| **Équipements** | Ce sur quoi un tableau de bord pose ses pastilles : **applique**, **caméra** et **borne de recharge** fixées au mur, **lampadaire**, **pompe à chaleur**, **boîte aux lettres** et **carport** (toit plat ou lames) au sol — appliques et lampadaires allumés la nuit |
 | **Clôture** | **Muret** tracé au glisser, avec chaperon ; **portillon** battant et **portail coulissant**, qui ouvrent le muret là où on les pose |
 | **Matières** | Tuiles, **tuiles canal panachées**, ardoises, bac acier sur le toit ; briques, bardage, pierre, colombages sur les murs — dessinées dans le plan de chaque face, donc elles suivent réellement la pente |
 | **Couleurs** | 6 palettes, dont deux reprenant le thème **Horizons de Gladys v5**, puis chaque matériau recolorable individuellement |
 | **Rendu** | Contours, ombre portée, projection isométrique 30° ou dimétrique 2:1 |
 | **Nuit** | Une **vue de nuit** : ciel dégradé et étoilé, lune, teintes de clair de lune — et les fenêtres allumées |
+| **Dans le rendu** | Cliquer un toit choisit son corps ; l'élément sélectionné **se déplace au glisser** — au sol, le long de son mur, sur son toit |
 | **Caméra** | **Orbite libre** : on fait tourner la maison à la souris, sur 360° et de la vue rasante à la quasi-verticale — plus une inclinaison de l'image ; pavé de navigation à l'écran, et les quatre faces à un clic |
 | **Cadrage** | Une zone dessinée sur le plan devient l'export : ce qui est hors zone disparaît, ce qui la traverse est coupé, rien n'est tranché par le bord, et chaque cadrage se garde comme **vue nommée** |
-| **Export** | PNG 1×/2×/4× à fond transparent, SVG, les 4 faces en lot, toutes les vues enregistrées en lot, copie directe dans le presse-papier |
+| **Export** | Aperçu fidèle avant téléchargement ; PNG 1×/2×/4× ou taille libre, fond transparent ou au choix, SVG, les 4 faces et toutes les vues enregistrées en une archive ZIP, copie directe dans le presse-papier |
+
+## Les équipements
+
+![Les sept équipements, de jour puis de nuit](assets/equipment.png)
+
+Une image de maison sur un tableau de bord sert à y poser des pastilles :
+l'éclairage du jardin, la caméra du portail, la borne de la voiture, la pompe à
+chaleur. La famille *Équipements* les dessine, pour que chaque pastille ait
+quelque chose sous elle. Ils suivent les mêmes règles que le reste : des
+aplats, rien qui ne se lise pas à petite taille — et un peu plus grands que
+nature, comme les fenêtres, faute de quoi une applique serait un point.
+
+Les équipements muraux s'accrochent **comme les ouvertures** : une arête de
+mur, une position le long de celle-ci, un niveau, plus une hauteur. Ils
+suivent donc leur mur quand la trame change, et partent avec leur corps. Ils
+vivent pourtant dans une **liste à part** (`fixtures`) plutôt que parmi les
+ouvertures : la version précédente de l'outil lit toute ouverture d'un type
+inconnu comme une fenêtre, et un fichier partagé aurait ouvert chez elle une
+fenêtre à la place de chaque caméra. Une liste qu'elle ne connaît pas, elle
+l'ignore.
+
+Appliques et lampadaires **s'allument la nuit**, comme les fenêtres et pour la
+même raison.
 
 ## La vue de nuit
 
@@ -155,11 +183,15 @@ régénère toutes en une passe quand la maison change.
 
 Trois colonnes, trois rôles, et rien qui les mélange :
 
-- **À gauche, créer.** Les outils qui ajoutent quelque chose au modèle, par
-  familles repliables. Deux d'entre elles — les objets de toit et le cadrage —
-  arrivent repliées : on les règle une fois et on n'y revient pas.
+- **À gauche, créer.** Les outils qui ajoutent quelque chose au modèle, chacun
+  avec son icône et, pour les plus courants, sa touche, par familles
+  repliables. Trois d'entre elles — les objets de toit, les équipements et le
+  cadrage — arrivent repliées : on les règle une fois et on n'y revient pas.
 - **Au centre, dessiner et regarder.** Le plan pour construire, le rendu pour
-  juger et exporter. Le **pavé de navigation**, en bas à droite du rendu, donne
+  juger et exporter — le rendu, qui est le produit fini, a la plus grande
+  part. Un séparateur se fait glisser entre les deux, et une bascule montre le
+  plan seul, les deux, ou le rendu seul (`1`, `2`, `3`). L'aide de l'outil
+  actif tient sur une ligne au-dessus. Le **pavé de navigation**, en bas à droite du rendu, donne
   un bouton pour chacun des gestes que la souris sait faire : tourner autour de
   la maison, monter ou descendre la caméra, zoomer, recadrer, et choisir ce que
   fait un simple glisser — pivoter ou déplacer, les flèches suivant ce choix.
@@ -173,8 +205,28 @@ Trois colonnes, trois rôles, et rien qui les mélange :
 Chaque section se replie, et **dit ce qu'elle contient tant qu'elle est
 fermée** : la palette en cours, l'orientation de la caméra, le nombre de corps.
 Sans cela il faudrait tout ouvrir pour se souvenir de ce qu'il y a dedans, ce
-qui annule l'intérêt de replier. L'état des sections tient pour la durée de la
-session.
+qui annule l'intérêt de replier. L'état des sections, la disposition des
+dessins et la taille d'export sont retrouvés d'une visite à l'autre — dans le
+navigateur, hors du projet : un fichier partagé emporte une maison, pas la
+façon dont on aime son écran.
+
+Chaque curseur de dimension ou de position est doublé d'un **champ exact** :
+on tape `3,40` — virgule ou point — et c'est 3,40 m, dans les bornes du
+curseur. `?` affiche tous les raccourcis.
+
+![La fenêtre d'export : l'image telle qu'elle sera téléchargée](assets/export.png)
+
+La **fenêtre d'export** montre l'image telle qu'elle sera téléchargée, aux
+proportions de la taille choisie, et c'est là que se choisit le fond. Les
+séries — les quatre faces, les vues enregistrées — partent en **une archive
+ZIP**, que le navigateur ne bloque pas comme une rafale de téléchargements.
+**Enregistrer** réécrit le même fichier là où le navigateur le permet (Chrome,
+Edge), et un fichier `.house.json` glissé sur la fenêtre s'ouvre.
+
+Sur **tablette**, les outils passent en icônes et les réglages restent à côté
+des dessins ; sur **téléphone**, l'outil devient une application à trois
+onglets — Plan, Rendu, Réglages — avec un bandeau d'outils qui défile. Les
+changements de version sont résumés dans [CHANGELOG.md](CHANGELOG.md).
 
 ## Prise en main
 
@@ -193,7 +245,7 @@ session.
    qu'elle suppose — *Horizons* se passe de contours et de soubassement, c'est
    ce qui fait son allure.
 4. **Posez les ouvertures.** Choisissez *Fenêtre*, *Porte* ou *Porte de garage*,
-   puis cliquez le long d'un mur — dans le plan, ou directement sur le rendu.
+   puis cliquez le long d'un mur — dans le plan, ou directement sur le rendu, les objets de toit sur le versant cliqué.
 5. **Ajoutez d'autres corps** si besoin (bouton *+ Nouveau corps*) :
    chacun se dessine et se règle séparément, et cliquer un volume dans le plan
    le rend actif. C'est ainsi qu'un abri de jardin reçoit un toit plat pendant
@@ -219,8 +271,10 @@ la saisie) — **regarder n'est pas modifier** : tourner, incliner ou changer de
 projection ne crée pas d'entrée d'historique, et annuler laisse la vue où elle
 est, si bien qu'on peut annuler, tourner la maison pour juger, puis rétablir ;
 la caméra reste enregistrée avec le projet, et le cadrage comme les vues
-enregistrées restent, eux, dans l'historique — `Ctrl+D` dupliquer la sélection, `[` et `]` tourner d'un quart de
-tour, `Suppr` supprimer l'élément sélectionné, `Échap` désélectionner. Le pavé
+enregistrées restent, eux, dans l'historique — `Ctrl+D` dupliquer la sélection (un corps compris), `[` et `]`
+tourner d'un quart de tour, les flèches décaler la sélection, `Suppr`
+supprimer l'élément sélectionné, `Échap` annuler le geste en cours dans le
+plan, sinon désélectionner. Le pavé
 de navigation se commande aussi au clavier.
 
 Dans le rendu, **glisser fait pivoter** la maison — où qu'on la prenne, sur le
@@ -235,7 +289,11 @@ répète le pas.
 Un appui sur le modèle reste ambigu jusqu'à ce que le pointeur bouge ou ne
 bouge pas : au-delà de quelques pixels c'est une navigation, sinon c'est une
 sélection. Sans cela, attraper la maison — le geste évident pour la tourner —
-ne faisait rien du tout.
+ne faisait rien du tout. Seule exception : un appui sur **l'élément déjà
+sélectionné** le prend en main, et le glisser le déplace — un extérieur au
+sol par quarts de mètre, une ouverture le long de son mur sans en sortir, un
+objet de toit sur son toit, un équipement mural le long de son mur et en
+hauteur. Le curseur l'annonce au survol, et chaque geste s'annule d'un coup.
 
 Sur les trois rotations : les deux premières déplacent la caméra autour de la
 maison, la troisième tourne le dessin fini dans son cadre. Ce sont les seules
@@ -245,6 +303,25 @@ Le ciel, lui, reste horizontal.
 Dans le plan, une ouverture sélectionnée **coulisse le long des murs** quand on
 la fait glisser ; les éléments d'extérieur se posent aussi d'un clic
 directement sur le rendu. Une boussole dans chaque vue rappelle où est le nord.
+
+Le plan est un outil de dessin à part entière :
+
+- **La vue ne bouge que sur demande.** Elle s'ajuste à l'ouverture d'un projet
+  et par le bouton *Ajuster* de son pavé (avec zoom avant et arrière), jamais
+  pendant un geste : une case garde sa taille sous le pinceau. Molette,
+  pincement, `Maj` + glisser, bouton du milieu, `Espace` + glisser, ou glisser
+  sur le vide en *Sélection* la déplacent.
+- **Dessiner.** Pinceau et gomme ne sautent aucune case, un trait s'annule en
+  une fois, `Échap` annule le geste en cours. Avant le clic, l'outil montre ce
+  qu'il va faire : le pan de mur visé et le gabarit de l'ouverture avec sa
+  distance à l'angle, l'emprise d'un objet d'extérieur, le muret où s'aligne
+  un portail, la terrasse que dessert un escalier, un objet de toit refusé hors
+  toit. Coordonnées du pointeur et cotes de la sélection s'affichent.
+- **Manipuler.** Un corps se déplace en le faisant glisser, avec ses
+  ouvertures et ses objets de toit ; il se duplique, se tourne d'un quart de
+  tour ou se retourne depuis l'inspecteur. La sélection porte des poignées, la
+  zone de cadrage aussi ; les bords s'aimantent aux murs et aux objets voisins
+  (`Alt` suspend l'aimantation) ; les flèches décalent la sélection.
 
 Le projet en cours est conservé dans le navigateur. *Enregistrer* produit un
 fichier `.house.json` lisible et versionnable, qu'*Ouvrir* relit ; c'est aussi
@@ -399,6 +476,24 @@ modifier le moteur :
   reste — arbres, sol, terrasses — est rangé par des mécanismes propres, et
   n'est pas fait de solides plans se rejoignant sur leurs arêtes.
 
+- **Ce qu'on clique, c'est ce qui est dessiné.** Le calque de sélection est
+  fait de cibles invisibles triées sur leur centre, et un toit n'en avait pas :
+  cliquer un versant ne sélectionnait rien, ou l'arbre caché derrière la
+  maison, ou posait une fenêtre sur le mur du fond. Ce qui est vu à un pixel
+  est pourtant connu — c'est la face dessinée en dernier. Le toit se choisit
+  donc sur le dessin lui-même, et le point cliqué se résout sur le plan de la
+  face touchée : le rayon de vue est affine en hauteur, son intersection avec
+  un plan se calcule exactement. Un objet de toit qu'on fait glisser suit le
+  rayon jusqu'au champ de hauteur de son toit, par dichotomie entre deux
+  plis, ce qui revient au même puisque le toit y est plan.
+- **Les équipements sont des boîtes qui se touchent sans s'interpénétrer.**
+  Ils rejoignent alors la passe d'ordre exacte avec la coque : deux boîtes
+  disjointes ont toujours un axe du monde entre elles. C'est ce qui garde une
+  applique sous son débord de toit, et le toit d'un carport au-dessus de la
+  voiture qu'il abrite, quel que soit l'angle. Un conifère, fait de cônes
+  empilés, suit une règle voisine : chaque étage est au-dessus d'un plan
+  horizontal, la caméra aussi, donc l'arbre se range d'un bloc par son centre,
+  puis étage après étage.
 - **Les éléments linéaires sont émis en tronçons.** Une haie ou un muret de
   vingt mètres fusionné en une seule face n'a qu'un centre, donc qu'une
   profondeur : le tout passe devant la maison ou derrière, jamais en partie
@@ -463,6 +558,15 @@ trouvés étaient invisibles sur une capture et évidents pour lui. Il balaie le
 orientations *et* les hauteurs de caméra : la première version ne balayait que
 les hauteurs et passait pendant qu'un mur traversait manifestement un débord.
 
+Une mise en ligne se protège aussi d'elle-même. GitHub Pages garde dix minutes
+de cache, et les modules s'importent sans numéro de version : juste après une
+publication, un navigateur peut recevoir un `main.js` neuf et un `roof.js`
+ancien, et l'import échoue avant que l'application n'ait rien affiché. Une
+**garde de démarrage**, petit script classique d'`index.html` hors du graphe
+de modules, le constate, recharge tout le graphe en contournant le cache et
+relance la page une fois ; si cela ne suffit pas, elle le dit et propose de
+recharger. Le lanceur de tests rejoue ce scénario.
+
 Les contributions sont bienvenues : ouvrez une issue ou une pull request.
 Merci de faire passer `node dev/run-tests.mjs` avant de proposer un changement.
 
@@ -470,33 +574,3 @@ Merci de faire passer `node dev/run-tests.mjs` avant de proposer un changement.
 
 MIT — voir [LICENSE](LICENSE). Faites-en ce que vous voulez, y compris
 commercialement.
-
----
-
-<details>
-<summary><b>English summary</b></summary>
-
-**Isometric House Builder** is a free, open-source, build-step-free web tool for
-modelling the exterior of a house in isometric view and exporting it as a
-transparent PNG or a flat SVG — meant for home-automation dashboards such as
-Gladys Assistant, but the output is plain image files usable anywhere.
-
-It opens on a gallery of ten starter houses — French regional archetypes from a
-Flemish brick townhouse to a Provençal mas, a mountain chalet and a passive
-solar home — so you begin by adjusting something close to your own rather than
-from an empty grid.
-
-Draw the footprint on a one-metre grid, pick a roof (hip, gable, shed, flat),
-place windows, doors, garage doors, solar panels, chimneys, a pool, trees, then
-export the current view or all four isometric orientations at once.
-
-The default palette matches the **Horizons** theme of Gladys Assistant v5, so an
-exported house drops straight into its *house-view* widget — which accepts a
-custom image and lets you pin device features onto it. Export at the *Gladys*
-preset (2560 px): the app downscales anything larger.
-
-No dependencies, no bundler, no account: clone it, serve the folder, open
-`index.html`. Roof and wall materials are generated in world space and projected, so courses follow each slope. Tests live in `tests/` and run in the browser, or headlessly via
-`node dev/run-tests.mjs`. MIT licensed.
-
-</details>

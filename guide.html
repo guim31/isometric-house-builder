@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Guide — Isometric House Builder</title>
 <meta name="description" content="Prise en main de l'outil : dessiner sa maison en isométrie et en exporter une image pour un tableau de bord domotique.">
+<link rel="alternate" hreflang="fr" href="guide.html">
+<link rel="alternate" hreflang="en" href="guide.en.html">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M4 18 16 11l12 7-12 7z' fill='%23c8663c'/><path d='M4 18v5l12 7v-5z' fill='%23e9c98d'/><path d='M28 18v5l-12 7v-5z' fill='%23c8a76d'/></svg>">
 <style>
 /* Same palette as the application, so the two read as one thing. */
@@ -77,6 +79,7 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <header>
   <span class="brand"><span class="mark" aria-hidden="true"></span> Isometric House Builder</span>
   <span class="spacer"></span>
+  <a class="btn" href="guide.en.html" hreflang="en" lang="en">English</a>
   <a class="btn" href="https://github.com/guim31/isometric-house-builder">Code source</a>
   <a class="btn primary" href="./">Ouvrir l’outil</a>
 </header>
@@ -99,6 +102,7 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
     <li><a href="#ouvertures">Fenêtres, portes, objets de toit</a></li>
     <li><a href="#corps">Plusieurs corps de bâtiment</a></li>
     <li><a href="#abords">Les abords : muret, portail, piscine, escalier</a></li>
+    <li><a href="#equipements">Les équipements, pour le tableau de bord</a></li>
     <li><a href="#couleurs">Couleurs et matières</a></li>
     <li><a href="#vue">Regarder sa maison</a></li>
     <li><a href="#cadrage">Cadrer sur une zone, pour un widget</a></li>
@@ -121,25 +125,72 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <img src="assets/screenshot.png" alt="L’interface : outils à gauche, plan et rendu au centre, réglages à droite">
 <ul>
   <li><strong>À gauche, créer.</strong> Les outils qui ajoutent quelque chose,
-    rangés par familles qui se replient. Deux arrivent repliées — <em>Sur le
-    toit</em> et <em>Cadrage</em> — parce qu’on les règle une fois.</li>
+    chacun avec son icône, rangés par familles qui se replient. Trois arrivent
+    repliées — <em>Sur le toit</em>, <em>Équipements</em> et <em>Cadrage</em> —
+    parce qu’on les pose une fois et qu’on n’y revient guère. Les plus courants
+    ont une touche, affichée à côté de leur nom ; l’info-bulle d’un outil donne
+    toute son aide.</li>
   <li><strong>Au centre, dessiner et regarder.</strong> Le plan pour
-    construire, le rendu pour juger et exporter.</li>
+    construire, le rendu pour juger et exporter. Au-dessus, une ligne rappelle
+    ce que fait l’outil actif, et une bascule montre le <em>plan seul</em>,
+    <em>les deux</em> ou le <em>rendu seul</em> (touches <kbd>1</kbd>
+    <kbd>2</kbd> <kbd>3</kbd>). Entre les deux dessins, un séparateur se fait
+    glisser pour donner plus de place à l’un ou à l’autre (double-clic : retour
+    au partage par défaut). Ces choix sont retrouvés à la visite suivante.</li>
   <li><strong>À droite, régler</strong>, en quatre familles : <em>Sélection</em>
     (ce qu’on vient de cliquer), <em>Bâtiment</em>, <em>Projet</em>,
-    <em>Vue et export</em>. Chaque section se replie et indique ce qu’elle
-    contient tant qu’elle est fermée.</li>
+    <em>Vue et export</em>. Chaque section se replie, indique ce qu’elle
+    contient tant qu’elle est fermée, et reste ouverte ou fermée d’une visite à
+    l’autre.</li>
 </ul>
+<p>
+  Le sélecteur de langue de l’en-tête fait passer l’interface du français à
+  l’anglais, et inversement ; votre projet n’en est pas modifié.
+</p>
+<p>
+  <strong>Au centimètre près.</strong> Chaque curseur de dimension ou de
+  position est doublé d’un champ : tapez <code>3,40</code> (ou <code>3.40</code>)
+  puis <kbd>Entrée</kbd>, et c’est 3,40 m — dans les bornes du curseur. Les
+  flèches <kbd>↑</kbd> <kbd>↓</kbd> du champ ajustent d’un pas, <kbd>Échap</kbd>
+  rend la valeur d’avant.
+</p>
+<p>
+  <strong>Sur tablette et téléphone.</strong> Jusqu’à 1100 px de large, les
+  outils passent en icônes et les réglages restent à côté des dessins. Sur un
+  téléphone, l’outil devient une application : une barre compacte (le bouton
+  <strong>⋯</strong> réunit Modèles, Nouveau, Ouvrir, Enregistrer, Partager et
+  le guide), un bandeau d’outils qui défile, et trois onglets en bas —
+  <em>Plan</em>, <em>Rendu</em>, <em>Réglages</em>. Un point sur l’onglet
+  Réglages signale qu’un élément est sélectionné.
+</p>
+<img src="assets/telephone.png" alt="Sur un téléphone : la barre compacte, le bandeau d’outils, le rendu et les onglets" style="max-width:320px">
 
 <h2 id="emprise">3. Dessiner l’emprise</h2>
 <ol>
   <li>Outil <strong>Rectangle</strong> : glissez dans le plan pour poser un
     volume. Les dimensions s’affichent pendant le tracé.</li>
   <li>Outil <strong>Pinceau</strong> pour ajouter case par case,
-    <strong>Gomme</strong> pour retirer. <kbd>Alt</kbd> inverse l’outil.</li>
+    <strong>Gomme</strong> pour retirer. <kbd>Alt</kbd> inverse l’outil. Un
+    geste rapide ne saute aucune case, et tout un trait s’annule d’un seul
+    <kbd>Ctrl</kbd>+<kbd>Z</kbd>. Une case qui appartient à un autre corps est
+    laissée de côté, et l’outil le signale.</li>
+  <li><kbd>Échap</kbd> pendant un geste — rectangle, muret, cadrage,
+    déplacement, redimensionnement — l’annule sans rien modifier.</li>
   <li>Chaque pan de mur affiche sa longueur : c’est ainsi qu’on cale les
     dimensions réelles sans compter les cases.</li>
 </ol>
+<h3>Se déplacer dans le plan</h3>
+<p>
+  Le plan ne bouge que quand vous le demandez : il s’ajuste à la maison à
+  l’ouverture d’un projet, puis garde son échelle pendant que vous dessinez.
+  La <strong>molette</strong> zoome autour du curseur, deux doigts pincent ou
+  glissent, et l’on déplace le plan en glissant avec <kbd>Maj</kbd>, le bouton
+  du milieu, <kbd>Espace</kbd> enfoncé, ou sur un endroit vide avec l’outil
+  <em>Sélection</em>. Le petit pavé en bas à droite du plan zoome, dézoome et
+  <strong>ajuste</strong> la vue à tout le projet. Les coordonnées du pointeur,
+  en mètres, s’affichent en bas à gauche.
+</p>
+
 <div class="note">
   <strong>Pour des cotes justes,</strong> passez la <em>Trame</em> à 0,50 m dans
   <em>Bâtiment → Tous les corps</em>. La maison déjà dessinée est conservée à
@@ -163,6 +214,12 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <p>
   Le débord se règle par pas de 25 cm, pour que la rive tombe sur la trame.
 </p>
+<p>
+  Un toit à deux pans prend son <strong>faîtage</strong> le long du grand côté
+  du corps. La liste <em>Faîtage</em> l’impose <em>est-ouest</em> ou
+  <em>nord-sud</em> — pour une maison presque carrée, ou pour des pignons sur
+  rue qui ne sont pas sur le grand côté.
+</p>
 
 <h2 id="ouvertures">5. Fenêtres, portes, objets de toit</h2>
 <p>
@@ -170,7 +227,9 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   <em>Porte de garage</em>, puis cliquez le long d’un mur — dans le plan
   <em>ou directement sur le rendu</em>. Une ouverture sélectionnée se règle
   (largeur, hauteur, allège) et se fait glisser le long des murs, en passant
-  les angles.
+  les angles. Avant le clic, le pan visé est surligné et le gabarit de
+  l’ouverture apparaît là où elle se posera, avec sa distance à l’angle.
+  Les flèches du clavier la font coulisser de 5 cm (25 cm avec <kbd>Maj</kbd>).
 </p>
 <p>
   <strong>Position</strong> se compte depuis l’angle du mur jusqu’au bord de
@@ -188,8 +247,13 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 </p>
 <p>
   Ce qui se pose sur le toit — panneaux solaires, cheminée, fenêtre de toit,
-  parabole — se place dans le plan, d’un clic sur l’emprise. Ils épousent la
-  pente.
+  parabole — se place d’un clic sur l’emprise dans le plan, ou <em>sur le
+  versant même</em> dans le rendu : l’objet arrive à l’endroit cliqué. Ils
+  épousent la pente. Hors de tout toit, le gabarit du plan vire au rouge et le
+  clic est refusé. Une fois sélectionnés, leurs coins se tirent dans le plan
+  pour les redimensionner. Un toit en accepte autant qu’on veut en poser un à
+  un — la limite, cent objets et 800 m² de panneaux et fenêtres de toit, ne
+  gêne qu’un fichier démesuré.
 </p>
 
 <h2 id="corps">6. Plusieurs corps de bâtiment</h2>
@@ -203,6 +267,16 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   Cliquer un volume dans le plan, avec l’outil <em>Sélection</em>, ou un mur
   ou un toit dans le rendu, rend son corps actif — pratique pour passer de l’un
   à l’autre.
+</p>
+<p>
+  Avec l’outil <em>Sélection</em>, <strong>glissez un corps</strong> pour le
+  déplacer tout entier, par cases, avec ses ouvertures, ses équipements muraux
+  et ce qui est posé sur son toit ; les flèches le décalent d’une case. Les boutons
+  <strong>Dupliquer</strong>, <strong>Tourner ¼</strong> et
+  <strong>Miroir</strong> de la section <em>Corps</em> (et
+  <kbd>Ctrl</kbd>+<kbd>D</kbd>) font le reste ; la pente d’un appentis suit,
+  et un faîtage imposé tourne avec le corps.
+  Deux corps ne se recouvrent jamais : un geste qui y mènerait est refusé.
 </p>
 
 <h2 id="abords">7. Les abords : muret, portail, piscine, escalier</h2>
@@ -229,10 +303,56 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <p>
   Largeur et profondeur d’un extérieur se règlent par quarts de mètre, à partir
   de 0,25 m : une terrasse de 3 × 4 m se cale donc exactement sur le bâtiment
-  qu’elle borde.
+  qu’elle borde. Le bouton <strong>Tourner d’un quart de tour</strong> fait
+  pivoter une terrasse, une allée, une piscine, un escalier — son sens de
+  montée avec lui —, un portail, un muret, une haie, une clôture ou la voiture,
+  autour de son centre.
+</p>
+<p>
+  La voiture a un <strong>sens</strong> : la liste dit où pointe le capot. Un
+  arbre est <em>feuillu</em> ou <em>conifère</em>.
+</p>
+<p>
+  Avant le clic, l’objet apparaît en transparence à l’endroit exact où il se
+  posera ; le portail montre le muret qu’il va ouvrir, l’escalier la terrasse
+  qu’il dessert. Sélectionné, un objet porte ses cotes et des
+  <strong>poignées</strong> : coins et milieux des côtés pour une terrasse,
+  une piscine ou une voiture, un bout de chaque côté pour un muret, une haie
+  ou une clôture, le rayon pour un arbre ou un buisson. En déplaçant ou en
+  redimensionnant, les bords <strong>s’aimantent</strong> aux murs et aux
+  autres objets à moins de 30 cm — un trait pointillé le signale —, et
+  <kbd>Alt</kbd> suspend l’aimantation. Les flèches décalent la sélection de
+  25 cm (1 m avec <kbd>Maj</kbd>).
 </p>
 
-<h2 id="couleurs">8. Couleurs et matières</h2>
+<h2 id="equipements">8. Les équipements, pour le tableau de bord</h2>
+<p>
+  La famille <em>Équipements</em> regroupe ce sur quoi un tableau de bord pose
+  ses pastilles : <strong>applique</strong>, <strong>caméra</strong> et
+  <strong>borne de recharge</strong>, qui se fixent au mur, puis
+  <strong>lampadaire</strong>, <strong>pompe à chaleur</strong>,
+  <strong>boîte aux lettres</strong> et <strong>carport</strong>, qui se posent
+  au sol.
+</p>
+<p>
+  Les équipements muraux se posent comme les ouvertures, d’un clic sur un mur
+  — dans le rendu, <em>à la hauteur cliquée</em> ; dans le plan, le pan visé et
+  le point de pose s’affichent avant le clic. Ils se règlent en position et
+  en hauteur, coulissent sur leur mur au glisser comme aux flèches — et d’un
+  mur à l’autre en les glissant dans le plan —, suivent leur mur quand la
+  maison change, et partent avec leur corps quand il est déplacé, tourné,
+  dupliqué ou supprimé. Appliques et lampadaires <strong>s’allument en vue
+  de nuit</strong>, comme les fenêtres.
+</p>
+<p>
+  La pompe à chaleur et la boîte aux lettres se tournent vers un côté
+  (<em>Ventilateur vers</em>, <em>Fente vers</em>). Le carport se règle en
+  dimensions et en hauteur, avec un toit plat ou des lames de pergola, et une
+  voiture se gare dessous.
+</p>
+<img src="assets/equipment.png" alt="Les sept équipements, de jour puis de nuit">
+
+<h2 id="couleurs">9. Couleurs et matières</h2>
 <p>
   Section <em>Projet → Apparence</em> pour la palette, <em>Couleurs et
   matières</em> pour le reste. Six palettes, des matières de toit (tuiles,
@@ -245,7 +365,7 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   maison ne détonne pas à côté du reste du tableau de bord.
 </div>
 
-<h2 id="vue">9. Regarder sa maison</h2>
+<h2 id="vue">10. Regarder sa maison</h2>
 <p>
   <strong>Glissez dans le rendu</strong> pour faire tourner la maison, où qu’on
   la prenne. Le pavé en bas à droite fait la même chose au clic, et bascule
@@ -255,11 +375,20 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
 <table>
   <tr><th>Geste</th><th>Effet</th></tr>
   <tr><td>Glisser</td><td>Faire tourner la maison, et monter ou descendre la caméra</td></tr>
+  <tr><td>Glisser l’élément sélectionné</td><td>Le déplacer : au sol, le long de son mur, ou sur son toit</td></tr>
   <tr><td><kbd>Maj</kbd> + glisser</td><td>Déplacer la vue</td></tr>
   <tr><td><kbd>Alt</kbd> + glisser</td><td>Incliner l’image dans son cadre</td></tr>
   <tr><td>Molette</td><td>Zoomer autour du curseur</td></tr>
   <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Tourner d’un quart de tour</td></tr>
 </table>
+<p>
+  Un élément <strong>déjà sélectionné</strong> se déplace en le faisant
+  glisser — le curseur le signale au survol : un extérieur glisse au sol par
+  quarts de mètre, une ouverture le long de son mur sans en sortir, un objet de
+  toit sur son toit, un équipement mural le long de son mur et en hauteur.
+  Tout autre glisser fait tourner la vue. <kbd>Échap</kbd> pendant le glisser
+  rend l’élément à sa place. Cliquer un toit sélectionne son corps.
+</p>
 <p>
   La section <em>Vue</em> donne les mêmes réglages au degré près, et
   <strong>+ Enregistrer cette vue</strong> garde un angle et un cadrage sous un
@@ -271,13 +400,20 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   qui, sur un tableau de bord, dit si la maison est éveillée.
 </p>
 <img src="assets/night.png" alt="La même maison de jour et deux maisons de nuit">
+<p>
+  Chaque vue enregistrée a trois petits boutons : <strong>renommer</strong>,
+  <strong>mettre à jour</strong> avec l’angle et le cadrage du moment, et
+  <strong>supprimer</strong> — le message qui suit propose <em>Annuler</em>
+  pour la faire revenir.
+</p>
 
-<h2 id="cadrage">10. Cadrer sur une zone, pour un widget</h2>
+<h2 id="cadrage">11. Cadrer sur une zone, pour un widget</h2>
 <p>
   Un widget qui pilote un seul appareil ne gagne rien à montrer toute la
   propriété : le portail y fait quelques pixels. L’outil <strong>Zone de
   cadrage</strong> (dernière famille, à gauche) trace un rectangle sur le plan ;
-  l’export s’y recadre.
+  l’export s’y recadre. Avec le même outil, on déplace la zone en la faisant
+  glisser et on la redimensionne par ses poignées.
 </p>
 <img src="assets/focus.png" alt="Une vue d’ensemble, puis deux cadrages : le portail, la piscine">
 <p>Ce qu’il faut savoir :</p>
@@ -299,12 +435,17 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
     peut porter autant de cadrages que de widgets.</li>
 </ul>
 
-<h2 id="export">11. Exporter et poser dans Gladys</h2>
+<h2 id="export">12. Exporter et poser dans Gladys</h2>
 <ol>
-  <li><strong>Exporter une image</strong>, en haut à droite (ou le bouton au
-    pied de la section <em>Cadrage</em>).</li>
+  <li><strong>Exporter</strong>, en haut à droite (ou <kbd>Ctrl</kbd>+<kbd>E</kbd>,
+    ou le bouton au pied de la section <em>Cadrage</em>). La fenêtre montre
+    l’image <strong>telle qu’elle sera téléchargée</strong>, aux proportions de
+    la taille choisie, sur un damier quand le fond est transparent.</li>
   <li>Taille <strong>Gladys — 2560 × 1600</strong>, format <strong>PNG</strong>,
-    fond transparent.</li>
+    fond <strong>Transparent</strong>. Le fond se choisit dans cette fenêtre :
+    transparent, blanc, gris clair, sombre ou une couleur libre ; la vue de
+    nuit impose son ciel étoilé. <em>Personnalisée…</em> donne une largeur et
+    une hauteur libres, jusqu’à 8192 px de côté.</li>
   <li>Dans Gladys : ajoutez un widget <em>Vue de la maison</em>,
     <strong>téléversez l’image</strong>, puis cliquez dessus pour poser vos
     pastilles liées aux appareils.</li>
@@ -316,14 +457,16 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   rééchantillonnée à l’arrivée. Le préréglage <em>Gladys</em> vise ce plafond.
 </div>
 <p>
-  Les autres sorties : <em>Les 4 faces</em> produit les quatre orientations en
-  un lot, <em>Vues enregistrées</em> régénère toutes vos vues nommées d’un coup,
-  et <em>SVG</em> donne du vectoriel éditable. Rien n’oblige à passer par le
+  Les autres sorties : <em>Les 4 faces</em> produit les quatre orientations,
+  <em>Vues enregistrées</em> régénère toutes vos vues nommées d’un coup — chacune
+  en <strong>une seule archive ZIP</strong>, que le navigateur ne bloque pas
+  comme une rafale de téléchargements —, <em>Copier</em> met l’image dans le
+  presse-papier et <em>SVG</em> donne du vectoriel éditable. Rien n’oblige à passer par le
   widget <em>Vue de la maison</em> : une simple carte <em>Image</em> convient,
   et l’export reste du PNG ordinaire pour Home Assistant, Jeedom ou un wiki.
 </p>
 
-<h2 id="fichiers">12. Enregistrer, partager, confidentialité</h2>
+<h2 id="fichiers">13. Enregistrer, partager, confidentialité</h2>
 <p>
   <strong>Rien ne quitte votre navigateur.</strong> L’outil n’envoie aucune
   requête : pas de compte, pas de serveur, pas de mesure d’audience. Le projet
@@ -332,8 +475,13 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
   galerie de modèles et ne voit rien de ce que vous avez dessiné.
 </p>
 <ul>
-  <li><strong>Enregistrer</strong> produit un fichier <code>.house.json</code>
-    lisible et versionnable, qu’<strong>Ouvrir</strong> relit.</li>
+  <li><strong>Enregistrer</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) produit un
+    fichier <code>.house.json</code> lisible et versionnable,
+    qu’<strong>Ouvrir</strong> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) relit — on peut
+    aussi <strong>glisser le fichier sur la fenêtre</strong>. Dans Chrome et
+    Edge, Enregistrer réécrit le même fichier au lieu d’en télécharger un
+    nouveau ; <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>S</kbd> en choisit un autre.
+    Ailleurs, c’est un téléchargement.</li>
   <li><strong>Partager</strong> copie un lien qui <strong>contient tout le
     projet</strong> dans son adresse. Pratique pour envoyer une maison à
     quelqu’un — et à ne pas confondre avec le lien de l’outil si vous ne
@@ -341,19 +489,35 @@ footer { color: var(--ink-soft); font-size: 14px; margin-top: 50px; }
     cours, mais <strong>Annuler</strong> le ramène — y compris pour un lien
     collé dans l’outil déjà ouvert ; le lien est ensuite retiré de la barre d’adresse, pour qu’un
     rechargement garde vos retouches.</li>
-  <li><strong>Nouveau</strong> repart d’une page blanche et efface le projet
-    conservé localement. Si le navigateur refuse la sauvegarde locale
+  <li><strong>Nouveau</strong> repart d’une page blanche, après confirmation ;
+    <kbd>Ctrl</kbd>+<kbd>Z</kbd> ramène le projet d’avant, comme après le choix
+    d’un modèle. Si le navigateur refuse la sauvegarde locale
     (navigation privée, stockage plein), l’outil le signale : pensez alors à
     <strong>Enregistrer</strong>.</li>
 </ul>
 
-<h2 id="raccourcis">13. Raccourcis</h2>
+<h2 id="raccourcis">14. Raccourcis</h2>
+<p>
+  <kbd>?</kbd> ou le bouton clavier de l’en-tête affiche cette liste dans
+  l’outil. Aucun raccourci à une touche n’agit pendant une saisie dans un
+  champ ; <kbd>Ctrl</kbd>+<kbd>S</kbd>, <kbd>Ctrl</kbd>+<kbd>O</kbd> et
+  <kbd>Ctrl</kbd>+<kbd>E</kbd> restent actifs, pour ne pas ouvrir à la place
+  l’enregistrement de la page du navigateur.
+</p>
 <table>
   <tr><th>Touche</th><th>Effet</th></tr>
+  <tr><td><kbd>V</kbd> <kbd>B</kbd> <kbd>R</kbd> <kbd>E</kbd></td><td>Sélectionner, Pinceau, Rectangle, Gomme</td></tr>
+  <tr><td><kbd>F</kbd> <kbd>P</kbd> <kbd>G</kbd></td><td>Fenêtre, Porte, Porte de garage</td></tr>
+  <tr><td><kbd>S</kbd> <kbd>A</kbd> <kbd>H</kbd> <kbd>M</kbd> <kbd>C</kbd></td><td>Panneaux solaires, Arbre, Haie, Muret, Zone de cadrage</td></tr>
+  <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Plan seul, les deux, rendu seul</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>Ctrl</kbd>+<kbd>O</kbd> / <kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Enregistrer, ouvrir, exporter</td></tr>
   <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>Z</kbd></td><td>Annuler, rétablir — dans un champ texte, annule la saisie. Tourner ou déplacer la vue n’est pas une modification : l’historique l’ignore, et la vue reste où elle est quand on annule</td></tr>
-  <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Dupliquer la sélection</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Dupliquer la sélection — un corps sélectionné est dupliqué à côté</td></tr>
+  <tr><td>Flèches</td><td>Décaler la sélection de 25 cm (1 m avec <kbd>Maj</kbd>) ; une ouverture ou un équipement mural de 5 cm le long de son mur ; un corps d’une case. Un champ qui a le focus garde ses flèches</td></tr>
+  <tr><td><kbd>Espace</kbd> + glisser</td><td>Déplacer le plan</td></tr>
+  <tr><td><kbd>Alt</kbd> en glissant</td><td>Suspendre l’aimantation (dans le plan)</td></tr>
   <tr><td><kbd>Suppr</kbd></td><td>Supprimer l’élément sélectionné (un corps se supprime depuis l’inspecteur)</td></tr>
-  <tr><td><kbd>Échap</kbd></td><td>Désélectionner</td></tr>
+  <tr><td><kbd>Échap</kbd></td><td>Annuler le geste en cours, dans le plan ou le rendu ; sinon, revenir à Sélectionner ; sinon, désélectionner</td></tr>
   <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Tourner d’un quart de tour</td></tr>
 </table>
 

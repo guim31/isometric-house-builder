@@ -17,7 +17,7 @@ import { Inspector } from '../src/ui/panels.js';
 import { renderScene } from '../src/render/svg.js';
 import { buildMesh } from '../src/core/scene.js';
 import { focusModel } from '../src/core/focus.js';
-import { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS } from '../src/ui/actions.js';
+import { OPENING_DEFAULTS, PROP_DEFAULTS, ROOF_ITEM_DEFAULTS, FIXTURE_DEFAULTS } from '../src/ui/actions.js';
 import { toShareUrl, saveLocal, clearLocal, initialModel } from '../src/io/project.js';
 
 /* ---------------- B1: palettes ---------------- */
@@ -281,9 +281,12 @@ export const FIXTURE_ITEMS = {
   prop: Object.keys(PROP_DEFAULTS).map((kind) => ({
     kind, x: kind === 'stairs' ? 3 : 2, y: -8, ...PROP_DEFAULTS[kind],
   })),
+  fixture: Object.keys(FIXTURE_DEFAULTS).map((kind) => ({
+    kind, edge: FIXTURE_EDGE, storey: 0, offset: 0.5, z: FIXTURE_DEFAULTS[kind].z,
+  })),
 };
 
-const LIST = { opening: 'openings', roofItem: 'roofItems', prop: 'props' };
+const LIST = { opening: 'openings', roofItem: 'roofItems', prop: 'props', fixture: 'fixtures' };
 
 /** The model with one item added and selected, in a store, with its inspector. */
 export function staged(type, item) {

@@ -1,0 +1,60 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Capture de l’interface</title>
+<style>html,body{margin:0;background:#888}iframe{border:0;display:block}</style></head><body>
+<!--
+  The application in a frame of a given size, set up as the illustrations
+  show it: a starter model, something selected, a window open. Captured by
+  headless Chrome, which has nothing else to set up:
+
+    chrome --headless --hide-scrollbars --window-size=1440,900 --virtual-time-budget=8000 \
+      --screenshot=assets/screenshot.png \
+      "http://localhost:8000/dev/ui-shot.html?w=1440&h=900&preset=provence&select=opening"
+
+  Parameters: w, h (frame size), preset (starter model id), select (opening,
+  roofItem, prop, fixture), layout (plan, both, render), tab (plan, render,
+  settings — on a phone), open (export, keys, menu, gallery).
+-->
+<iframe id="app"></iframe>
+<script type="module">
+import { PRESETS } from '../src/data/presets.js';
+import { normalise } from '../src/core/model.js';
+
+const q = new URLSearchParams(location.search);
+const w = Number(q.get('w')) || 1440, h = Number(q.get('h')) || 900;
+const frame = document.getElementById('app');
+frame.style.width = `${w}px`;
+frame.style.height = `${h}px`;
+// A first visit, whatever was stored by the last capture.
+localStorage.removeItem('isometric-house-builder/current');
+localStorage.removeItem('isometric-house-builder/ui');
+frame.src = '../index.html';
+frame.addEventListener('load', () => {
+  const win = frame.contentWindow;
+  const ready = () => {
+    if (!win.__app) { setTimeout(ready, 30); return; }
+    const { store, layout, exportDialog, render } = win.__app;
+    const doc = frame.contentDocument;
+    doc.querySelectorAll('dialog[open]').forEach((d) => d.close());
+    const preset = PRESETS.find((p) => p.id === q.get('preset'));
+    if (preset) {
+      store.reset(normalise({ ...preset.model, name: preset.name }));
+      win.__app.plan.refit();
+      win.__app.viewport.resetView();
+    }
+    store.setTool('select');
+    const kind = q.get('select');
+    const list = { opening: 'openings', roofItem: 'roofItems', prop: 'props', fixture: 'fixtures' }[kind];
+    if (list && store.model[list][0]) store.select({ type: kind, id: store.model[list][0].id });
+    if (q.get('layout')) layout.setLayout(q.get('layout'));
+    if (q.get('tab')) layout.setTab(q.get('tab'));
+    render();
+    const open = q.get('open');
+    if (open === 'export') exportDialog.open();
+    if (open === 'keys') doc.getElementById('btn-keys').click();
+    if (open === 'menu') doc.getElementById('btn-menu').click();
+    if (open === 'gallery') doc.getElementById('btn-gallery').click();
+    doc.getElementById('toast').classList.remove('show');
+  };
+  ready();
+});
+</script>
+</body></html>
