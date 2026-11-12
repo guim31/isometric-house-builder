@@ -1089,7 +1089,7 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12.5px; }
 /* The inspector stays at the side, the centre keeps the whole height; the
    palette gives up its labels for a double column of icons. */
 @media (max-width: 1100px) {
-  :root { --tools-w: 98px; --inspector-w: 272px; }
+  :root { --tools-w: 106px; --inspector-w: 272px; }
   .layout { gap: 6px; padding: 6px; }
   .tools { padding: 4px; }
   /* Titles in plain case, and allowed a second line: in capitals they ran
