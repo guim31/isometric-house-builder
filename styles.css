@@ -54,6 +54,8 @@
 }
 
 * { box-sizing: border-box; }
+/* `hidden` means hidden, whatever display a class gives. */
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -77,6 +79,10 @@ button, select, input, textarea {
   font: inherit;
   color: inherit;
 }
+
+/* No double-tap zoom on controls: a tap right after another one, elsewhere,
+   was taken for the second half of a double tap and its click was lost. */
+button, a, input, select, label, summary { touch-action: manipulation; }
 
 button {
   background: var(--panel);
@@ -1284,7 +1290,7 @@ button.subtle { width: 100%; margin-top: 10px; font-size: 12.5px; }
   .export-body { grid-template-columns: 1fr; gap: 12px; }
   .export-stage { height: clamp(160px, 30dvh, 260px); }
   .export-actions { flex-direction: column; }
-  .export-main button, .export-sets button { flex: 1; }
+  .export-main button, .export-sets button { flex: 1; padding: 0 8px; white-space: nowrap; font-size: 13px; }
   .keys-grid { grid-template-columns: 1fr; }
 }
 
